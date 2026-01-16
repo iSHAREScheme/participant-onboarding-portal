@@ -4,7 +4,6 @@ RUN corepack enable && corepack prepare yarn@4.7.0 --activate
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json yarn.lock ./
-COPY .yarn .yarn
 COPY .yarnrc.yml ./
 RUN YARN_ENABLE_SCRIPTS=0 yarn install --immutable
 
