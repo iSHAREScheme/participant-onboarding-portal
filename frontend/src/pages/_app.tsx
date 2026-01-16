@@ -19,6 +19,14 @@ const poppins = Poppins({
   display: 'swap',
 });
 
+const keycloakStub = {
+  authenticated: false,
+  tokenParsed: undefined,
+  realm: '',
+  authServerUrl: '',
+  hasRealmRole: () => false,
+} as unknown as Keycloak;
+
 // Theme wrapper component to initialize theming
 function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const { theme, tenantId } = useTheme()
@@ -29,22 +37,31 @@ function ThemeWrapper({ children }: { children: React.ReactNode }) {
 function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
   const env = getPublicEnv()
+  const isBrowser = typeof window !== 'undefined'
   const keycloakUrl = env.NEXT_PUBLIC_KEYCLOAK_BASE_URL
   const keycloakRealm = env.NEXT_PUBLIC_KEYCLOAK_REALM
   const keycloakClientId = env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
 
-  if (!keycloakUrl) 
-    throw Error('Missing keycloak URL')
-  if (!keycloakRealm) 
-    throw Error('Missing keycloak realm')
-  if (!keycloakClientId) 
-    throw Error('Missing keycloak client-ID')
-  
-  const keycloak = useMemo(() => new Keycloak({
-    url: keycloakUrl,
-    realm: keycloakRealm,
-    clientId: keycloakClientId,
-  }), [keycloakUrl, keycloakRealm, keycloakClientId])
+  if (isBrowser) {
+    if (!keycloakUrl) 
+      throw Error('Missing keycloak URL')
+    if (!keycloakRealm) 
+      throw Error('Missing keycloak realm')
+    if (!keycloakClientId) 
+      throw Error('Missing keycloak client-ID')
+  }
+
+  const keycloak = useMemo(() => {
+    if (!isBrowser) {
+      return keycloakStub
+    }
+
+    return new Keycloak({
+      url: keycloakUrl as string,
+      realm: keycloakRealm as string,
+      clientId: keycloakClientId as string,
+    })
+  }, [isBrowser, keycloakUrl, keycloakRealm, keycloakClientId])
   
   const keycloakProviderInitConfig = useRef(useKeycloakInitConfig())
 
