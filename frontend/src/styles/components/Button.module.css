@@ -1,0 +1,41 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--button-padding, 0.8rem 1.5rem);
+  font-weight: var(--button-font-weight, 550);
+  font-size: var(--button-font-size, 15px);
+  border-radius: var(--button-border-radius, 4px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  gap: 8px;
+  text-transform: uppercase;
+  min-width: 9rem;
+}
+
+.primary {
+  background-color: var(--primary-color, #61365E);
+  color: white;
+}
+
+.primary:hover {
+  background-color: var(--primary-color, #61365E);
+  opacity: 0.9;
+}
+
+.secondary {
+  background-color: white;
+  color: var(--primary-color, #61365E);
+  border: 1px solid var(--primary-color, #61365E);
+}
+
+.secondary:hover {
+  background-color: var(--primary-color, #61365E);
+  color: white;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+}

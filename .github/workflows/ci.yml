@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - run: go test ./...
+
+  frontend:
+    name: Frontend lint/build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_FRONTEND_DOMAIN: http://localhost:3000
+      NEXT_PUBLIC_BASE_SERVER_URL: http://localhost:8081
+      NEXT_PUBLIC_KEYCLOAK_BASE_URL: http://localhost:8080
+      NEXT_PUBLIC_KEYCLOAK_REALM: demo
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: frontend
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - run: corepack enable
+      - run: corepack prepare yarn@4.7.0 --activate
+      - run: yarn install --immutable
+      - run: yarn lint
+      - run: yarn build

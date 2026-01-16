@@ -1,0 +1,45 @@
+version: '3.7'
+
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/vhost.d:/etc/nginx/vhost.d
+      - ./nginx/html:/usr/share/nginx/html
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  frontend:
+    environment:
+      VIRTUAL_HOST: ${FRONTEND_VIRTUAL_HOST}
+      VIRTUAL_PORT: 3000
+      VIRTUAL_PROTO: http
+    networks:
+      - proxy
+
+  backend:
+    environment:
+      VIRTUAL_HOST: ${BACKEND_VIRTUAL_HOST}
+      VIRTUAL_PORT: 8081
+      VIRTUAL_PROTO: http
+    networks:
+      - proxy
+
+  keycloak:
+    environment:
+      VIRTUAL_HOST: ${KEYCLOAK_VIRTUAL_HOST}
+      VIRTUAL_PORT: 8080
+      VIRTUAL_PROTO: http
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    driver: bridge

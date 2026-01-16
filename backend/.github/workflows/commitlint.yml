@@ -1,0 +1,54 @@
+name: Commit message lint
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  commitlint:
+    name: Commitlint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Corepack and Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.7.0 --activate
+
+      - name: Zero-install integrity check
+        run: |
+          yarn install --immutable
+
+      - name: Determine commit range
+        id: range
+        run: |
+          # For pull requests use the PR base/head SHAs, for pushes use the event.before/event.after
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "from=${{ github.event.pull_request.base.sha }}" >> $GITHUB_OUTPUT
+            echo "to=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+          else
+            if [ -n "${{ github.event.before }}" ]; then
+              echo "from=${{ github.event.before }}" >> $GITHUB_OUTPUT
+              echo "to=${{ github.sha }}" >> $GITHUB_OUTPUT
+            else
+              # Fallback to linting the current commit only
+              echo "from=${{ github.sha }}^" >> $GITHUB_OUTPUT
+              echo "to=${{ github.sha }}" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run commitlint
+        run: |
+          echo "Commit range: ${{ steps.range.outputs.from }} -> ${{ steps.range.outputs.to }}"
+          npx --no -- commitlint --from=${{ steps.range.outputs.from }} --to=${{ steps.range.outputs.to }}

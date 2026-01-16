@@ -1,0 +1,829 @@
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  /* Add space for footer */
+}
+
+.stepsContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4rem;
+  padding: 1rem 2rem;
+  gap: 1rem;
+  background-color: #F8F7F4;
+}
+
+.stepWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.step {
+  width: 6rem;
+  height: 8px;
+  border-radius: 8px;
+  background-color: rgba(1, 58, 87, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+.step.active {
+  background-color: var(--accent-color, var(--secondary-color, #013A57));
+}
+
+.step.completed {
+  background-color: var(--secondary-color, #013A57);
+}
+
+.step.incomplete {
+  background-color: rgba(1, 58, 87, 0.15);
+}
+
+.content.completed {
+  color: #013A57;
+}
+
+.content.incomplete {
+  color: #013A5799;
+}
+
+.connector {
+  width: 50px;
+  height: 1px;
+  background-color: #E5E5E5;
+  margin: 0 0.5rem;
+}
+
+.content {
+  max-width: 800px;
+  margin: auto;
+  border-radius: 0.5rem;
+}
+
+.description {
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.section {
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.roleOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.roleDescription {
+  color: #666;
+  font-size: 0.9rem;
+  margin-left: 1.6rem;
+}
+
+.pointerDiv {
+  cursor: pointer;
+}
+
+.backButton {
+  color: var(--accent-color, #209BD8);
+  background-color: #e7e7e7;
+  border: none;
+  font-size: 1.1rem;
+  padding: 12px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: var(--button-border-radius, 40px);
+}
+
+.backButton.disabled {
+  background-color: #cccccc;
+  opacity: 0.7;
+  cursor: not-allowed;
+  border-radius: var(--button-border-radius, 40px);
+}
+
+.continueButton {
+  color: white;
+  background-color: var(--button-primary, #0066EE);
+  border: none;
+  font-size: 1.1rem;
+  padding: 12px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: var(--button-border-radius, 40px);
+}
+
+.submitButton {
+  color: white;
+  background-color: var(--button-primary, #0066EE);
+  border: none;
+  font-size: 1.1rem;
+  padding: 12px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: var(--button-border-radius, 40px);
+  transition: all 0.3s ease;
+}
+
+.submitButton.disabled {
+  background-color: #cccccc;
+  opacity: 0.7;
+}
+
+.backButton:hover {
+  background-color: #209BD866;
+}
+
+.backButton.disabled:hover {
+  background-color: #bbbbbb;
+}
+
+.cancelButton:hover {
+  background-color: #209BD866;
+}
+
+.continueButton:hover {
+  background-color: #209BD8BB;
+}
+
+.submitButton:hover {
+  background-color: #209BD8BB;
+}
+
+.submitButton.disabled:hover {
+  background-color: #bbbbbb;
+}
+
+.confirmationSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.summaryRow {
+  display: flex;
+  padding-bottom: 1rem;
+}
+
+.summaryLabel {
+  width: 200px;
+  font-weight: 500;
+}
+
+.summaryValue {
+  flex: 1;
+  color: #333;
+}
+
+.summaryValue>div {
+  margin-bottom: 0.5rem;
+}
+
+.summaryValue>div:last-child {
+  margin-bottom: 0;
+}
+
+.buttonContainer {
+  padding: 0 2rem 1.25rem;
+  display: flex;
+  justify-content: flex-start;
+  gap: 1rem;
+}
+
+.questionContainer {
+  color: #013A57;
+  margin-bottom: 2rem;
+}
+
+.question {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.identityCheck {
+  display: flex;
+  flex-direction: column;
+  gap: 1.875rem;
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.radioOption{
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-secondary, #013A57);
+  line-height: 120%;
+}
+
+.radioOption input {
+  margin-right: 5px;
+  cursor: pointer;
+}
+
+.radioLabel {
+  cursor: pointer;
+}
+
+.description {
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.idCheckContainer {
+  border-radius: 8px;
+}
+
+.eHerkenningButton {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  padding: 0;
+  border: 3px solid #21366F;
+  border-radius: 2px;
+  overflow: hidden;
+  background-color: white;
+  height: 40px;
+  cursor: pointer;
+}
+
+.eHerkenningImage {
+  height: 100%;
+  background-color: white;
+  padding: 0 12px;
+  object-fit: contain;
+}
+
+.eHerkenningRight {
+  background-color: #21366F;
+  color: white;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 500;
+  height: 100%;
+}
+
+.eHerkenningText {
+  background-color: #e01e5a;
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.eherkenningContainer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.provideCertificate{
+  font-weight: 18px;
+  font-weight: 400;
+  color: #013A57;
+  margin: 10px 0px;
+}
+
+.loginText {
+  background-color: #1e2d5f;
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.infoText {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.link {
+  color: #0088cc;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.step.active[data-step="ID check"] {
+  color: #0088cc;
+  font-weight: 500;
+  border-bottom: 2px solid #0088cc;
+}
+
+.description {
+  color: #666;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.orgName {
+  font-weight: 500;
+}
+
+.ishareId {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+}
+
+.infoIcon {
+  color: #0088cc;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.formAndInfo {
+  display: flex;
+  gap: 2rem;
+}
+
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 400px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #0088cc;
+  box-shadow: 0 0 0 2px rgba(0, 136, 204, 0.1);
+}
+
+.input::placeholder {
+  color: #999;
+}
+
+.infoBox {
+  padding: 1rem;
+  border-radius: 4px;
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  height: fit-content;
+  max-width: 250px;
+}
+
+.step.active[data-step="Location"] {
+  color: #0088cc;
+  font-weight: 500;
+  border-bottom: 2px solid #0088cc;
+}
+
+.associationContainer {
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inputGroup {
+  width: 300px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+}
+
+.select {
+  background-color: white;
+  color: #013A5799;
+  padding-right: 2.5rem;
+}
+
+.select::selection {
+  background-color: white;
+  color: #013A5799;
+  padding-right: 2.5rem;
+}
+
+.selectOption {
+  background-color: white;
+}
+
+.uploadSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 18px;
+  font-weight: 400;
+  color:#013A57;
+  margin-left: 20px;
+}
+
+.uploadLabel {
+  display: flex;
+  align-items: center;
+}
+
+.fileUpload {
+  font-weight: 400;
+  font-size: 16px;
+  color: #013A5799;
+}
+
+.dropZone {
+  border: 2px dashed #209BD833;
+  background-color: #209BD833;
+  border-radius: 8px;
+  padding: 2rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.dropZone:hover {
+  border: 2px solid #209BD8;
+}
+
+.dropZoneContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #666;
+}
+
+.orText {
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.browseButton {
+  background-color: #209BD800;
+  border: 1px solid #209BD8;
+  border-radius: 8px;
+  color: #209BD8;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 1.125rem;
+}
+
+.browseButton:hover {
+  background-color: #000;
+  color: #209BD8;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.step.active[data-step="Association"] {
+  color: #0088cc;
+  font-weight: 500;
+  border-bottom: 2px solid #0088cc;
+}
+
+.header {
+  color: #013A57;
+  margin-bottom: 2rem;
+}
+
+.title {
+  color: var(--text-secondary, #013A57);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.errorMessage {
+  font-size: 1rem;
+  color: #DC2626;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.signAgreementsContainer {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.signAgreementsContainer .title {
+  color: var(--text-secondary, #013A57);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.agreementCheckbox {
+  margin: 2rem auto;
+  max-width: 480px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.checkbox {
+  margin-top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 2px solid #CBD5E1;
+  cursor: pointer;
+}
+
+.checkboxLabel {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.signButton {
+  background-color: var(--button-primary, #0066EE);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--button-border-radius, 40px);
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.signButton:hover:not(.disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+
+.signButton.disabled {
+  background-color: #CBD5E1;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.successContainer {
+  text-align: left;
+  padding: 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #FBF7F4;
+  border-radius: 8px;
+}
+
+.successTitle {
+  color: #013A57;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.successMessage {
+  color: #333;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.completedContainer {
+  text-align: center;
+  padding: 2rem;
+}
+
+.completedTitle {
+  font-size: 2rem;
+  color: #2c5282;
+  margin-bottom: 1rem;
+}
+
+.completedMessage {
+  font-size: 1.25rem;
+  color: #4a5568;
+}
+
+.rejectedContainer {
+  text-align: center;
+  padding: 2rem;
+}
+
+.rejectedTitle {
+  font-size: 2rem;
+  color: #e53e3e;
+  margin-bottom: 1rem;
+}
+
+.rejectedMessage {
+  font-size: 1.25rem;
+  color: #4a5568;
+}
+
+.editButton {
+  margin-top: 2rem;
+  background-color: #209BD8;
+  color: white;
+  border: none;
+  font-size: 1.1rem;
+  padding: 12px 24px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background-color 0.2s;
+}
+
+.editButton:hover {
+  background-color: #209BD8BB;
+}
+
+.uploadContainer {
+  border: 2px dashed #209BD8;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  background-color: #209BD833;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.uploadContainer:hover {
+  border-color: #0EA5E9;
+  background-color: #0EA5E950;
+}
+
+.uploadContainer.dragActive {
+  border-color: #0EA5E9;
+  background-color: #F0F9FF;
+}
+
+.agreementsList {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+}
+
+.agreementFile {
+  color: #64748B;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.agreementsLink {
+  margin-top: 1rem;
+}
+
+.uploadLabel {
+  color: #374151;
+  font-weight: 500;
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}
+
+.uploadContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.maxSizeText {
+  color: #013A5799;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.uploadStatus {
+  color: #374151;
+  font-size: 0.9rem;
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.uploadIcon {
+  color: #64748B;
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.uploadText {
+  color: #475569;
+  margin-bottom: 0.5rem;
+}
+
+.orText {
+  color: #94A3B8;
+  margin: 0.5rem 0;
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #013A57
+}
+
+.fileName {
+  color: #013A57;
+  font-size: 18px;
+  font-weight: 500;
+  max-width: 436px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.removeButton {
+  color: #209BD8;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0.25rem;
+}
+
+.downloadSection {
+  margin: 2rem 0;
+  text-align: center;
+}
+
+.downloadLink {
+  display: inline-block;
+  color: #209BD8;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 18px;
+  padding: 0.75rem 0rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.downloadLink:hover {
+  text-decoration: underline;
+}
+
+.commitButton {
+  color: white;
+  background-color: #209BD8;
+  border: none;
+  font-size: 1.1rem;
+  padding: 12px 24px;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: var(--button-border-radius, 40px);
+  transition: all 0.3s ease;
+}
+
+.commitButton:hover:not(.disabled) {
+  background-color: #209BD8BB;
+}
+
+.commitButton.disabled {
+  background-color: #cccccc;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.termsSection {
+  margin-top: 1rem;          /* space above the section */
+  padding-top: 0.5rem;       /* internal top padding */
+  margin-bottom: 1.5rem;     /* space below the section */
+  padding-bottom: 0.75rem;   /* internal bottom padding */
+}
+
+.termsTitle {
+  margin: 0 0 0.75rem 0;     /* space under the title */
+}
+
+/* Add space between each agreement row */
+.termsSection .inputGroup {
+  margin-bottom: 0.5rem;     /* space between each checkbox+label */
+  gap: 0.5rem;               /* space between checkbox and label */
+}

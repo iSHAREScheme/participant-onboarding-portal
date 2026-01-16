@@ -1,0 +1,1 @@
+<p>Hello ${user.firstName?default(user.username)},</p><p>New agreements have been uploaded. Please review them in the portal</p><p>Review them here:</p><p><a href="${proposalLink}">${proposalLink}</a></p><p>– Onboarding Portal</p>

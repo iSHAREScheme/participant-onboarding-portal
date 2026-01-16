@@ -1,0 +1,459 @@
+openapi: 3.0.3
+info:
+  title: iSHARE Onboarding API
+  version: "1.0"
+  description: Backend API for the iSHARE onboarding portal.
+  contact:
+    name: Protium.digital
+    email: support@protium.digital
+servers:
+  - url: /
+    description: Local server root
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthcheck:
+    get:
+      tags: [health]
+      summary: Health check
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true }}}}
+  /party:
+    post:
+      tags: [parties]
+      summary: Create party in Satellite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/requests.PartyCreateRequest'
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals:
+    get:
+      tags: [proposals]
+      summary: List proposals
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/models.Proposal' }
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/{id}:
+    get:
+      tags: [proposals]
+      summary: Get proposal by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/models.Proposal' }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/{id}/approve:
+    put:
+      tags: [proposals]
+      summary: Approve a proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/{id}/reject:
+    put:
+      tags: [proposals]
+      summary: Reject a proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/users/{keycloakUsername}:
+    get:
+      tags: [proposals]
+      summary: Get proposal by Keycloak username
+      parameters:
+        - in: path
+          name: keycloakUsername
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/models.Proposal' }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/users/{keycloakUsername}/sign:
+    put:
+      tags: [proposals]
+      summary: Upload signed agreements for a proposal
+      description: Requires at least two files (signedAgreement1, signedAgreement2, ...).
+      parameters:
+        - in: path
+          name: keycloakUsername
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [signedAgreement1, signedAgreement2]
+              properties:
+                signedAgreement1:
+                  type: string
+                  format: binary
+                signedAgreement2:
+                  type: string
+                  format: binary
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/{id}/complete:
+    put:
+      tags: [proposals]
+      summary: Complete a signed proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/{id}/agreement:
+    get:
+      tags: [proposals]
+      summary: Download a signed agreement file
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: index
+          required: false
+          schema: { type: integer }
+          description: Agreement file index (default 0)
+      responses:
+        "200":
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/proposals/users/{keycloakUsername}/modify:
+    put:
+      tags: [proposals]
+      summary: Modify a rejected proposal
+      description: Accepts a multipart form with JSON `data` and optional `cttProof` file.
+      parameters:
+        - in: path
+          name: keycloakUsername
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: string
+                  description: JSON string with updated proposal data
+                cttProof:
+                  type: string
+                  format: binary
+                  description: Optional CTT proof file
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "404": { description: Not Found, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /party/propose:
+    post:
+      tags: [proposals]
+      summary: Submit onboarding proposal
+      description: Accepts a multipart form with JSON data and optional CTT proof file to create a proposal.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: string
+                  description: JSON string with proposal data (see ProposalData)
+                cttProof:
+                  type: string
+                  format: binary
+                  description: Optional CTT proof file
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /registry:
+    get:
+      tags: [registry]
+      summary: List authorisation registries
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /registry/certificate/validate:
+    post:
+      tags: [registry]
+      summary: Verify trusted certificate
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: true }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+  /settings:
+    get:
+      tags: [settings]
+      summary: Get settings
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/models.Settings' }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+    post:
+      tags: [settings]
+      summary: Update settings
+      description: Requires onboarding-admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/models.Settings' }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "400": { description: Bad Request, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+        "500": { description: Internal Server Error, content: { application/json: { schema: { type: object, additionalProperties: {} }}}}
+
+components:
+  schemas:
+    models.Proposal:
+      type: object
+      properties:
+        address:
+          type: string
+        authRegistry:
+          type: string
+        authRegistryName:
+          type: string
+        authRegistryUrl:
+          type: string
+        capabilitiesUrl:
+          type: string
+        city:
+          type: string
+        companyName:
+          type: string
+        contactEmail:
+          type: string
+        contactName:
+          type: string
+        contactPhone:
+          type: string
+        country:
+          type: string
+        createdAt:
+          type: string
+        cttProofPath:
+          type: string
+        dataConsumer:
+          type: boolean
+        dataOwner:
+          type: boolean
+        dataProvider:
+          type: boolean
+        id:
+          type: integer
+        keycloakUsername:
+          type: string
+        kvkNumber:
+          type: string
+        partyId:
+          type: string
+        partyName:
+          type: string
+        signedAgreementPaths:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        useM2M:
+          type: string
+        website:
+          type: string
+        zipCode:
+          type: string
+    models.Settings:
+      type: object
+      properties:
+        agreements:
+          type: array
+          items:
+            type: string
+        dataspaceId:
+          type: string
+        description:
+          type: string
+        id:
+          type: integer
+        registrarId:
+          type: string
+    requests.PartyCreateRequest:
+      type: object
+      properties:
+        additional_info:
+          type: object
+          properties:
+            company_email:
+              type: string
+            company_phone:
+              type: string
+            countries_operation:
+              type: array
+              items:
+                type: string
+            description:
+              type: string
+            logo:
+              type: string
+            publicly_publishable:
+              type: boolean
+            sector_industry:
+              type: array
+              items:
+                type: string
+            tags:
+              type: string
+            website:
+              type: string
+        adherence:
+          type: object
+          properties:
+            end_date:
+              type: string
+            start_date:
+              type: string
+            status:
+              type: string
+        agreements:
+          type: array
+          items:
+            type: object
+            properties:
+              hash_file:
+                type: string
+              compliancy_verified:
+                type: string
+              dataspace_id:
+                type: string
+              dataspace_title:
+                type: string
+              expiry_date:
+                type: string
+              framework:
+                type: string
+              sign_date:
+                type: string
+              status:
+                type: string
+              title:
+                type: string
+              type:
+                type: string
+        authregistries:
+          type: array
+          items:
+            type: object
+            properties:
+              authregistery_id:
+                type: string
+              authregistery_name:
+                type: string
+              authregistery_url:
+                type: string
+              dataspace_id:
+                type: string
+              dataspace_title:
+                type: string
+        capability_url:
+          type: string
+        party_id:
+          type: string
+        party_name:
+          type: string
+        registrar_id:
+          type: string
+        roles:
+          type: array
+          items:
+            type: object
+            properties:
+              compliancy_verified:
+                type: boolean
+              end_date:
+                type: string
+              legal_adherence:
+                type: boolean
+              loa:
+                type: string
+              role:
+                type: string
+              start_date:
+                type: string
+        spor:
+          type: object
+          properties:
+            signed_request:
+              type: string
+        status:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

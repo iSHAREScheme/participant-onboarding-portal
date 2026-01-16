@@ -1,0 +1,1 @@
+<p>Hello ${user.firstName?default(user.username)},</p><p>A new onboarding proposal was submitted by <strong>${proposedBy}</strong>.</p><p>You can review it here:</p><p><a href="${proposalLink}">${proposalLink}</a></p><p>– Onboarding Portal</p>

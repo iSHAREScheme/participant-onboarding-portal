@@ -1,0 +1,37 @@
+# Local env files
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Local keys and secrets
+**/.infisical.json
+nginx/certs/
+nginx/vhost.d/
+nginx/html/
+nginx/acme/
+backend/keys/
+backend/keys/*.pem
+backend/keys/*.key
+backend/keys/*.crt
+backend/keys/*.txt
+
+# Local SQLite DBs
+backend/db/*.db
+backend/db/*.db-*
+backend/db/*.sqlite
+backend/db/*.sqlite-*
+
+# Build artifacts
+frontend/provider-src/target/
+frontend/tsconfig.tsbuildinfo
+frontend/.yarn/install-state.gz
+frontend/public/env.js
+
+# OS
+.DS_Store

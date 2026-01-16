@@ -1,0 +1,91 @@
+version: '3.7'
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/onboarding-portal-backend:${IMAGE_TAG:-latest}
+    env_file:
+      - ./.env
+    ports:
+      - "8081:8081"
+    networks:
+      - devnet
+    volumes:
+      - sqlite:/app/db
+      - uploads:/app/uploads
+      - ./backend/keys:/app/keys:ro
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/onboarding-portal-frontend:${IMAGE_TAG:-latest}
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    networks:
+      - devnet
+    depends_on:
+      - backend
+      - keycloak
+    restart: unless-stopped
+
+  keycloak:
+    image: ghcr.io/${GHCR_OWNER}/onboarding-portal-keycloak:${IMAGE_TAG:-latest}
+    env_file:
+      - ./.env
+    environment:
+      KC_HOSTNAME: ${NEXT_PUBLIC_KEYCLOAK_BASE_URL}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HTTP_CORS: true
+      KC_HTTP_CORS_ORIGINS: ${NEXT_PUBLIC_FRONTEND_DOMAIN}
+      KC_HTTP_CORS_METHODS: POST,GET,PUT,DELETE,OPTIONS
+      KC_HTTP_CORS_HEADERS: Authorization,Content-Type
+      KC_HTTP_CORS_ALLOW_CREDENTIALS: true
+      KC_FEATURES: scripts,preview
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_DATABASE}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USERNAME}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME_STRICT_HTTPS: true
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT: true
+      KC_PROXY: edge
+      KC_PROXY_HEADERS: xforwarded
+    command: >
+      start
+    ports:
+      - "8080:8080"
+    networks:
+      - devnet
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${KEYCLOAK_DB_USERNAME}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      POSTGRES_DB: ${KEYCLOAK_DB_DATABASE}
+    volumes:
+      - keycloak_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - devnet
+    restart: unless-stopped
+
+networks:
+  devnet:
+    driver: bridge
+
+volumes:
+  sqlite:
+  uploads:
+  keycloak_pg_data:

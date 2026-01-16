@@ -1,0 +1,28 @@
+/* Import CSS custom properties for theming */
+@import './variables.css';
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background-color: var(--background-color, #F8F7F4);
+  color: var(--text-primary, #003145);
+  font-family: var(--font-primary);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+button {
+  font-family: var(--font-button);
+}

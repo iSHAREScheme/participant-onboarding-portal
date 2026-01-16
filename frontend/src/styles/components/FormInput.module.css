@@ -1,0 +1,76 @@
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.inputContainer {
+  position: relative;
+}
+
+.label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 400;
+  color: #013A5799;
+  font-size: 18px;
+  transition: all 0.2s ease-in-out;
+  pointer-events: none;
+  padding: 0 4px;
+  z-index: 1;
+
+}
+
+.labelActive {
+  top: 0;
+  left: 8px;
+  font-size: 16px;
+  color: #013A57;
+  font-weight: 400;
+  padding: 0 4px;
+}
+
+.input {
+  padding: 12px;
+  border: 1px solid #C3CCCD;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #013A57;
+  height: 38px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.input:focus~.label,
+.input.hasValue~.label {}
+
+.input:focus {
+  outline: none;
+  border-color: #757575;
+}
+
+.input::placeholder {
+  color: #A0A0A0;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.input.isInvalid {
+  border-color: rgba(255, 59, 48, 0.3);
+  background-color: #fff;
+}
+
+.inValidFeedback {
+  color: #FF3B30;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.required {
+  color: #FF3B30;
+}

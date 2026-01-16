@@ -1,0 +1,9 @@
+bin
+*.db
+vendor
+*.log
+.env
+.DS_Store
+keys/*.pem
+keys/mint.js
+keys/token.txt

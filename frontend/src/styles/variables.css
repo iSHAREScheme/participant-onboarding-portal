@@ -1,0 +1,56 @@
+/* Global CSS Custom Properties for Multi-tenant Theming */
+:root {
+  --primary-color: #61365E;
+  --secondary-color: #003145;
+  --accent-color: #004C6C;
+  --background-color: #F8F7F4;
+  --text-primary: #003145;
+  --text-secondary: #013A57;
+  --button-primary: #0088cc;
+  --button-primary-hover: #006699;
+  --border-color: #C3CCCD;
+  --error-color: #FF3B30;
+  
+  /* Button specific styling */
+  --button-border-radius: 4px;   /* From Button.module.css and Home.module.css */
+  --button-font-size: 15px;      /* From Button.module.css */
+  --button-font-weight: 550;     /* From Button.module.css */
+  --button-padding: 0.8rem 1.5rem; /* From Button.module.css */
+  
+  /* Font families - default system fonts with fallbacks */
+  --font-primary: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-button: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  /* Header specific */
+  --header-background: #ffffff;
+  --header-text: #333;
+  --header-height: 120px;
+  --header-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  
+  /* Form specific */
+  --input-border: #C3CCCD;
+  --input-focus: #757575;
+  --input-background: #fff;
+  
+  /* Layout */
+  --container-padding: 2rem;
+  --border-radius: 8px;
+}
+
+/* Theme overrides will be dynamically loaded here based on tenant */
+
+/* Default Theme (uses root variables - current styling) */
+[data-theme="default"] {
+  /* Uses default CSS custom properties defined above */
+}
+
+/* Example subdomain theme (commented out - customize as needed)
+[data-theme="subdomain1"] {
+  --primary-color: #209BD8;
+  --secondary-color: #013A57;
+  --accent-color: #21366F;
+  --button-primary: #209BD8;
+  --button-primary-hover: #013A57;
+}
+*/

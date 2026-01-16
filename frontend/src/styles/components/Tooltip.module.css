@@ -1,0 +1,23 @@
+/* components/Tooltip.module.css */
+.wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: white;
+  color: #013A5799;
+  font-weight: 400;
+  font-size: 18px;
+  border: 1px solid #013A5733;
+  border-radius: 8px;
+  padding: 16px;
+  max-width: 328px;
+  z-index: 1000;
+  line-height: 180%;
+}

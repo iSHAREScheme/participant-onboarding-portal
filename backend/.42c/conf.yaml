@@ -1,0 +1,3 @@
+apis:
+  docs/swagger.yaml:
+    alias: ishare-onboarding-api

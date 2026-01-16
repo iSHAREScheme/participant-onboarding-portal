@@ -1,0 +1,44 @@
+.container {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.helperText {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #555;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.saveButton {
+  background-color: var(--button-primary, #0066EE);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--button-border-radius, 40px);
+  cursor: pointer;
+}
+
+.saveButton:hover {
+  background-color: var(--button-primary-hover, #006699);
+}

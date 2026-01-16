@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+public/env.js
+Dockerfile
+docker-compose.yml
+Makefile
+README.md

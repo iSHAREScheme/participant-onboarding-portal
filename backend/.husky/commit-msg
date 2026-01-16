@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+npx --yes @commitlint/cli --edit "${1:-$(git rev-parse --git-path COMMIT_EDITMSG)}"

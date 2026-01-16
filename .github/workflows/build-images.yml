@@ -1,0 +1,88 @@
+name: Build Images
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (backend, frontend, keycloak)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871
+
+      - name: Compute image metadata
+        id: meta
+        shell: bash
+        run: |
+          echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "push=true" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "push=false" >> $GITHUB_OUTPUT
+            echo "tag=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb
+
+      - name: Login to GHCR
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ steps.meta.outputs.push }}
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/onboarding-portal-backend:${{ steps.meta.outputs.tag }}
+          secrets: |
+            "SAT_PRIVATE_KEY=${{ secrets.SAT_PRIVATE_KEY }}"
+
+      - name: Build frontend image
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ steps.meta.outputs.push }}
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/onboarding-portal-frontend:${{ steps.meta.outputs.tag }}
+
+      - name: Build keycloak image
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75
+        with:
+          context: ./frontend/keycloak
+          file: ./frontend/keycloak/Dockerfile
+          push: ${{ steps.meta.outputs.push }}
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner_lc }}/onboarding-portal-keycloak:${{ steps.meta.outputs.tag }}
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

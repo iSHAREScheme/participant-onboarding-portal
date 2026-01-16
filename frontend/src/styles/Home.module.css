@@ -1,0 +1,113 @@
+.container {
+  padding: 2rem;
+  background-color: #f5f5f5;
+  padding-top: 90px;
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 5rem;
+}
+
+.leftSection {
+  width: 400px;
+  padding-right: 2rem;
+}
+
+.rightSection {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--secondary-color, #003145);
+  color: white;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+.title {
+  color: var(--text-secondary, #013A57);
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.description {
+  color: #666;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.agreementText {
+  color: var(--text-primary, #003145);
+  margin-bottom: 1rem;
+}
+
+.agreementList {
+  list-style: none;
+  padding: 0;
+}
+
+.agreementList li {
+  margin-bottom: 0.5rem;
+}
+
+.agreementList a {
+  color: var(--button-primary, #0088cc);
+  text-decoration: none;
+}
+
+.beforeTitle {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.beforeDescription {
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+}
+
+.requirementsList {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.requirementsList li {
+  margin-bottom: 0.5rem;
+}
+
+.readyText {
+  margin-bottom: 1.5rem;
+}
+
+.proceedButton {
+  font-size: var(--button-font-size, 18px);
+  background-color: var(--button-primary, #0088cc);
+  color: var(--text-primary, #000);
+  border: none;
+  padding: 0.6rem 0.8rem;
+  font-weight: var(--button-font-weight, bold);
+  border-radius: var(--button-border-radius, 4px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  text-transform: none;
+}
+
+.proceedButton::after {
+  /* Use the arrow-next SVG as the icon */
+  content: "";
+  display: inline-block;
+  width: 1em;            /* roughly the height of the text line */
+  height: 1em;
+  background-color: currentColor;          /* picks up the button’s text color */
+  mask: url("../../public/icons/arrow-next.svg") no-repeat center;
+  -webkit-mask: url("../../public/icons/arrow-next.svg") no-repeat center; /* Safari */
+  mask-size: contain;
+  -webkit-mask-size: contain;
+
+}

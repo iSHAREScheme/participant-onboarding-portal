@@ -1,0 +1,65 @@
+.placeholderContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  min-height: 200px;
+}
+
+.placeholderImage {
+  margin-bottom: 1rem;
+}
+
+.placeholderImage img {
+  max-width: 194px;
+  height: auto;
+}
+
+.placeholderHeader {
+  margin-bottom: 1rem;
+}
+
+.placeholderHeader h1 {
+  font-size: 24px;
+  color: var(--text-secondary, #013A57);
+  margin: 0;
+  font-weight: 700;
+}
+
+.placeholderContent {
+  max-width: 400px;
+}
+
+.placeholderContent p {
+  color: var(--text-primary, #013A57);
+  font-size: 18px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.placeholderButton {
+  margin-top: 1.5rem;
+  border-radius: var(--button-border-radius, 40px);
+}
+
+.defaultButton {
+  background-color: var(--text-primary, #013A57);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--button-border-radius, 40px);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.defaultButton:hover {
+  background-color: #012a41;
+}
+
+.defaultButton:active {
+  background-color: #011f30;
+}
