@@ -434,7 +434,7 @@ components:
             type: object
             properties:
               compliancy_verified:
-                type: boolean
+                type: string
               end_date:
                 type: string
               legal_adherence:

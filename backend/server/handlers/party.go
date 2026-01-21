@@ -711,7 +711,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 			"framework":            "iSHARE",
 			"dataspace_id":         dataspaceId,
 			"dataspace_title":      dataspaceTitle,
-			"compliancy_verified":  "No",
+			"compliancy_verified":  "no",
 		})
 	}
 
@@ -767,7 +767,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 					"start_date":          time.Now().Format("2006-01-02T15:04:05.000Z"),
 					"end_date":            time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z"),
 					"loa":                 "Substantial",
-					"compliancy_verified": true,
+					"compliancy_verified": "yes",
 					"legal_adherence":     "yes",
 				},
 			},
