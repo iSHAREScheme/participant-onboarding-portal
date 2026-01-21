@@ -41,15 +41,6 @@ RUN mkdir -p /app/config /app/keys /app/resources
 COPY --chown=appuser:appgroup --chmod=0440 config/*.yaml /app/config/
 COPY --chown=appuser:appgroup --chmod=0440 resources/ /app/resources/
 
-# Add private key via BuildKit secret when provided; skip locally
-RUN --mount=type=secret,id=SAT_PRIVATE_KEY \
-    sh -c 'set -e; mkdir -p /app/keys; \
-    if [ -f /run/secrets/SAT_PRIVATE_KEY ]; then \
-      install -m 400 -o appuser -g appgroup /run/secrets/SAT_PRIVATE_KEY /app/keys/dil-sat-private-key.pem; \
-    else \
-      echo "No SAT_PRIVATE_KEY secret provided at build time; skipping."; \
-    fi'
-
 WORKDIR /app
 # bootstrap: ensure parent dir for DB exists (if path has a slash) and uploads dir exists
 RUN printf '%s\n' \
