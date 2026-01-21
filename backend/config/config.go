@@ -93,8 +93,9 @@ func (config *Config) LoadEnvironment() error {
 		config.SatellitePrivateKey = privateKey
 	}
 
-	config.SporSignedRequestPath = strings.TrimSpace(os.Getenv("SPOR_SIGNED_REQUEST_PATH"))
-	if config.SporSignedRequestPath == "" {
+	if sporPathRaw, ok := os.LookupEnv("SPOR_SIGNED_REQUEST_PATH"); ok {
+		config.SporSignedRequestPath = strings.TrimSpace(sporPathRaw)
+	} else {
 		config.SporSignedRequestPath = "resources/spor-signed-request.pdf"
 	}
 	if config.SporSignedRequestPath != "" {

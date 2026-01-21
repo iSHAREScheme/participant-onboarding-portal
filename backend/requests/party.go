@@ -6,6 +6,7 @@ type PartiesGetRequest struct {
 type PartyCreateRequest struct {
 	PartyId       string  `json:"party_id"`
 	PartyName     string  `json:"party_name"`
+	ID            string  `json:"id,omitempty"`
 	CapabilityUrl *string `json:"capability_url"`
 	RegistrarId   string  `json:"registrar_id"`
 	Status        *string `json:"status"`

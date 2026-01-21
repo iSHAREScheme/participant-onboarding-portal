@@ -138,6 +138,33 @@ func NewHandlerParty(server *s.Server, config *config.Config) *HandlerParty {
 	}
 }
 
+func (h *HandlerParty) buildSporSignedRequest(partyID string) (string, error) {
+	if h.Config.SporSignedRequestBase64 != "" {
+		return h.Config.SporSignedRequestBase64, nil
+	}
+	iss := strings.TrimSpace(h.Config.RegistrarId)
+	aud := strings.TrimSpace(h.Config.SatelliteAud)
+	privateKey := strings.TrimSpace(h.Config.SatellitePrivateKey)
+	if privateKey == "" {
+		return "", fmt.Errorf("SPOR signed request is not configured")
+	}
+	if iss == "" {
+		return "", fmt.Errorf("SPOR issuer is not configured (REGISTRAR_ID)")
+	}
+	if aud == "" {
+		return "", fmt.Errorf("SPOR JWT aud is not configured")
+	}
+	return utils.CreateSporSignedRequestJWT(
+		iss,
+		aud,
+		partyID,
+		partyID,
+		h.Config.SatelliteX5c,
+		privateKey,
+		300,
+	)
+}
+
 // CreateParty godoc
 // @Summary      Create party in Satellite
 // @Description  Forwards the party creation request to the iSHARE Satellite.
@@ -170,8 +197,25 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 		}
 	}
 
-	if h.Config.SporSignedRequestBase64 != "" {
-		request.Spor.SignedRequest = h.Config.SporSignedRequestBase64
+	normalizedPartyID := normalizePartyID(request.PartyId)
+	if normalizedPartyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
+	}
+	request.PartyId = normalizedPartyID
+	if request.ID == "" {
+		request.ID = normalizedPartyID
+	} else if normalizePartyID(request.ID) != normalizedPartyID {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "id must match party_id")
+	} else {
+		request.ID = normalizedPartyID
+	}
+
+	if request.Spor.SignedRequest == "" {
+		signedRequest, err := h.buildSporSignedRequest(normalizedPartyID)
+		if err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
+		}
+		request.Spor.SignedRequest = signedRequest
 	}
 
 	if h.Config.SatelliteDebug {
@@ -715,15 +759,14 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		})
 	}
 
-	normalizedPartyID := proposal.PartyId
-	if strings.HasPrefix(normalizedPartyID, "EU.EORI.") {
-		normalizedPartyID = strings.TrimPrefix(normalizedPartyID, "EU.EORI.")
+	normalizedPartyID := normalizePartyID(proposal.PartyId)
+	if normalizedPartyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
 	}
-	normalizedPartyID = "EU.EORI." + strings.TrimPrefix(normalizedPartyID, "NTR")
 
-	signedRequest := h.Config.SporSignedRequestBase64
-	if signedRequest == "" {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "SPOR signed request is not configured")
+	signedRequest, err := h.buildSporSignedRequest(normalizedPartyID)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 
 	authRegistryURL := proposal.AuthRegistryUrl
@@ -733,6 +776,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 
 	requestBody := map[string]interface{}{
 		"party_id":       normalizedPartyID,
+		"id":             normalizedPartyID,
 		"party_name":     proposal.PartyName,
 		"capability_url": proposal.CapabilitiesUrl,
 		"registrar_id":   registrarId,
@@ -855,6 +899,19 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	}
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
+}
+
+func normalizePartyID(raw string) string {
+	normalized := strings.TrimSpace(raw)
+	if normalized == "" {
+		return ""
+	}
+	if strings.HasPrefix(normalized, "EU.EORI.") {
+		normalized = strings.TrimPrefix(normalized, "EU.EORI.")
+	}
+	normalized = strings.TrimPrefix(normalized, "NTR")
+	normalized = "EU.EORI." + strings.TrimPrefix(normalized, "NTR")
+	return normalized
 }
 
 func normalizeWebsiteURL(raw string) string {

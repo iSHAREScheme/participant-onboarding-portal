@@ -422,6 +422,8 @@ components:
                 type: string
         capability_url:
           type: string
+        id:
+          type: string
         party_id:
           type: string
         party_name:
