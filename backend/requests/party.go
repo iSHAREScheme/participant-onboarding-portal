@@ -53,6 +53,6 @@ type PartyCreateRequest struct {
 		EndDate            *string `json:"end_date"`
 		Loa                *string `json:"loa"`
 		CompliancyVerified *bool   `json:"compliancy_verified"`
-		LegalAdherence     *bool   `json:"legal_adherence"`
+		LegalAdherence     *string `json:"legal_adherence"`
 	} `json:"roles"`
 }

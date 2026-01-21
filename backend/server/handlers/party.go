@@ -768,7 +768,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 					"end_date":            time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z"),
 					"loa":                 "Substantial",
 					"compliancy_verified": true,
-					"legal_adherence":     true,
+					"legal_adherence":     "yes",
 				},
 			},
 	}

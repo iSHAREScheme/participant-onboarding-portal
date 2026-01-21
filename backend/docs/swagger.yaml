@@ -438,7 +438,7 @@ components:
               end_date:
                 type: string
               legal_adherence:
-                type: boolean
+                type: string
               loa:
                 type: string
               role:
