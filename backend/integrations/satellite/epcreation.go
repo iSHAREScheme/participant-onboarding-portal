@@ -72,7 +72,7 @@ type epCreationAgreement201 struct {
 	Framework          string  `json:"framework"`
 	DataSpaceId        *string `json:"dataspace_id,omitempty"`
 	DataSpaceTitle     *string `json:"dataspace_title,omitempty"`
-	CompliancyVerified string  `json:"compliancy_verified"`
+	CompliancyVerified string  `json:"complaiancy_verified"`
 }
 
 type epCreationAgreement211 struct {
@@ -86,7 +86,7 @@ type epCreationAgreement211 struct {
 	Framework          string  `json:"framework"`
 	DataSpaceId        *string `json:"dataspace_id,omitempty"`
 	DataSpaceTitle     *string `json:"dataspace_title,omitempty"`
-	CompliancyVerified string  `json:"compliancy_verified"`
+	CompliancyVerified string  `json:"complaiancy_verified"`
 }
 
 type epCreationRole struct {
@@ -94,7 +94,7 @@ type epCreationRole struct {
 	StartDate          *string `json:"start_date"`
 	EndDate            *string `json:"end_date"`
 	Loa                *string `json:"loa"`
-	CompliancyVerified *string `json:"compliancy_verified"`
+	CompliancyVerified *string `json:"complaiancy_verified"`
 	LegalAdherence     *string `json:"legal_adherence"`
 }
 

@@ -45,7 +45,7 @@ type PartyCreateRequest struct {
 		Framework          string  `json:"framework"`
 		DataSpaceId        *string `json:"dataspace_id"`
 		DataSpaceTitle     *string `json:"dataspace_title"`
-		CompliancyVerified string  `json:"compliancy_verified"`
+		CompliancyVerified string  `json:"complaiancy_verified"`
 	} `json:"agreements"`
 	Spor struct {
 		SignedRequest string `json:"signed_request"`
@@ -55,7 +55,7 @@ type PartyCreateRequest struct {
 		StartDate          *string `json:"start_date"`
 		EndDate            *string `json:"end_date"`
 		Loa                *string `json:"loa"`
-		CompliancyVerified *string `json:"compliancy_verified"`
+		CompliancyVerified *string `json:"complaiancy_verified"`
 		LegalAdherence     *string `json:"legal_adherence"`
 	} `json:"roles"`
 }

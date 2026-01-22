@@ -400,7 +400,7 @@ components:
               agreement_file:
                 type: string
                 description: "Base64-encoded PDF; used in 2.1.1."
-              compliancy_verified:
+              complaiancy_verified:
                 type: string
               dataspace_id:
                 type: string
@@ -455,7 +455,7 @@ components:
           items:
             type: object
             properties:
-              compliancy_verified:
+              complaiancy_verified:
                 type: string
               end_date:
                 type: string
