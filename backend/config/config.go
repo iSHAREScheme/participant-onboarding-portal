@@ -19,6 +19,7 @@ type Config struct {
 	SatelliteEpCreationEndpoint string
 	SatelliteTokenEndpoint      string
 	SatelliteTokenScope         string
+	SatelliteVersion            string
 	SatelliteIss                string
 	RegistrarId                 string
 	DataspaceId                 string
@@ -75,6 +76,10 @@ func (config *Config) LoadEnvironment() error {
 	config.SatelliteTokenScope = os.Getenv("SATELLITE_TOKEN_SCOPE")
 	if config.SatelliteTokenScope == "" {
 		config.SatelliteTokenScope = "iSHARE"
+	}
+	config.SatelliteVersion = os.Getenv("SATELLITE_VERSION")
+	if config.SatelliteVersion == "" {
+		config.SatelliteVersion = "2.0.1"
 	}
 	config.SatelliteIss = os.Getenv("SATELLITE_ISS")
 	config.SatelliteAud = os.Getenv("SATELLITE_AUD")

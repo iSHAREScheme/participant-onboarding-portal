@@ -4,12 +4,13 @@ type PartiesGetRequest struct {
 }
 
 type PartyCreateRequest struct {
-	PartyId       string  `json:"party_id"`
-	PartyName     string  `json:"party_name"`
-	ID            string  `json:"id,omitempty"`
-	CapabilityUrl *string `json:"capability_url"`
-	RegistrarId   string  `json:"registrar_id"`
-	Status        *string `json:"status"`
+	PartyId       string   `json:"party_id"`
+	PartyName     string   `json:"party_name"`
+	ID            string   `json:"id,omitempty"`
+	AlsoKnownAs   []string `json:"alsoKnownAs"`
+	CapabilityUrl *string  `json:"capability_url"`
+	RegistrarId   string   `json:"registrar_id"`
+	Status        *string  `json:"status"`
 	Adherence     struct {
 		Status    string `json:"status"`
 		StartDate string `json:"start_date"`
@@ -34,16 +35,17 @@ type PartyCreateRequest struct {
 		Tags                *string   `json:"tags"`
 	} `json:"additional_info"`
 	Agreements *[]struct {
-		Type                string  `json:"type"`
-		Title               string  `json:"title"`
-		Status              string  `json:"status"`
-		SignDate            string  `json:"sign_date"`
-		ExpiryDate          string  `json:"expiry_date"`
-		HashFile            string  `json:"hash_file"`
-		Framework           string  `json:"framework"`
-		DataSpaceId         *string `json:"dataspace_id"`
-		DataSpaceTitle      *string `json:"dataspace_title"`
-		CompliancyVerified  string  `json:"compliancy_verified"`
+		Type               string  `json:"type"`
+		Title              string  `json:"title"`
+		Status             string  `json:"status"`
+		SignDate           string  `json:"sign_date"`
+		ExpiryDate         string  `json:"expiry_date"`
+		HashFile           string  `json:"hash_file"`
+		AgreementFile      string  `json:"agreement_file"`
+		Framework          string  `json:"framework"`
+		DataSpaceId        *string `json:"dataspace_id"`
+		DataSpaceTitle     *string `json:"dataspace_title"`
+		CompliancyVerified string  `json:"compliancy_verified"`
 	} `json:"agreements"`
 	Spor struct {
 		SignedRequest string `json:"signed_request"`

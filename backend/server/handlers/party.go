@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"onboardingportal/config"
+	"onboardingportal/integrations/satellite"
 	"onboardingportal/models"
 	"onboardingportal/requests"
 	"onboardingportal/responses"
@@ -138,7 +139,7 @@ func NewHandlerParty(server *s.Server, config *config.Config) *HandlerParty {
 	}
 }
 
-func (h *HandlerParty) buildSporSignedRequest(partyID string) (string, error) {
+func (h *HandlerParty) buildSporSignedRequest(subject string, organizationIdentifier string) (string, error) {
 	if h.Config.SporSignedRequestBase64 != "" {
 		return h.Config.SporSignedRequestBase64, nil
 	}
@@ -157,8 +158,8 @@ func (h *HandlerParty) buildSporSignedRequest(partyID string) (string, error) {
 	return utils.CreateSporSignedRequestJWT(
 		iss,
 		aud,
-		partyID,
-		partyID,
+		subject,
+		organizationIdentifier,
 		h.Config.SatelliteX5c,
 		privateKey,
 		300,
@@ -197,21 +198,37 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 		}
 	}
 
+	flavor := epCreationFlavorFromVersion(h.Config.SatelliteVersion)
 	normalizedPartyID := normalizePartyID(request.PartyId)
 	if normalizedPartyID == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
 	}
 	request.PartyId = normalizedPartyID
-	if request.ID == "" {
-		request.ID = normalizedPartyID
-	} else if normalizePartyID(request.ID) != normalizedPartyID {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "id must match party_id")
+
+	partyDID := strings.TrimSpace(request.ID)
+	partyAliases := request.AlsoKnownAs
+	derivedDID := satellite.BuildDidFromPartyID(normalizedPartyID)
+	if flavor.UseDidIdentifiers {
+		if partyDID == "" {
+			partyDID = derivedDID
+		} else if partyDID != derivedDID {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "id must match party_id")
+		}
+		if len(partyAliases) == 0 || strings.TrimSpace(partyAliases[0]) == "" {
+			partyAliases = []string{satellite.BuildEoriAlias(normalizedPartyID)}
+		}
 	} else {
-		request.ID = normalizedPartyID
+		partyDID = ""
+		partyAliases = nil
 	}
 
-	if request.Spor.SignedRequest == "" {
-		signedRequest, err := h.buildSporSignedRequest(normalizedPartyID)
+	sporIdentifier := normalizedPartyID
+	if flavor.UseDidIdentifiers {
+		sporIdentifier = partyDID
+	}
+	signedRequest := request.Spor.SignedRequest
+	if signedRequest == "" {
+		signedRequest, err = h.buildSporSignedRequest(sporIdentifier, sporIdentifier)
 		if err != nil {
 			return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 		}
@@ -219,7 +236,6 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 	}
 
 	if h.Config.SatelliteDebug {
-		signedRequest := request.Spor.SignedRequest
 		if signedRequest == "" {
 			log.Printf("satellite: spor signed_request is empty")
 		} else {
@@ -240,7 +256,14 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}
 
-	payloadBytes, err := json.Marshal(request)
+	var payload interface{}
+	if flavor.UseDidIdentifiers {
+		payload = satellite.BuildEpCreation211RequestFromRequest(&request, partyDID, partyAliases, signedRequest)
+	} else {
+		payload = satellite.BuildEpCreation201RequestFromRequest(&request, normalizedPartyID, signedRequest)
+	}
+
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to prepare request payload.")
 	}
@@ -718,53 +741,41 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Signed agreements are required to complete proposal")
 	}
 
+	flavor := epCreationFlavorFromVersion(h.Config.SatelliteVersion)
+
 	// Read and hash agreement files
-	var agreementHashes []string
+	var agreementFiles []satellite.AgreementFile
 	for _, path := range proposal.SignedAgreementPaths {
 		fileContent, err := os.ReadFile(path)
 		if err != nil {
 			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read agreement file")
 		}
 		hash := md5.Sum(fileContent)
-		agreementHashes = append(agreementHashes, fmt.Sprintf("%x", hash))
+		agreementFiles = append(agreementFiles, satellite.AgreementFile{
+			Hash:       fmt.Sprintf("%x", hash),
+			FileBase64: base64.StdEncoding.EncodeToString(fileContent),
+		})
 	}
 
-	agreementMetadata := []struct {
-		Type  string
-		Title string
-	}{
+	agreementTemplates := []satellite.AgreementTemplate{
 		{Type: "TermsOfUse", Title: "ToU-iSHARE"},
 		{Type: "AccessionAgreement", Title: "iSHARE-AA"},
 	}
 
-	agreements := make([]map[string]interface{}, 0, len(agreementHashes))
-	for idx, agreementHash := range agreementHashes {
-		agreementType := "Agreement"
-		agreementTitle := fmt.Sprintf("Agreement-%d", idx+1)
-		if idx < len(agreementMetadata) {
-			agreementType = agreementMetadata[idx].Type
-			agreementTitle = agreementMetadata[idx].Title
-		}
-		agreements = append(agreements, map[string]interface{}{
-			"type":                 agreementType,
-			"title":                agreementTitle,
-			"status":               "Accepted",
-			"sign_date":            time.Now().Format("2006-01-02T15:04:05.000Z"),
-			"expiry_date":          time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z"),
-			"hash_file":            agreementHash,
-			"framework":            "iSHARE",
-			"dataspace_id":         dataspaceId,
-			"dataspace_title":      dataspaceTitle,
-			"compliancy_verified":  "no",
-		})
-	}
+	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
+	endDate := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
 
 	normalizedPartyID := normalizePartyID(proposal.PartyId)
 	if normalizedPartyID == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
 	}
-
-	signedRequest, err := h.buildSporSignedRequest(normalizedPartyID)
+	partyDID := satellite.BuildDidFromPartyID(normalizedPartyID)
+	aliases := []string{satellite.BuildEoriAlias(normalizedPartyID)}
+	sporIdentifier := normalizedPartyID
+	if flavor.UseDidIdentifiers {
+		sporIdentifier = partyDID
+	}
+	signedRequest, err := h.buildSporSignedRequest(sporIdentifier, sporIdentifier)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -774,63 +785,25 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		authRegistryURL = "https://ar.isharetest.net"
 	}
 
-	requestBody := map[string]interface{}{
-		"party_id":       normalizedPartyID,
-		"id":             normalizedPartyID,
-		"party_name":     proposal.PartyName,
-		"capability_url": proposal.CapabilitiesUrl,
-		"registrar_id":   registrarId,
-		"adherence": map[string]interface{}{
-			"status":     "Active",
-			"start_date": time.Now().Format("2006-01-02T15:04:05.000Z"),
-			"end_date":   time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z"),
-		},
-		"authregistries": []map[string]interface{}{
-			{
-				"authregistery_id":   proposal.AuthRegistry,
-				"authregistery_name": proposal.AuthRegistryName,
-				"authregistery_url":  authRegistryURL,
-				"dataspace_id":       dataspaceId,
-				"dataspace_title":    dataspaceTitle,
-			},
-		},
-			"additional_info": map[string]interface{}{
-				"description":          "",
-				"logo":                 "",
-				"website":              normalizeWebsiteURL(proposal.Website),
-				"company_phone":        proposal.ContactPhone,
-				"company_email":        proposal.ContactEmail,
-				"publicly_publishable": false,
-			},
-		"spor": map[string]interface{}{
-			"signed_request": signedRequest,
-		},
-			"roles": []map[string]interface{}{
-				{
-					"role":                "EntitledParty",
-					"start_date":          time.Now().Format("2006-01-02T15:04:05.000Z"),
-					"end_date":            time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z"),
-					"loa":                 "Substantial",
-					"compliancy_verified": "yes",
-					"legal_adherence":     "yes",
-				},
-			},
-	}
-
-	if len(agreements) > 0 {
-		requestBody["agreements"] = agreements
+	var payload interface{}
+	if flavor.UseDidIdentifiers {
+		agreements := satellite.BuildAgreements211FromFiles(agreementFiles, agreementTemplates, dataspaceId, dataspaceTitle, startDate, endDate)
+		payload = satellite.BuildEpCreation211RequestFromProposal(&proposal, partyDID, aliases, signedRequest, registrarId, authRegistryURL, dataspaceId, dataspaceTitle, agreements, startDate, endDate)
+	} else {
+		agreements := satellite.BuildAgreements201FromFiles(agreementFiles, agreementTemplates, dataspaceId, dataspaceTitle, startDate, endDate)
+		payload = satellite.BuildEpCreation201RequestFromProposal(&proposal, normalizedPartyID, signedRequest, registrarId, authRegistryURL, dataspaceId, dataspaceTitle, agreements, startDate, endDate)
 	}
 
 	if h.Config.SatelliteDebug {
-		if dump, err := json.MarshalIndent(requestBody, "", "  "); err == nil {
+		if dump, err := json.MarshalIndent(payload, "", "  "); err == nil {
 			log.Printf("satellite: completeProposal payload %s", string(dump))
 		} else {
 			log.Printf("satellite: payload marshal error: %v", err)
 		}
 	}
 
-	// Convert the map to JSON
-	jsonBody, err := json.Marshal(requestBody)
+	// Convert the payload to JSON
+	jsonBody, err := json.Marshal(payload)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to marshal request body")
 	}
@@ -914,21 +887,20 @@ func normalizePartyID(raw string) string {
 	return normalized
 }
 
-func normalizeWebsiteURL(raw string) string {
+type epCreationFlavor struct {
+	UseDidIdentifiers bool
+}
+
+// ep_creation differences:
+//   - 2.0.1: party_id, hash_file, publicly_publishable boolean, SPOR uses EORI.
+//   - 2.1.1: id + alsoKnownAs (DID/EORI), hash_file + agreement_file (base64),
+//     publicly_publishable string, SPOR uses DID.
+func epCreationFlavorFromVersion(raw string) epCreationFlavor {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
+	if strings.HasPrefix(trimmed, "2.1") {
+		return epCreationFlavor{UseDidIdentifiers: true}
 	}
-
-	if !strings.Contains(trimmed, "://") {
-		trimmed = "https://" + trimmed
-	}
-
-	if _, err := url.ParseRequestURI(trimmed); err != nil {
-		return raw
-	}
-
-	return trimmed
+	return epCreationFlavor{UseDidIdentifiers: false}
 }
 
 // ModifyProposal godoc

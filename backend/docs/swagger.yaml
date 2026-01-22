@@ -344,7 +344,15 @@ components:
         registrarId:
           type: string
     requests.PartyCreateRequest:
+      description: "Versioned request body; use oneOf to target the appropriate Satellite mapping."
+      oneOf:
+        - $ref: '#/components/schemas/requests.PartyCreateRequest201'
+        - $ref: '#/components/schemas/requests.PartyCreateRequest211'
+    requests.PartyCreateRequestBase:
       type: object
+      description: "Backend maps this request to the Satellite ep_creation payload based on SATELLITE_VERSION (2.0.1 or 2.1.1)."
+      required:
+        - party_id
       properties:
         additional_info:
           type: object
@@ -363,6 +371,7 @@ components:
               type: string
             publicly_publishable:
               type: boolean
+              description: "Client sends boolean; converted to \"true\"/\"false\" when SATELLITE_VERSION starts with 2.1."
             sector_industry:
               type: array
               items:
@@ -387,6 +396,10 @@ components:
             properties:
               hash_file:
                 type: string
+                description: "Used in 2.0.1; still sent alongside agreement_file in 2.1.1."
+              agreement_file:
+                type: string
+                description: "Base64-encoded PDF; used in 2.1.1."
               compliancy_verified:
                 type: string
               dataspace_id:
@@ -424,8 +437,15 @@ components:
           type: string
         id:
           type: string
+          description: "2.1.1 DID derived from party_id."
+        alsoKnownAs:
+          type: array
+          items:
+            type: string
+          description: "2.1.1 EORI alias derived from party_id."
         party_id:
           type: string
+          description: "EORI identifier; used for 2.0.1 and to derive 2.1.1 DID."
         party_name:
           type: string
         registrar_id:
@@ -452,8 +472,17 @@ components:
           properties:
             signed_request:
               type: string
+              description: "JWT or base64. organizationIdentifier uses DID for 2.1.1 and EORI for 2.0.1."
         status:
           type: string
+    requests.PartyCreateRequest201:
+      description: "Satellite 2.0.1 mapping. id and alsoKnownAs are ignored; party_id is used directly. spor.signed_request is optional and generated if omitted."
+      allOf:
+        - $ref: '#/components/schemas/requests.PartyCreateRequestBase'
+    requests.PartyCreateRequest211:
+      description: "Satellite 2.1.1 mapping. id and alsoKnownAs are derived from party_id when omitted. publicly_publishable is sent as a string. spor.signed_request is optional and generated if omitted."
+      allOf:
+        - $ref: '#/components/schemas/requests.PartyCreateRequestBase'
   securitySchemes:
     bearerAuth:
       type: http
