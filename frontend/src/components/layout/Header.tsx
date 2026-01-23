@@ -20,7 +20,7 @@ const Header: React.FC = () => {
 
   const env = getPublicEnv()
   const defaultAssociationName = env.NEXT_PUBLIC_DEFAULT_ASSOCIATION_NAME || ''
-  const idpOnly = Boolean(env.NEXT_PUBLIC_IDP_ONLY)
+  const idpOnly = env.NEXT_PUBLIC_IDP_ONLY === "true"
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const adminRoutesDisabled = env.NEXT_PUBLIC_DISABLE_ADMIN_ROUTES === "true"
   const idpHint =

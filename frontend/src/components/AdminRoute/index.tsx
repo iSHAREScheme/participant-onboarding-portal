@@ -32,7 +32,7 @@ const AdminRoute = ({
       fetchData();
     } else if (!isAuthenticated) {
       const env = getPublicEnv();
-      const idpOnly = Boolean(env.NEXT_PUBLIC_IDP_ONLY);
+      const idpOnly = env.NEXT_PUBLIC_IDP_ONLY === "true";
       const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP;
       const idpHint =
         idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""

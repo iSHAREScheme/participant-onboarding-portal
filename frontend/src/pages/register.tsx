@@ -276,7 +276,11 @@ const Register: NextPage = () => {
     }
     return "";
   };
-  const kvkFromUserInfo = toTrimmedString(keycloakUserInfo?.["kvk"]);
+  const kvkFromUserInfo = toTrimmedString(
+    keycloakUserInfo?.["legalSubjectId"] ??
+    keycloakUserInfo?.["kvkNumber"] ??
+    keycloakUserInfo?.["kvk"]
+  );
   const companyNameFromUserInfo = toTrimmedString(
     keycloakUserInfo?.["companyName"] ?? keycloakUserInfo?.["companyname"]
   );
@@ -316,6 +320,7 @@ const Register: NextPage = () => {
   const autoAcceptProposal = parseBoolEnv(env.NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL)
   const skipRoleStep = parseBoolEnv(env.NEXT_PUBLIC_SKIP_ROLES)
   const skipSettings = parseBoolEnv(env.NEXT_PUBLIC_SKIP_SETTINGS)
+  const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
 
   const steps = alwaysM2M ? (staticParty ? StepsV3 : StepsV2) : StepsV1
@@ -1328,7 +1333,7 @@ const Register: NextPage = () => {
     if (!keycloak) return
 
     const idpHint =
-      keycloakIdp &&
+      idpOnly && keycloakIdp &&
       keycloakIdp !== "undefined" &&
       keycloakIdp !== ""
         ? keycloakIdp

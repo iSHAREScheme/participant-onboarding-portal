@@ -18,9 +18,10 @@ const ProtectedRoute = ({
     if (!initialized) return
     if (!keycloak.authenticated) {
       const env = getPublicEnv();
+      const idpOnly = env.NEXT_PUBLIC_IDP_ONLY === "true";
       const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP;
       const idpHint =
-        keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+        idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
           ? keycloakIdp
           : undefined;
       // console.log('Not authenticated', keycloakIdp)
