@@ -762,29 +762,35 @@ const Register: NextPage = () => {
       // }
 
       case steps.association: // Association
-        if (
-          !data.association.authRegistry ||
-          (!hideCapabilitiesUrlField && !data.association.capabilitiesUrl) ||
-          !data.association.authRegistryUrl ||
-          (data.status !== "rejected" && (data.roles.dataProvider && !data.association.cttProof))
-        ) {
+        if (!data.association.authRegistry || !data.association.authRegistryUrl) {
           setValidationError("register.validation.associationRequired");
           return false;
-        } else if (!hideCapabilitiesUrlField && !urlRegex.test(data.association.capabilitiesUrl)) {
+        } else if (
+          !hideCapabilitiesUrlField &&
+          data.association.capabilitiesUrl &&
+          !urlRegex.test(data.association.capabilitiesUrl)
+        ) {
           setValidationError("register.validation.invalidCapabilitiesUrl");
           return false;
         } else if (!urlRegex.test(data.association.authRegistryUrl)) {
           setValidationError("register.validation.invalidRegistryUrl");
+          return false;
+        } else if (
+          data.status !== "rejected" &&
+          data.roles.dataProvider &&
+          !data.association.cttProof
+        ) {
+          setValidationError("register.validation.cttProofRequired");
           return false;
         } else {
           return true;
         }
 
       case steps.account: // Account
-        if (!data.account.name || !data.account.phone || !data.account.email) {
+        if (!data.account.name || !data.account.email) {
           setValidationError("register.validation.accountRequired");
           return false;
-        } else if (!phoneRegex.test(data.account.phone)) {
+        } else if (data.account.phone && !phoneRegex.test(data.account.phone)) {
           setValidationError("register.validation.invalidPhone");
           return false;
         } else if (!emailRegex.test(data.account.email)) {
@@ -2010,7 +2016,6 @@ const Register: NextPage = () => {
                   onChange={(e) =>
                     handleInputChange("account", "phone", e.target.value)
                   }
-                  required
                 />
               </div>
             </div>
