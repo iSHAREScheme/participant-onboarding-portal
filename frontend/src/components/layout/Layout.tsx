@@ -1,6 +1,7 @@
 import React from "react";
 import MyHeader from "./Header";
 import Footer from "./Footer";
+import styles from "styles/components/Layout.module.css";
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -10,10 +11,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <>
       <MyHeader />
-      <main style={{ paddingTop: "120px", paddingBottom: "80px" }}>
-        {children}
-      </main>
-      <Footer />
+      <div className={styles.page}>
+        <main className={styles.main}>{children}</main>
+        <Footer />
+      </div>
     </>
   );
 };
