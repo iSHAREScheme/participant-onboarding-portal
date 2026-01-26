@@ -1,1 +1,5 @@
-<p>Hello ${user.firstName?default(user.username)},</p><p>Your proposal has been accepted.\\n\\nYour proposal has been accepted. Please log in to the portal and upload the required signed agreements</p><p>– Onboarding Portal</p>
+<p>Hello ${user.firstName?default(user.username)},</p>
+<p>Your proposal was approved. Please upload the signed agreements to continue.</p>
+<p>Upload agreements here:</p>
+<p><a href="${proposalLink}">${proposalLink}</a></p>
+<p>- Onboarding Portal</p>

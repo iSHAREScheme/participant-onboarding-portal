@@ -1,1 +1,5 @@
-<p>Hello ${user.firstName?default(user.username)},</p><p>Your uploaded agreements have been rejected.\\n\\nPlease review the agreements and take the necessary actions</p><p>– Onboarding Portal</p>
+<p>Hello ${user.firstName?default(user.username)},</p>
+<p>Your agreements were rejected. Please upload corrected agreements.</p>
+<p>Upload agreements here:</p>
+<p><a href="${proposalLink}">${proposalLink}</a></p>
+<p>- Onboarding Portal</p>

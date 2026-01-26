@@ -6,7 +6,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import { useLanguage } from "../context/LanguageContext";
 import { FormInput, Tooltip } from "../components";
 import Placeholder from "../components/Placeholder";
-// import EmailNotification from "util/notify"
+import EmailNotification from "util/notify"
 import preValidateEidasCert from "util/validateEidas"
 import API from "api/client"
 import { AxiosError } from "axios"
@@ -1124,8 +1124,9 @@ const Register: NextPage = () => {
           void clearPersistedRegisterState(registerStateKey)
         }
 
-        // if (keycloak)
-        //   void EmailNotification.newProposal(keycloak, createdProposal.id)
+        if (keycloak) {
+          void EmailNotification.newProposal(keycloak, String(createdProposal?.id || ""))
+        }
 
       } catch (error) {
         console.error("Error submitting registration:", error);
@@ -1209,8 +1210,9 @@ const Register: NextPage = () => {
         status: "signed",
       }))
 
-      // if (keycloak)
-      //   void EmailNotification.agreementCreated(keycloak, keycloak?.tokenParsed?.preferred_username)
+      if (keycloak) {
+        void EmailNotification.agreementCreated(keycloak)
+      }
 
       setValidationError("");
       setCurrentStep(10);

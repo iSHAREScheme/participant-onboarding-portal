@@ -55,14 +55,21 @@ public class ProposalEmailEndpoint implements RealmResourceProvider {
         return rb.build();
     }
 
+    private enum RecipientType {
+        ADMIN_ROLE,
+        USER
+    }
+
     /** Holder for template references resolved from notifyType */
     private static final class NotificationTemplate {
         final String subjectRef;
         final String bodyRef;
+        final RecipientType recipientType;
 
-        NotificationTemplate(String subjectRef, String bodyRef) {
+        NotificationTemplate(String subjectRef, String bodyRef, RecipientType recipientType) {
             this.subjectRef = subjectRef;
             this.bodyRef = bodyRef;
+            this.recipientType = recipientType;
         }
     }
 
@@ -106,6 +113,19 @@ public class ProposalEmailEndpoint implements RealmResourceProvider {
         }
     }
 
+    private UserModel resolveRecipientUser(RealmModel realm, JsonObject body) {
+        String recipientUsername = body.getString("recipientUsername", "").trim();
+        String recipientEmail = body.getString("recipientEmail", "").trim();
+        UserModel user = null;
+        if (!recipientUsername.isEmpty()) {
+            user = session.users().getUserByUsername(realm, recipientUsername);
+        }
+        if (user == null && !recipientEmail.isEmpty()) {
+            user = session.users().getUserByEmail(realm, recipientEmail);
+        }
+        return user;
+    }
+
     public ProposalEmailEndpoint(KeycloakSession session) {
         this.session = session;
     }
@@ -140,29 +160,35 @@ public class ProposalEmailEndpoint implements RealmResourceProvider {
 
         // Resolve subject/body references based on notifyType
         NotificationTemplate notification = switch (notifyType) {
-            case "proposal_created" -> new NotificationTemplate("proposalCreatedSubject", "proposalCreatedBody.ftl");
-            case "proposal_review" -> new NotificationTemplate("proposalInReviewSubject", "proposalInReviewBody.ftl");
-            case "proposal_accepted" -> new NotificationTemplate("proposalAcceptedSubject", "proposalAcceptedBody.ftl");
-            case "proposal_rejected" -> new NotificationTemplate("proposalRejectedSubject", "proposalRejectedBody.ftl");
+            case "proposal_created" -> new NotificationTemplate("proposalCreatedSubject", "proposalCreatedBody.ftl", RecipientType.ADMIN_ROLE);
+            case "proposal_received" -> new NotificationTemplate("proposalReceivedSubject", "proposalReceivedBody.ftl", RecipientType.USER);
+            case "proposal_accepted" -> new NotificationTemplate("proposalAcceptedSubject", "proposalAcceptedBody.ftl", RecipientType.USER);
+            case "proposal_rejected" -> new NotificationTemplate("proposalRejectedSubject", "proposalRejectedBody.ftl", RecipientType.USER);
 
-            case "agreement_created" -> new NotificationTemplate("agreementUploadedSubject", "agreementUploadedBody.ftl");
-            case "agreement_review" -> new NotificationTemplate("agreementInReviewSubject", "agreementInReviewBody.ftl");
-            case "agreement_accepted" -> new NotificationTemplate("agreementAcceptedSubject", "agreementAcceptedBody.ftl");
-            case "agreement_rejected" -> new NotificationTemplate("agreementRejectedSubject", "agreementRejectedBody.ftl");
+            case "agreement_created" -> new NotificationTemplate("agreementUploadedSubject", "agreementUploadedBody.ftl", RecipientType.ADMIN_ROLE);
+            case "agreement_accepted" -> new NotificationTemplate("agreementAcceptedSubject", "agreementAcceptedBody.ftl", RecipientType.USER);
+            case "agreement_rejected" -> new NotificationTemplate("agreementRejectedSubject", "agreementRejectedBody.ftl", RecipientType.USER);
 
-            default -> new NotificationTemplate("default.subject", "default.body");
+            default -> null;
         };
+        if (notification == null) {
+            return withCors(Response.status(400).entity("Unknown notifyType"));
+        }
         
         String proposedBy   = body.getString("keycloakUsername", "unknown");
 
-        // Get domain from environment variable
-        String frontendDomain = System.getenv("NEXT_PUBLIC_FRONTEND_DOMAIN");
-
         String proposalLink;
-        if (frontendDomain != null && !frontendDomain.isEmpty()) {
-            proposalLink = frontendDomain + "/admin/proposals";
+        String requestLink = body.getString("proposalLink", "").trim();
+        if (!requestLink.isEmpty()) {
+            proposalLink = requestLink;
         } else {
-            proposalLink = body.getString("proposalLink", "https://example.org/admin/proposals");
+            String frontendDomain = System.getenv("NEXT_PUBLIC_FRONTEND_DOMAIN");
+            String path = notification.recipientType == RecipientType.ADMIN_ROLE ? "/admin/proposals" : "/register";
+            if (frontendDomain != null && !frontendDomain.isEmpty()) {
+                proposalLink = frontendDomain + path;
+            } else {
+                proposalLink = "https://example.org" + path;
+            }
         }
 
         // template args
@@ -178,36 +204,47 @@ public class ProposalEmailEndpoint implements RealmResourceProvider {
         // Prepare templates: subject is a bundle key; body is an .ftl under email/html/
         String subjectKey   = notification.subjectRef;           // e.g. messages property key
         String bodyTemplate = ensureFtl(notification.bodyRef);   // ensure .ftl for the body
-        session.users()
-               .getRoleMembersStream(realm, role)
-               .forEach(u -> {
-                   try {
-                       etp.setUser(u)
-                          .send(subjectKey,
-                                bodyTemplate,
-                                attrs);
-                   } catch (EmailException e) {
-                       String userInfo = String.format("userId=%s, email=%s, username=%s", u.getId(), u.getEmail(), u.getUsername());
-                       String themeName = realm.getEmailTheme();
-                       // quick checks: does subject key exist in messages? do html/text variants exist?
-                       boolean bodyExists = templateExists(realm, bodyTemplate);
-                       boolean textExists = templateExists(realm, bodyTemplate.replace(".ftl", ".ftl"));
-                       java.util.Set<String> messageKeys = new java.util.HashSet<>();
-                       try {
-                           Theme th = session.theme().getTheme(themeName, Theme.Type.EMAIL);
-                           java.util.Properties msgs = th.getMessages(null);
-                           if (msgs != null) messageKeys.addAll(msgs.stringPropertyNames());
-                       } catch (Exception ignore) {}
-                       boolean subjectKeyPresent = messageKeys.contains(subjectKey);
+        java.util.function.Consumer<UserModel> sendToUser = (u) -> {
+            if (u == null) return;
+            try {
+                etp.setUser(u)
+                   .send(subjectKey,
+                         bodyTemplate,
+                         attrs);
+            } catch (EmailException e) {
+                String userInfo = String.format("userId=%s, email=%s, username=%s", u.getId(), u.getEmail(), u.getUsername());
+                String themeName = realm.getEmailTheme();
+                // quick checks: does subject key exist in messages? do html/text variants exist?
+                boolean bodyExists = templateExists(realm, bodyTemplate);
+                boolean textExists = templateExists(realm, bodyTemplate.replace(".ftl", ".ftl"));
+                java.util.Set<String> messageKeys = new java.util.HashSet<>();
+                try {
+                    Theme th = session.theme().getTheme(themeName, Theme.Type.EMAIL);
+                    java.util.Properties msgs = th.getMessages(null);
+                    if (msgs != null) messageKeys.addAll(msgs.stringPropertyNames());
+                } catch (Exception ignore) {}
+                boolean subjectKeyPresent = messageKeys.contains(subjectKey);
 
-                       Logger.getLogger(ProposalEmailEndpoint.class.getName()).log(
-                           Level.WARNING,
-                           "Failed to template email. Details: subjectKey={0}, bodyTemplate={1}, theme={2}, subjectKeyPresent={3}, bodyExists={4}, textExists={5}, attrsKeys={6}, {7}",
-                           new Object[]{ subjectKey, bodyTemplate, themeName, subjectKeyPresent, bodyExists, textExists, attrs.keySet(), userInfo }
-                       );
-                       Logger.getLogger(ProposalEmailEndpoint.class.getName()).log(Level.WARNING, "Exception:", e);
-                   }
-               });
+                Logger.getLogger(ProposalEmailEndpoint.class.getName()).log(
+                    Level.WARNING,
+                    "Failed to template email. Details: subjectKey={0}, bodyTemplate={1}, theme={2}, subjectKeyPresent={3}, bodyExists={4}, textExists={5}, attrsKeys={6}, {7}",
+                    new Object[]{ subjectKey, bodyTemplate, themeName, subjectKeyPresent, bodyExists, textExists, attrs.keySet(), userInfo }
+                );
+                Logger.getLogger(ProposalEmailEndpoint.class.getName()).log(Level.WARNING, "Exception:", e);
+            }
+        };
+
+        if (notification.recipientType == RecipientType.ADMIN_ROLE) {
+            session.users()
+                   .getRoleMembersStream(realm, role)
+                   .forEach(sendToUser);
+        } else {
+            UserModel recipient = resolveRecipientUser(realm, body);
+            if (recipient == null) {
+                return withCors(Response.status(400).entity("Recipient user not found"));
+            }
+            sendToUser.accept(recipient);
+        }
 
         return withCors(Response.ok("{\"ok\":true}"));
     }

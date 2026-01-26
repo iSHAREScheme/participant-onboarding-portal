@@ -1,1 +1,4 @@
-Your proposal has been rejected.\\n\\nPlease review the proposal and upload a new proposal.
+Your proposal was rejected. Please review and resubmit your proposal.
+
+Update your proposal here:
+${proposalLink}

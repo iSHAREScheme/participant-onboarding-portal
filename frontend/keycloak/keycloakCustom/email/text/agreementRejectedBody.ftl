@@ -1,1 +1,4 @@
-Your uploaded agreements have been rejected.\\n\\nPlease review the agreements and take the necessary actions.
+Your agreements were rejected. Please upload corrected agreements.
+
+Upload agreements here:
+${proposalLink}

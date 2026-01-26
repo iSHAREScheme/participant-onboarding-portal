@@ -13,6 +13,7 @@ import { getPublicEnv } from "config/publicEnv"
 type VerificationStep = "verify-info" | "verify-agreement";
 
 interface BackendData {
+  id: number;
   companyName: string;
   kvkNumber: string;
   dataOwner: boolean;
@@ -33,6 +34,7 @@ interface BackendData {
   status: string;
   createdAt: string;
   signedAgreementPaths?: string[];
+  keycloakUsername: string;
 }
 
 const safeDecodeURIComponent = (value: string) => {
@@ -217,8 +219,12 @@ const VerifyAgreementStep = ({ api, proposalData }: VerifyAgreementStepProps) =>
         return
       }
 
-      if (keycloak)
-        void EmailNotification.agreementAccepted(keycloak, String(id))
+      if (keycloak) {
+        void EmailNotification.agreementAccepted(keycloak, String(id), {
+          username: proposalData.keycloakUsername,
+          email: proposalData.contactEmail,
+        })
+      }
 
       // Redirect to admin page
       router.push("/admin");
@@ -241,8 +247,12 @@ const VerifyAgreementStep = ({ api, proposalData }: VerifyAgreementStepProps) =>
 
       const response = await api.rejectProposal(String(id))
 
-      if (keycloak)
-        void EmailNotification.agreementRejected(keycloak, String(id))
+      if (keycloak) {
+        void EmailNotification.agreementRejected(keycloak, String(id), {
+          username: proposalData.keycloakUsername,
+          email: proposalData.contactEmail,
+        })
+      }
 
       // Redirect to admin page
       router.push("/admin");
@@ -372,8 +382,12 @@ const VerifyInfoStep = ({ api, onApprove, proposalData }: VerifyInfoStepProps) =
 
       const response = await api.approveProposal(proposalData.id) 
 
-      if (keycloak)
-        void EmailNotification.proposalAccepted(keycloak, String(proposalData.id))
+      if (keycloak) {
+        void EmailNotification.proposalAccepted(keycloak, String(proposalData.id), {
+          username: proposalData.keycloakUsername,
+          email: proposalData.contactEmail,
+        })
+      }
 
       // Redirect to admin page
       router.push("/admin")
@@ -394,8 +408,12 @@ const VerifyInfoStep = ({ api, onApprove, proposalData }: VerifyInfoStepProps) =
 
       const response = await api.rejectProposal(proposalData.id)
 
-      if (keycloak)
-        void EmailNotification.proposalRejected(keycloak, String(proposalData.id))
+      if (keycloak) {
+        void EmailNotification.proposalRejected(keycloak, String(proposalData.id), {
+          username: proposalData.keycloakUsername,
+          email: proposalData.contactEmail,
+        })
+      }
 
       // Redirect to admin page
       router.push("/admin");

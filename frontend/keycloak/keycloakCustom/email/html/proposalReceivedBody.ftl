@@ -1,5 +1,5 @@
 <p>Hello ${user.firstName?default(user.username)},</p>
-<p>Your proposal was rejected. Please review and resubmit your proposal.</p>
-<p>Update your proposal here:</p>
+<p>We received your onboarding proposal. Our team will review it and get back to you.</p>
+<p>You can track the status here:</p>
 <p><a href="${proposalLink}">${proposalLink}</a></p>
 <p>- Onboarding Portal</p>
