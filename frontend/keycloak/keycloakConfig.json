@@ -1,6 +1,6 @@
 {
   "id": "6ac287c8-fd3c-4763-9775-295b6f093a63",
-  "realm": "demo",
+  "realm": "onboarding-portal",
   "notBefore": 0,
   "defaultSignatureAlgorithm": "RS256",
   "revokeRefreshToken": false,
@@ -51,7 +51,17 @@
         "id": "992fae8c-ec90-4fa8-bd0a-908e11af17de",
         "name": "onboarding-admin",
         "description": "",
-        "composite": false,
+        "composite": true,
+        "composites": {
+          "client": {
+            "realm-management": [
+              "manage-users",
+              "view-users",
+              "query-users",
+              "view-realm"
+            ]
+          }
+        },
         "clientRole": false,
         "containerId": "6ac287c8-fd3c-4763-9775-295b6f093a63",
         "attributes": {}

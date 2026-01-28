@@ -356,8 +356,9 @@ export default {
         fetch: "Error fetching users",
         delete: "Error deleting user",
         create: "Error creating user",
+        invite: "Error sending invite email",
         roleAssignment: "Error assigning role to user",
-        roleNotFound: "Admin role not found in the system"
+        roleNotFound: "Role not found in the system"
       },
       success: {
         delete: "User deleted successfully"

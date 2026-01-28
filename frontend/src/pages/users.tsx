@@ -4,6 +4,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import AdminRoute from "components/AdminRoute";
 import styles from "styles/Users.module.css";
 import { useLanguage } from "../context/LanguageContext";
+import { getPublicEnv } from "config/publicEnv";
 
 interface KeycloakUser {
   id: string;
@@ -34,6 +35,7 @@ const Users: NextPage = () => {
     firstName: "",
     lastName: "",
   });
+  const env = getPublicEnv();
 
   const fetchData = useCallback(() => {
     fetch(`${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users`, {
@@ -143,20 +145,18 @@ const Users: NextPage = () => {
       return;
     }
 
+    const trimmedEmail = newUserData.email.trim();
+    const trimmedFirstName = newUserData.firstName.trim();
+    const trimmedLastName = newUserData.lastName.trim();
+    const requiredActions = ["VERIFY_EMAIL", "UPDATE_PASSWORD"];
     const newUser = {
-      username: newUserData.email,
+      username: trimmedEmail,
       enabled: true,
-      emailVerified: true,
-      firstName: newUserData.firstName.trim(),
-      lastName: newUserData.lastName.trim(),
-      email: newUserData.email,
-      credentials: [
-        {
-          type: "password",
-          value: "password",
-          temporary: true,
-        },
-      ],
+      emailVerified: false,
+      firstName: trimmedFirstName,
+      lastName: trimmedLastName,
+      email: trimmedEmail,
+      requiredActions,
     };
 
     try {
@@ -180,12 +180,13 @@ const Users: NextPage = () => {
       // Get the user ID from the Location header
       const locationHeader = response.headers.get("Location");
       const userId = locationHeader?.split("/").pop();
+      if (!userId) {
+        throw new Error(t("users.messages.error.create"));
+      }
 
-      // If admin role is selected, assign the realm role
-      if (newUserData.role === "admin" && userId) {
-        // First get the role ID
+      const assignRealmRole = async (roleName: string) => {
         const rolesResponse = await fetch(
-          `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/roles/onboarding-admin`,
+          `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/roles/${roleName}`,
           {
             method: "GET",
             headers: {
@@ -196,12 +197,11 @@ const Users: NextPage = () => {
         );
 
         if (!rolesResponse.ok) {
-          throw new Error("Failed to get role details");
+          throw new Error(t("users.messages.error.roleNotFound"));
         }
 
         const roleDetails = await rolesResponse.json();
 
-        // Then assign the role using the fetched ID
         const roleResponse = await fetch(
           `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${userId}/role-mappings/realm`,
           {
@@ -213,7 +213,7 @@ const Users: NextPage = () => {
             body: JSON.stringify([
               {
                 id: roleDetails.id,
-                name: "onboarding-admin",
+                name: roleName,
               },
             ]),
           }
@@ -222,6 +222,33 @@ const Users: NextPage = () => {
         if (!roleResponse.ok) {
           throw new Error(t("users.messages.error.roleAssignment"));
         }
+      };
+
+      if (newUserData.role === "admin") {
+        await assignRealmRole("onboarding-admin");
+      }
+
+      const redirectBase = env.NEXT_PUBLIC_FRONTEND_DOMAIN;
+      const redirectUri = redirectBase ? `${redirectBase}/register` : "";
+      const clientId = env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID;
+      const params = new URLSearchParams();
+      if (clientId) params.set("client_id", clientId);
+      if (redirectUri) params.set("redirect_uri", redirectUri);
+      const inviteUrl =
+        `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${userId}/execute-actions-email` +
+        (params.toString() ? `?${params.toString()}` : "");
+
+      const inviteResponse = await fetch(inviteUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${keycloak.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requiredActions),
+      });
+
+      if (!inviteResponse.ok) {
+        throw new Error(t("users.messages.error.invite"));
       }
 
       fetchData();

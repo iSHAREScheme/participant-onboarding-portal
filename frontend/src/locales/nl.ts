@@ -365,8 +365,9 @@ export default {
         fetch: "Fout bij ophalen gebruikers",
         delete: "Fout bij verwijderen gebruiker",
         create: "Fout bij aanmaken gebruiker",
+        invite: "Fout bij verzenden uitnodiging",
         roleAssignment: "Fout bij toewijzen rol aan gebruiker",
-        roleNotFound: "Beheerdersrol niet gevonden in het systeem"
+        roleNotFound: "Rol niet gevonden in het systeem"
       },
       success: {
         delete: "Gebruiker succesvol verwijderd"
