@@ -1,4 +1,4 @@
-# iShare Onboarding Portal
+# iSHARE Onboarding Portal
 
 Monorepo for the iShare Foundation onboarding portal. It contains:
 - backend/ (Go API service)
