@@ -1,6 +1,6 @@
 # iSHARE Onboarding Portal
 
-Monorepo for the iShare Foundation onboarding portal. It contains:
+Monorepo for the iSHARE Foundation onboarding portal. It contains:
 - backend/ (Go API service)
 - frontend/ (Next.js web app + Keycloak)
 
