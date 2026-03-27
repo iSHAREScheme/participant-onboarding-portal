@@ -215,7 +215,7 @@ export default {
     validation: {
       roleRequired: "Selecteer ten minste één rol",
       m2mRequired: "Geef aan of u gebruik wilt maken van M2M-diensten",
-      idcheckRequired: "Vul Partij ID en Partij Naam in",
+      identityRequired: "Ga verder met eHerkenning of upload een geldig eIDAS-certificaat",
       selectOption: "Kies een van de aangeboden identificatiemethoden.",
       locationRequired: "Vul alle vereiste gegevens in",
       associationRequired: "Vul alle vereiste gegevens in",

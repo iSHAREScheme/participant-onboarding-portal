@@ -813,6 +813,22 @@ const Register: NextPage = () => {
   }, [canUseCurrentEherkenning, canUseFreshEherkenningLink])
 
   useEffect(() => {
+    const isHumanFlow = formData.m2m.useM2M === "no" && !alwaysM2M
+    if (!isHumanFlow) return
+
+    setFormData((prev) => {
+      if (prev.idCheck.idCheckMethod === "eherkenning") return prev
+      return {
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eherkenning",
+        },
+      }
+    })
+  }, [formData.m2m.useM2M, alwaysM2M])
+
+  useEffect(() => {
     let cancelled = false
 
     if (!keycloak?.authenticated) {
@@ -896,19 +912,23 @@ const Register: NextPage = () => {
         }
 
       case steps.idCheck: // ID Check
-        if (!data.idCheck.idCheckMethod) {
-          setValidationError("register.validation.selectOption");
-          return false
+        // Selection is optional: user can continue with either a ready eHerkenning identity
+        // or a valid uploaded eIDAS certificate.
+        if (canUseCurrentEherkenning || canUseFreshEherkenningLink) {
+          return true
         }
-        if (data.idCheck.idCheckMethod === "eidas" && !uploadedFile) {
-          setValidationError("register.validation.idcheckRequired");
-          return false
-        } // TODO: also allow eherkenning check
-        else if (data.idCheck.idCheckMethod === "eidas" && !(await preValidateEidasCert(uploadedFile))) {
-          setValidationError("register.validation.idcheckRequired")
-          return false
+
+        const eidasFile = data.eidasCert ?? uploadedFile
+        if (eidasFile) {
+          if (!(await preValidateEidasCert(eidasFile))) {
+            setValidationError("register.validation.identityRequired")
+            return false
+          }
+          return true
         }
-        return true
+
+        setValidationError("register.validation.identityRequired")
+        return false
 
       case steps.location: // Location
         if (
@@ -1446,6 +1466,13 @@ const Register: NextPage = () => {
       }
 
       setFormData((prev) => ({ ...prev, eidasCert: file }))
+      setFormData((prev) => ({
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eidas",
+        },
+      }))
       setUploadError("")
       setUploadedFile(file)
 
@@ -1910,10 +1937,19 @@ const Register: NextPage = () => {
                               <button
                                 className={styles.removeButton}
                                 onClick={(e) => {
-                                  formData.idCheck.idCheckMethod = "eidas"
                                   e.stopPropagation();
                                   setUploadedFile(null);
-                                  setFormData({ ...formData, eidasCert: undefined });
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    eidasCert: undefined,
+                                    idCheck: {
+                                      ...prev.idCheck,
+                                      idCheckMethod:
+                                        prev.idCheck.idCheckMethod === "eidas"
+                                          ? undefined
+                                          : prev.idCheck.idCheckMethod,
+                                    },
+                                  }));
                                 }}
                               >
                                 ✕
@@ -1942,7 +1978,6 @@ const Register: NextPage = () => {
                                 className={styles.hiddenInput}
                                 ref={fileInputRef}
                                 onChange={(e) => {
-                                  formData.idCheck.idCheckMethod = "eidas"
                                   const file = e.target.files?.[0]
                                   if (file) handleFileUpload(file)
                                 }}

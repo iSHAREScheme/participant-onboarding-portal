@@ -200,7 +200,7 @@ export default {
     validation: {
       roleRequired: "Please select at least one role",
       m2mRequired: "Please select whether you want to use M2M services",
-      idcheckRequired: "Please provide the required Identification",
+      identityRequired: "Continue with eHerkenning or upload a valid eIDAS certificate",
       selectOption: "Please select an option",
       locationRequired: "Please fill in all required details",
       associationRequired: "Please fill in all required fields",
