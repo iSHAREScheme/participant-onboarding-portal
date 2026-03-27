@@ -29,6 +29,8 @@ backend/db/*.sqlite-*
 
 # Build artifacts
 frontend/provider-src/target/
+frontend/keycloak/keycloakProviders/*.jar
+!frontend/keycloak/keycloakProviders/.gitkeep
 frontend/tsconfig.tsbuildinfo
 frontend/.yarn/install-state.gz
 frontend/public/env.js

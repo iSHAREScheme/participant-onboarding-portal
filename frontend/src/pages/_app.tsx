@@ -12,6 +12,7 @@ import { useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { getPublicEnv } from 'config/publicEnv'
 import { storeKeycloakTokens } from 'util/keycloakTokens'
+import { clearStoredIdpActionState, setCompletedIdpAction } from 'util/idpActionState'
 
 const poppins = Poppins({
   weight: ['300', '400', '500', '600', '700'],
@@ -56,11 +57,26 @@ function MyApp({ Component, pageProps }: AppProps) {
       return keycloakStub
     }
 
-    return new Keycloak({
+    const instance = new Keycloak({
       url: keycloakUrl as string,
       realm: keycloakRealm as string,
       clientId: keycloakClientId as string,
     })
+    instance.onActionUpdate = async (status, action) => {
+      if (action?.startsWith("idp_link:")) {
+        setCompletedIdpAction(status, action)
+        if (status === 'success') {
+          try {
+            await instance.updateToken(0)
+            const info = await instance.loadUserInfo()
+            ;(instance as any).userInfo = info
+          } catch (error) {
+            console.error('Failed to refresh user info after idp link', error)
+          }
+        }
+      }
+    }
+    return instance
   }, [isBrowser, keycloakUrl, keycloakRealm, keycloakClientId])
   
   const keycloakProviderInitConfig = useRef(useKeycloakInitConfig())
@@ -72,6 +88,9 @@ function MyApp({ Component, pageProps }: AppProps) {
         keycloak={keycloak}
         initConfig={keycloakProviderInitConfig.current}
         onEvent={async (event) => {
+          if (event === 'onAuthLogout') {
+            clearStoredIdpActionState()
+          }
           if (event === 'onAuthSuccess') {
             const info = await keycloak.loadUserInfo()
             ;(keycloak as any).userInfo = info

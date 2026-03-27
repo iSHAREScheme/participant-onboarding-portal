@@ -250,6 +250,32 @@
   border-radius: 8px;
 }
 
+.idCheckStatusCard {
+  margin-top: 12px;
+  border: 1px solid #d7e2ee;
+  border-radius: 8px;
+  background: #f7fafc;
+  padding: 12px 14px;
+}
+
+.idCheckStatusText {
+  margin: 0;
+  color: #013A57;
+  font-weight: 500;
+}
+
+.idCheckStatusMeta {
+  margin: 6px 0 0;
+  color: #4e5f73;
+  font-size: 0.95rem;
+}
+
+.idCheckStatusWarning {
+  margin: 8px 0 0;
+  color: #9a6700;
+  font-size: 0.95rem;
+}
+
 .eHerkenningButton {
   display: flex;
   align-items: center;
@@ -261,6 +287,11 @@
   background-color: white;
   height: 40px;
   cursor: pointer;
+}
+
+.eHerkenningButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .eHerkenningImage {

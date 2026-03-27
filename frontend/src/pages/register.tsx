@@ -11,6 +11,15 @@ import preValidateEidasCert from "util/validateEidas"
 import API from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
+import {
+  loadStoredIdpActionState,
+  setPendingIdpLinkAction,
+  type StoredIdpActionState,
+} from "util/idpActionState"
+import {
+  fetchKeycloakLinkedAccounts,
+  hasLinkedIdentityProvider,
+} from "util/keycloakLinkedAccounts"
 
 const KVK_BASE_URL = 'https://developers.kvk.nl/api/v2'
 
@@ -62,6 +71,20 @@ const StepsV3 = {
 
 const parseBoolEnv = (value?: string) =>
   typeof value === "string" && ["1", "true", "yes", "on"].includes(value?.toLowerCase())
+
+const toTrimmedStringValue = (value: unknown): string => {
+  if (typeof value === "string") return value.trim()
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
+    return value[0].trim()
+  }
+  return ""
+}
+
+const toNormalizedKvkValue = (value: unknown): string => {
+  const raw = toTrimmedStringValue(value)
+  if (!raw) return ""
+  return raw.replace(/\D+/g, "")
+}
 
 const REGISTER_STATE_DB_NAME = "register:form-state"
 const REGISTER_STATE_STORE = "state"
@@ -269,19 +292,12 @@ const Register: NextPage = () => {
     fullNameFromUserInfo !== ""
       ? fullNameFromUserInfo.split(" ")[0]?.trim() || ""
       : "";
-  const toTrimmedString = (value: unknown): string => {
-    if (typeof value === "string") return value.trim();
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
-      return value[0].trim();
-    }
-    return "";
-  };
-  const kvkFromUserInfo = toTrimmedString(
+  const kvkFromUserInfo = toNormalizedKvkValue(
     keycloakUserInfo?.["legalSubjectId"] ??
     keycloakUserInfo?.["kvkNumber"] ??
     keycloakUserInfo?.["kvk"]
   );
-  const companyNameFromUserInfo = toTrimmedString(
+  const companyNameFromUserInfo = toTrimmedStringValue(
     keycloakUserInfo?.["companyName"] ?? keycloakUserInfo?.["companyname"]
   );
   const prefilledPartyId = kvkFromUserInfo
@@ -322,6 +338,10 @@ const Register: NextPage = () => {
   const skipSettings = parseBoolEnv(env.NEXT_PUBLIC_SKIP_SETTINGS)
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
+  const eherkenningAlias =
+    keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+      ? keycloakIdp
+      : "eHerkenning"
 
   const steps = alwaysM2M ? (staticParty ? StepsV3 : StepsV2) : StepsV1
   const activeRoles = env.NEXT_PUBLIC_ACTIVE_ROLES
@@ -365,7 +385,7 @@ const Register: NextPage = () => {
       idCheck: {
         idCheckMethod: alwaysM2M ? "eidas" : undefined,
         companyName: "",
-        kvkNumber: "",
+        kvkNumber: kvkFromUserInfo,
         partyId: prefilledPartyId,
         partyName: prefilledPartyName,
       },
@@ -399,12 +419,25 @@ const Register: NextPage = () => {
         method: "",
       },
     }),
-    [alwaysM2M, defaultRoles, prefilledEmail, prefilledFullName, prefilledPartyId, prefilledPartyName]
+    [
+      alwaysM2M,
+      defaultRoles,
+      kvkFromUserInfo,
+      prefilledEmail,
+      prefilledFullName,
+      prefilledPartyId,
+      prefilledPartyName,
+    ]
   )
 
   const [currentStep, setCurrentStep] = useState(firstInteractiveStep)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const hasHydratedRef = useRef(false)
+  const [idpActionState, setIdpActionState] = useState<StoredIdpActionState | undefined>(() =>
+    loadStoredIdpActionState()
+  )
+  const [, setUserInfoVersion] = useState(0)
+  const [hasEherkenningLink, setHasEherkenningLink] = useState<boolean | undefined>(undefined)
 
   // load saved state
   useEffect(() => {
@@ -503,7 +536,6 @@ const Register: NextPage = () => {
   }, [registerStateKey, initialFormData, firstInteractiveStep])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const autoAdvancedFromEherkenningRef = useRef(false)
   const [validationError, setValidationError] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -513,19 +545,63 @@ const Register: NextPage = () => {
   const shouldShowAgreementTerms = useAutoAcceptProposal;
   const requiresTermsConsent = shouldShowAgreementTerms;
   const [hideCapabilitiesUrlField, setHideCapabilitiesUrlField] = useState(false);
+  const actingSubjectId = toTrimmedStringValue(
+    keycloak?.tokenParsed?.["actingSubjectId"] ??
+      keycloakUserInfo?.["actingSubjectId"]
+  )
+  const isAuthenticated = Boolean(keycloak?.authenticated)
+  const currentIdp = String(keycloak?.tokenParsed?.idp ?? "").toLowerCase()
+  const hasEherkenningSession = currentIdp === eherkenningAlias.toLowerCase()
+  const hasSuccessfulEherkenningLink =
+    idpActionState?.status === "success" &&
+    idpActionState.alias?.toLowerCase() === eherkenningAlias.toLowerCase()
+  const canUseFreshEherkenningLink =
+    isAuthenticated && !hasEherkenningSession && hasSuccessfulEherkenningLink
+  const hasKnownEherkenningLink =
+    hasEherkenningSession ||
+    hasSuccessfulEherkenningLink ||
+    hasEherkenningLink === true
+  const isCheckingEherkenningLink =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !hasSuccessfulEherkenningLink &&
+    hasEherkenningLink === undefined
+  const canUseCurrentEherkenning = isAuthenticated && hasEherkenningSession
+  const shouldUseLinkedEherkenning =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !hasSuccessfulEherkenningLink &&
+    hasKnownEherkenningLink
+  const shouldLinkEherkenning =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !isCheckingEherkenningLink &&
+    !hasKnownEherkenningLink
+  const currentAccountLabel =
+    toTrimmedStringValue(
+      keycloak?.tokenParsed?.preferred_username ?? keycloak?.tokenParsed?.email
+    ) || prefilledEmail
+  const eherkenningIdentityLabel =
+    companyNameFromUserInfo ||
+    kvkFromUserInfo ||
+    actingSubjectId
 
   useEffect(() => {
-    if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName) return;
+    if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName && !kvkFromUserInfo) return;
 
     setFormData((prev) => {
-      const nextPartyId = prev.idCheck.partyId || prefilledPartyId;
-      const nextPartyName = prev.idCheck.partyName || prefilledPartyName;
+      const nextPartyId = prefilledPartyId || prev.idCheck.partyId;
+      const nextPartyName = prefilledPartyName || prev.idCheck.partyName;
+      const nextCompanyName = prefilledPartyName || prev.idCheck.companyName;
+      const nextKvkNumber = kvkFromUserInfo || prev.idCheck.kvkNumber;
       const nextAccountName = prev.account.name || prefilledFullName;
       const nextAccountEmail = prev.account.email || prefilledEmail;
 
       if (
         nextPartyId === prev.idCheck.partyId &&
         nextPartyName === prev.idCheck.partyName &&
+        nextCompanyName === prev.idCheck.companyName &&
+        nextKvkNumber === prev.idCheck.kvkNumber &&
         nextAccountName === prev.account.name &&
         nextAccountEmail === prev.account.email
       ) {
@@ -536,6 +612,8 @@ const Register: NextPage = () => {
         ...prev,
         idCheck: {
           ...prev.idCheck,
+          companyName: nextCompanyName,
+          kvkNumber: nextKvkNumber,
           partyId: nextPartyId,
           partyName: nextPartyName,
         },
@@ -546,7 +624,7 @@ const Register: NextPage = () => {
         },
       };
     });
-  }, [prefilledPartyId, prefilledPartyName, prefilledEmail, prefilledFullName]);
+  }, [kvkFromUserInfo, prefilledPartyId, prefilledPartyName, prefilledEmail, prefilledFullName]);
 
   useEffect(() => {
     if (currentStep !== steps.confirm) return;
@@ -669,23 +747,112 @@ const Register: NextPage = () => {
 
 
   useEffect(() => {
-    // if always-m2m and always-eherkenning are both set
-    // do not skip id-check since this dictates an eSeal is required
-    if (alwaysM2M && alwaysEherkenning)
-      return
+    setIdpActionState(loadStoredIdpActionState())
+  }, [keycloak?.authenticated, keycloak?.token, keycloak?.tokenParsed?.sub])
 
-    if (autoAdvancedFromEherkenningRef.current) return
-    if (typeof steps.idCheck !== "number") return
-    if (currentStep !== steps.idCheck) return
+  useEffect(() => {
+    let cancelled = false
 
-    const hasEherkenningAuth =
-      String(keycloak?.tokenParsed?.idp ?? "").toLowerCase() === "eherkenning"
+    if (!keycloak?.authenticated) {
+      setHasEherkenningLink(undefined)
+      return () => {
+        cancelled = true
+      }
+    }
 
-    if (!hasEherkenningAuth) return
+    if (hasEherkenningSession || hasSuccessfulEherkenningLink) {
+      setHasEherkenningLink(true)
+      return () => {
+        cancelled = true
+      }
+    }
 
-    autoAdvancedFromEherkenningRef.current = true
-    setCurrentStep((prev) => prev + 1)
-  }, [currentStep, keycloak])
+    setHasEherkenningLink(undefined)
+
+    const loadLinkedAccounts = async () => {
+      try {
+        const linkedAccounts = await fetchKeycloakLinkedAccounts(keycloak)
+        if (cancelled) return
+        setHasEherkenningLink(
+          hasLinkedIdentityProvider(linkedAccounts, eherkenningAlias)
+        )
+      } catch (error) {
+        if (cancelled) return
+        console.error("Failed to load linked eHerkenning accounts", error)
+        setHasEherkenningLink(false)
+      }
+    }
+
+    void loadLinkedAccounts()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    keycloak,
+    keycloak?.authenticated,
+    keycloak?.tokenParsed?.sub,
+    eherkenningAlias,
+    hasEherkenningSession,
+    hasSuccessfulEherkenningLink,
+  ])
+
+  useEffect(() => {
+    if (!canUseCurrentEherkenning && !canUseFreshEherkenningLink) return
+
+    setFormData((prev) => {
+      if (prev.idCheck.idCheckMethod === "eherkenning") return prev
+      return {
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eherkenning",
+        },
+      }
+    })
+  }, [canUseCurrentEherkenning, canUseFreshEherkenningLink])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!keycloak?.authenticated) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (!hasEherkenningSession && !hasSuccessfulEherkenningLink) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const refreshUserInfo = async () => {
+      try {
+        await keycloak.updateToken(0)
+        const info = await keycloak.loadUserInfo()
+        if (cancelled) return
+        ;(keycloak as any).userInfo = info
+        setUserInfoVersion((version) => version + 1)
+      } catch (error) {
+        if (cancelled) return
+        console.error("Failed to refresh Keycloak user info for eHerkenning", error)
+      }
+    }
+
+    void refreshUserInfo()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    keycloak,
+    keycloak?.authenticated,
+    keycloak?.token,
+    keycloak?.tokenParsed?.sub,
+    hasEherkenningSession,
+    hasSuccessfulEherkenningLink,
+  ])
 
   useEffect(() => {
     if (!useStaticParty) return;
@@ -910,6 +1077,16 @@ const Register: NextPage = () => {
         // we'll return without setting the fetched data
         if (process.env.IS_PENTEST) return
 
+        const proposalKvkNumber = toNormalizedKvkValue(proposalData.kvkNumber) || kvkFromUserInfo
+        const proposalPartyId = toTrimmedStringValue(proposalData.partyId)
+        const proposalPartyName = toTrimmedStringValue(proposalData.partyName)
+        const proposalCompanyName = toTrimmedStringValue(proposalData.companyName)
+        const proposalPartyIdFromKvk = proposalKvkNumber
+          ? `EU.EORI.NL.KVK${proposalKvkNumber}`
+          : ""
+        const resolvedPartyId = proposalPartyIdFromKvk || proposalPartyId
+        const resolvedPartyName = prefilledPartyName || proposalPartyName
+
         // Update form data with existing proposal regardless of status
         setFormData({
           roles: {
@@ -922,10 +1099,10 @@ const Register: NextPage = () => {
             useM2M: proposalData.useM2M,
           },
           idCheck: {
-            companyName: proposalData.companyName,
-            kvkNumber: proposalData.kvkNumber,
-            partyId: proposalData.partyId,
-            partyName: proposalData.partyName,
+            companyName: proposalCompanyName || resolvedPartyName,
+            kvkNumber: proposalKvkNumber,
+            partyId: resolvedPartyId,
+            partyName: resolvedPartyName,
           },
           location: {
             address: proposalData.address,
@@ -1141,9 +1318,35 @@ const Register: NextPage = () => {
 
     // kvk data prefetch
     if ((currentStep + 1) === steps.location) {
-        // see if we can prefetch location details based on user (kvk) data
-        const kvkNumber = formData.idCheck.kvkNumber || keycloak?.userInfo?.legalSubjectId || keycloak?.tokenParsed?.preferred_username
-        formData.idCheck.kvkNumber = kvkNumber
+        // see if we can prefill details from the linked eHerkenning identity claims
+        const kvkNumber = toNormalizedKvkValue(formData.idCheck.kvkNumber) || kvkFromUserInfo
+        const partyIdFromKvk = kvkNumber ? `EU.EORI.NL.KVK${kvkNumber}` : ""
+        const partyNameFromCompany = prefilledPartyName
+
+        setFormData((prev) => {
+          const nextPartyId = partyIdFromKvk || prev.idCheck.partyId
+          const nextPartyName = partyNameFromCompany || prev.idCheck.partyName
+
+          if (
+            nextPartyId === prev.idCheck.partyId &&
+            nextPartyName === prev.idCheck.partyName &&
+            kvkNumber === prev.idCheck.kvkNumber &&
+            (partyNameFromCompany || prev.idCheck.companyName) === prev.idCheck.companyName
+          ) {
+            return prev
+          }
+
+          return {
+            ...prev,
+            idCheck: {
+              ...prev.idCheck,
+              companyName: partyNameFromCompany || prev.idCheck.companyName,
+              kvkNumber,
+              partyId: nextPartyId,
+              partyName: nextPartyName,
+            },
+          }
+        })
 
         // NOTE: disabling due to current CSP
         // if (kvkNumber) {
@@ -1166,7 +1369,6 @@ const Register: NextPage = () => {
 
   const handleBack = () => {
     setValidationError(""); // Clear any existing error
-    const hasEherkenningAuth = String(keycloak?.tokenParsed?.idp)?.toLowerCase() === 'eherkenning'
     if (currentStep === steps.signingMethod) {
       // go to index page if on agreements step
       window.location.href = "/";
@@ -1174,11 +1376,7 @@ const Register: NextPage = () => {
     }
     if (!canGoBack)
       return
-    if (currentStep === steps.m2m && hasEherkenningAuth) {
-      setCurrentStep((prev) => Math.max(prev - 2, firstInteractiveStep))
-    } else {
-      setCurrentStep((prev) => Math.max(prev - 1, firstInteractiveStep))
-    }
+    setCurrentStep((prev) => Math.max(prev - 1, firstInteractiveStep))
   };
 
   const handleSignAndCommit = async () => {
@@ -1337,26 +1535,139 @@ const Register: NextPage = () => {
     e.target.value = '';
   };
 
+  const handleUseCurrentEherkenning = () => {
+    setFormData((prev) => ({
+      ...prev,
+      idCheck: {
+        ...prev.idCheck,
+        idCheckMethod: "eherkenning",
+      },
+    }))
+    setValidationError("")
+    setCurrentStep((prev) => prev + 1)
+  }
+
   const initiateIDPCheck = () => {
     if (!keycloak) return
-
-    const idpHint =
-      idpOnly && keycloakIdp &&
-      keycloakIdp !== "undefined" &&
-      keycloakIdp !== ""
-        ? keycloakIdp
-        : undefined;
 
     const redirectUri =
       typeof window !== "undefined" ? `${window.location.origin}/register` : undefined
 
-    keycloak.login({
+    if (keycloak.authenticated && !hasEherkenningSession) {
+      if (hasKnownEherkenningLink) {
+        void keycloak.login({
+          redirectUri,
+          idpHint: eherkenningAlias,
+          scope: "openid profile email",
+          prompt: "login",
+        })
+        return
+      }
+
+      if (isCheckingEherkenningLink) return
+
+      setPendingIdpLinkAction(eherkenningAlias)
+      setIdpActionState(loadStoredIdpActionState())
+      void keycloak.login({
+        redirectUri,
+        idpHint: eherkenningAlias,
+        action: `idp_link:${eherkenningAlias}`,
+        scope: "openid profile email",
+      })
+      return
+    }
+
+    const idpHint =
+      idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+        ? keycloakIdp
+        : eherkenningAlias
+
+    void keycloak.login({
       redirectUri,
       idpHint,
       scope: "openid profile email",
       prompt: "login"
-    });
-  };
+    })
+  }
+
+  const renderEherkenningAction = () => {
+    const linkWasAttempted =
+      idpActionState?.alias?.toLowerCase() === eherkenningAlias.toLowerCase()
+    const showPortalAccount =
+      isAuthenticated &&
+      !hasEherkenningSession &&
+      !canUseFreshEherkenningLink &&
+      !isCheckingEherkenningLink
+    const helperText = canUseCurrentEherkenning
+      ? t("register.idCheck.currentSessionDescription")
+      : canUseFreshEherkenningLink
+      ? t("register.idCheck.linkedReadyDescription")
+      : isCheckingEherkenningLink
+      ? t("register.idCheck.checkingLinkDescription")
+      : shouldUseLinkedEherkenning
+      ? t("register.idCheck.linkedAccountDescription")
+      : shouldLinkEherkenning
+      ? t("register.idCheck.linkDescription")
+      : t("register.idCheck.loginDescription")
+    const buttonLabel = canUseCurrentEherkenning
+      ? t("register.idCheck.useCurrentSession")
+      : canUseFreshEherkenningLink
+      ? t("register.idCheck.useLinkedIdentity")
+      : shouldUseLinkedEherkenning
+      ? t("register.idCheck.continueWithEherkenning")
+      : shouldLinkEherkenning
+      ? t("register.idCheck.linkAccount")
+      : t("common.login")
+
+    return (
+      <div className={styles.idCheckContainer}>
+        <button
+          type="button"
+          className={styles.eHerkenningButton}
+          disabled={isCheckingEherkenningLink}
+          onClick={
+            canUseCurrentEherkenning || canUseFreshEherkenningLink
+              ? handleUseCurrentEherkenning
+              : initiateIDPCheck
+          }
+        >
+          <img
+            src="/resources/img/eherkenning-logo.png"
+            alt="eHerkenning"
+            className={styles.eHerkenningImage}
+          />
+          <span className={styles.eHerkenningRight}>{buttonLabel}</span>
+        </button>
+        <div className={styles.idCheckStatusCard}>
+          <p className={styles.idCheckStatusText}>{helperText}</p>
+          {hasKnownEherkenningLink && eherkenningIdentityLabel && (
+            <p className={styles.idCheckStatusMeta}>
+              {t("register.idCheck.currentIdentity", {
+                identity: eherkenningIdentityLabel,
+              })}
+            </p>
+          )}
+          {showPortalAccount && currentAccountLabel && (
+            <p className={styles.idCheckStatusMeta}>
+              {t("register.idCheck.currentAccount", {
+                account: currentAccountLabel,
+              })}
+            </p>
+          )}
+          {linkWasAttempted && idpActionState?.status === "cancelled" && (
+            <p className={styles.idCheckStatusWarning}>
+              {t("register.idCheck.linkCancelled")}
+            </p>
+          )}
+          {linkWasAttempted && idpActionState?.status === "error" && (
+            <p className={styles.errorMessage}>
+              {t("register.idCheck.linkError")}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Add handler for registry selection
   const handleRegistrySelection = (registryId: string) => {
@@ -1569,16 +1880,7 @@ const Register: NextPage = () => {
                         <Tooltip content={t("register.idCheck.eHerkenningInfo")}>
                           <span className={styles.infoIcon}>ⓘ</span>
                         </Tooltip>
-                        <div className={styles.roleDescription}>
-                          <button className={styles.eHerkenningButton} onClick={initiateIDPCheck}>
-                            <img
-                              src="/resources/img/eherkenning-logo.png"
-                              alt="eHerkenning"
-                              className={styles.eHerkenningImage}
-                            />
-                            <span className={styles.eHerkenningRight}>{t("common.login")}</span>
-                          </button>
-                        </div>
+                        <div className={styles.roleDescription}>{renderEherkenningAction()}</div>
                       </div>}
 
                       <div className={styles.radioOption}>
@@ -1656,25 +1958,16 @@ const Register: NextPage = () => {
                     <p>
                       {t("register.idCheck.subtitle", { id: "eHerkenning" })}
                     </p>
-                    <div className={styles.idCheckContainer}>
-                      <button className={styles.eHerkenningButton} onClick={() => { }}>
-                        <img
-                          src="/resources/img/eherkenning-logo.png"
-                          alt="eHerkenning"
-                          className={styles.eHerkenningImage}
-                        />
-                        <span className={styles.eHerkenningRight}>{t("common.login")}</span>
-                      </button>
-                      <p className={styles.infoText}>
-                        {t("register.idCheck.info", { id: "eHerkenning" })}
-                        <a
-                          href="https://www.eherkenning.nl"
-                          className={styles.link}
-                        >
-                          {t("register.idCheck.forMoreInfo")}
-                        </a>
-                      </p>
-                    </div>
+                    {renderEherkenningAction()}
+                    <p className={styles.infoText}>
+                      {t("register.idCheck.info", { id: "eHerkenning" })}
+                      <a
+                        href="https://www.eherkenning.nl"
+                        className={styles.link}
+                      >
+                        {t("register.idCheck.forMoreInfo")}
+                      </a>
+                    </p>
                   </>
                 )}
               </p >

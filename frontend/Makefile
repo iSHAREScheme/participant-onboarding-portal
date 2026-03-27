@@ -30,7 +30,7 @@ KEYCLOAK_CONTAINER ?= keycloak
 PROVIDER_SRC       := provider-src
 PROVIDER_TARGET    := $(PROVIDER_SRC)/target
 PROVIDER_JAR       := $(shell ls $(PROVIDER_TARGET)/*.jar 2>/dev/null | head -n 1)
-PROVIDERS_DIR      := keycloakProviders
+PROVIDERS_DIR      := keycloak/keycloakProviders
 
 build-provider:
 	@echo ">>> Building provider with Maven..."
