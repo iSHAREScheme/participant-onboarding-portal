@@ -166,6 +166,44 @@ export interface Party {
   claims: Claim[]
 }
 
+export interface DelegationOrganization {
+  id: number
+  kvkNumber: string
+  companyName?: string
+}
+
+export interface DelegationMember {
+  id: number
+  organizationId: number
+  organization?: DelegationOrganization
+  email: string
+  keycloakSubject?: string
+  username?: string
+  providerAlias?: string
+  role: string
+  status: string
+  createdAt: string
+}
+
+export interface DelegationIdpConnection {
+  id: number
+  organizationId: number
+  providerType: string
+  alias: string
+  displayName?: string
+  issuerUrl?: string
+  clientId?: string
+  status: string
+  createdAt: string
+}
+
+export interface DelegationOverview {
+  verifiedOrganization?: DelegationOrganization
+  memberships: DelegationMember[]
+  idpConnections: DelegationIdpConnection[]
+  members: DelegationMember[]
+}
+
 export class API {
   public client: AxiosInstance
   constructor () {
@@ -310,6 +348,31 @@ export class API {
     return this.client.get('/settings/logo', {
       responseType: 'blob'
     })
+  }
+
+  fetchDelegationOverview () {
+    return this.client.get<DelegationOverview>('/delegations/me')
+  }
+
+  createDelegationIdpConnection (data: {
+    kvkNumber: string
+    providerType: string
+    alias: string
+    displayName?: string
+    issuerUrl?: string
+    clientId?: string
+    clientSecret?: string
+  }) {
+    return this.client.post<DelegationIdpConnection>('/delegations/idp-connections', data)
+  }
+
+  createDelegationMember (data: {
+    kvkNumber: string
+    email: string
+    providerAlias?: string
+    role?: string
+  }) {
+    return this.client.post<DelegationMember>('/delegations/members', data)
   }
 
 }

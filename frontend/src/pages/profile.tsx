@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "../styles/Profile.module.css";
@@ -11,7 +11,8 @@ interface UserProfile {
 }
 
 const Profile: React.FC = () => {
-  const { keycloak } = useKeycloak();
+  const { keycloak: keycloakFromContext } = useKeycloak();
+  const keycloak = keycloakFromContext!;
   const { t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,13 +23,7 @@ const Profile: React.FC = () => {
     lastName: "",
   });
 
-  useEffect(() => {
-    if (keycloak.authenticated) {
-      loadUserProfile();
-    }
-  }, [keycloak.authenticated]);
-
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     try {
       const userProfile = await keycloak.loadUserProfile();
       setProfile({
@@ -39,7 +34,13 @@ const Profile: React.FC = () => {
     } catch (err) {
       setError(t("profile.errors.loadFailed"));
     }
-  };
+  }, [keycloak, t]);
+
+  useEffect(() => {
+    if (keycloak.authenticated) {
+      loadUserProfile();
+    }
+  }, [keycloak.authenticated, loadUserProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,6 +151,7 @@ const Profile: React.FC = () => {
             )}
           </div>
         </form>
+
       </div>
     </ProtectedRoute>
   );

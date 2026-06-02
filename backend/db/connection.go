@@ -29,7 +29,13 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 	}
 
 	// Modify this section to handle migration errors better
-	if err = db.AutoMigrate(&models.Proposal{}, &models.Settings{}); err != nil {
+	if err = db.AutoMigrate(
+		&models.Proposal{},
+		&models.Settings{},
+		&models.Organization{},
+		&models.OrganizationMember{},
+		&models.OrganizationIdpConnection{},
+	); err != nil {
 		log.Printf("Database migration failed: %v", err)
 		return nil, err // Return the error instead of calling log.Fatal
 	}

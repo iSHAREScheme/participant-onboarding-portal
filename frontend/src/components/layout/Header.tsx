@@ -156,6 +156,9 @@ const Header: React.FC = () => {
                     <button onClick={() => window.location.href = '/profile'}>
                       <span>{t("common.profile")}</span>
                     </button>
+                    <button onClick={() => window.location.href = '/organization-access'}>
+                      <span>{t("common.organizationAccess")}</span>
+                    </button>
                     <button onClick={handleLogout}>
                       <span>{t("common.logout")}</span>
                     </button>

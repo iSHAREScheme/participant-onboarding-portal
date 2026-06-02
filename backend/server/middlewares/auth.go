@@ -37,9 +37,28 @@ type KeycloakClaims struct {
 	} `json:"resource_access,omitempty"`
 	KvkNumber            string `json:"kvkNumber,omitempty"`
 	KvkNumberPascalCase  string `json:"KvkNumber,omitempty"`
+	CompanyName          string `json:"companyName,omitempty"`
+	CompanyNameLowerCase string `json:"companyname,omitempty"`
+	CompanyNamePascal    string `json:"CompanyName,omitempty"`
 	LegalSubjectID       string `json:"legalSubjectId,omitempty"`
 	LegalSubjectIDUpper  string `json:"legalSubjectID,omitempty"`
 	LegalSubjectIDPascal string `json:"LegalSubjectId,omitempty"`
+}
+
+func (k *KeycloakClaims) OrganizationName() string {
+	if k == nil {
+		return ""
+	}
+	switch {
+	case k.CompanyName != "":
+		return k.CompanyName
+	case k.CompanyNameLowerCase != "":
+		return k.CompanyNameLowerCase
+	case k.CompanyNamePascal != "":
+		return k.CompanyNamePascal
+	default:
+		return ""
+	}
 }
 
 // LegalEntityIdentifier returns the identifier a user is allowed to act on (kvk/legalSubject).

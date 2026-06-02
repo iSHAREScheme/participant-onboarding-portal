@@ -132,6 +132,31 @@ func (h *HandlerParty) getSatelliteAccessToken(client *http.Client, assertionTok
 	return *tokenResponse.AccessToken, nil
 }
 
+func (h *HandlerParty) userCanActForKvk(c *fiber.Ctx, kvk string) bool {
+	claims := currentClaims(c)
+	if claims == nil || strings.TrimSpace(kvk) == "" {
+		return false
+	}
+
+	var org models.Organization
+	if err := h.Server.DB.Where("kvk_number = ?", strings.TrimSpace(kvk)).First(&org).Error; err != nil {
+		return false
+	}
+
+	var count int64
+	h.Server.DB.Model(&models.OrganizationMember{}).
+		Where("organization_id = ? AND status = ? AND (keycloak_subject = ? OR email = ? OR username = ?)",
+			org.ID,
+			"active",
+			strings.TrimSpace(claims.Subject),
+			strings.TrimSpace(claims.Email),
+			strings.TrimSpace(claims.PreferredUsername),
+		).
+		Count(&count)
+
+	return count > 0
+}
+
 func NewHandlerParty(server *s.Server, config *config.Config) *HandlerParty {
 	return &HandlerParty{
 		Server: server,
@@ -624,10 +649,10 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		} else if h.Config.SatelliteDebug {
 			log.Printf("auth: request context missing claims")
 		}
-		if tokenIdentifier == "" {
-			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user is missing organization identifier claim")
+		if tokenIdentifier == "" && !h.userCanActForKvk(c, proposalKvk) {
+			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user is missing organization identifier claim and has no delegation for this kvkNumber")
 		}
-		if tokenIdentifier != proposalKvk {
+		if tokenIdentifier != proposalKvk && !h.userCanActForKvk(c, proposalKvk) {
 			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user cannot submit proposals for this kvkNumber")
 		}
 	}

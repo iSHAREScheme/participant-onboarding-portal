@@ -6,6 +6,8 @@ services:
       context: ./backend
     env_file:
       - ./.env
+    environment:
+      KEYCLOAK_ADMIN_BASE_URL: http://keycloak:8080
     ports:
       - "8081:8081"
     networks:

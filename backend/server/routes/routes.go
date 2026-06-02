@@ -29,6 +29,9 @@ func ConfigureRoutes(server *s.Server, config *config.Config) {
 	// Add registry route
 	groupRegistry := server.App.Group("/registry")
 	GroupRegistryRequests(server, groupRegistry, config)
+
+	groupDelegations := server.App.Group("/delegations")
+	GroupDelegationRequests(server, groupDelegations, config)
 }
 
 func GroupPartyRequests(server *s.Server, group fiber.Router, config *config.Config) {
@@ -75,9 +78,17 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.Config) {
 	handler := handlers.NewHandlerRegistry(server, config)
 	group.Get("/", handler.GetRegistry)
+	group.Get("/version", handler.GetSatelliteVersion)
 	group.Get("/participants", middlewares.RequireAdminRole(), handler.GetParticipants)
 	group.Get("/participants/detail", middlewares.RequireAdminRole(), handler.GetParticipantDetail)
 	group.Post("/certificate/validate", handler.VerifyTrustedCertificate)
+}
+
+func GroupDelegationRequests(server *s.Server, group fiber.Router, config *config.Config) {
+	handler := handlers.NewHandlerDelegation(server, config)
+	group.Get("/me", handler.GetOverview)
+	group.Post("/idp-connections", handler.CreateIdpConnection)
+	group.Post("/members", handler.CreateMember)
 }
 
 // func SetupRoutes(app *fiber.App) {

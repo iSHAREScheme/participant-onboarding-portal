@@ -47,6 +47,21 @@ func (h *HandlerRegistry) GetRegistry(c *fiber.Ctx) error {
 	return c.JSON(decodedData)
 }
 
+// GetSatelliteVersion godoc
+// @Summary      Effective satellite framework version
+// @Description  Returns the iSHARE framework version the backend is operating against — auto-detected from the satellite at startup, or the configured SATELLITE_VERSION fallback.
+// @Tags         registry
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /registry/version [get]
+func (h *HandlerRegistry) GetSatelliteVersion(c *fiber.Ctx) error {
+	version := strings.TrimSpace(h.Config.SatelliteVersion)
+	return c.JSON(fiber.Map{
+		"version":    version,
+		"claimModel": strings.HasPrefix(version, "3"),
+	})
+}
+
 const (
 	defaultParticipantsPageSize = 10
 	maxParticipantsPageSize     = 100 // satellite maximum page size

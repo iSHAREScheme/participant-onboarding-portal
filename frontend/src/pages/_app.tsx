@@ -102,7 +102,7 @@ function MyApp({ Component, pageProps }: AppProps) {
             // Only redirect if current path is not already appropriate for the role
             const path = router.pathname
             const isOnAdminArea = /^\/(admin|users|settings|participants)(\/|$)/.test(path)
-            const isOnUserArea = /^\/(?:register|profile)(?:\/|$)/.test(path)
+            const isOnUserArea = /^\/(?:register|profile|organization-access)(?:\/|$)/.test(path)
 
             const shouldRedirect = isAdmin ? !isOnAdminArea : !isOnUserArea
             if (shouldRedirect && path !== target) router.replace(target)

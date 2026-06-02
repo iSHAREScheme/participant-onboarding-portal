@@ -23,7 +23,51 @@ export default {
     next: "Next",
     previous: "Previous",
     profile: "Profile",
-    participants: "Participants"
+    participants: "Participants",
+    organizationAccess: "Organization access"
+  },
+  organizationAccess: {
+    title: "Organization access",
+    refresh: "Refresh",
+    organization: {
+      title: "Verified organization",
+      kvk: "KvK number",
+      company: "Company"
+    },
+    noOrganization: {
+      title: "No eHerkenning organization found",
+      description: "Log in or link eHerkenning first. Once the session contains an organization identifier, you can configure IdPs and delegate access for that organization."
+    },
+    idp: {
+      title: "Organization IdP connections",
+      providerType: "Provider type",
+      alias: "Keycloak alias",
+      displayName: "Display name",
+      issuerUrl: "Issuer / metadata URL",
+      clientId: "Client ID",
+      clientSecret: "Client secret",
+      status: "Status",
+      create: "Provision IdP connection",
+      empty: "No organization IdP connections yet."
+    },
+    members: {
+      title: "Delegated people",
+      email: "Email",
+      providerAlias: "Provider alias",
+      role: "Role",
+      status: "Status",
+      create: "Delegate access",
+      empty: "No delegated people yet."
+    },
+    messages: {
+      idpCreated: "IdP connection provisioned.",
+      memberCreated: "Delegated access recorded."
+    },
+    errors: {
+      load: "Could not load organization access.",
+      idpCreate: "Could not provision IdP connection.",
+      memberCreate: "Could not delegate access."
+    }
   },
   participants: {
     title: "Participants",
@@ -576,6 +620,28 @@ export default {
       lastName: "Last Name",
       newPassword: "New Password (optional)",
       confirmPassword: "Confirm Password"
+    },
+    linkedAccounts: {
+      title: "Login methods",
+      description: "Link standard login providers to this portal account. The provider alias must exist as an Identity Provider in Keycloak.",
+      alias: "Keycloak alias",
+      refresh: "Refresh",
+      status: {
+        linked: "Linked",
+        notLinked: "Not linked"
+      },
+      actions: {
+        link: "Link",
+        relink: "Relink"
+      },
+      messages: {
+        linked: "The login method was linked successfully.",
+        cancelled: "The linking flow was cancelled.",
+        error: "The linking flow failed. Please try again."
+      },
+      errors: {
+        loadFailed: "Could not load linked login methods"
+      }
     },
     errors: {
       loadFailed: "Failed to load profile",

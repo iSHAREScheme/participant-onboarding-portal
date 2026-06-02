@@ -22,7 +22,51 @@ export default {
     next: "Volgende",
     previous: "Vorige",
     profile: "Profiel",
-    participants: "Deelnemers"
+    participants: "Deelnemers",
+    organizationAccess: "Organisatietoegang"
+  },
+  organizationAccess: {
+    title: "Organisatietoegang",
+    refresh: "Vernieuwen",
+    organization: {
+      title: "Geverifieerde organisatie",
+      kvk: "KvK-nummer",
+      company: "Organisatie"
+    },
+    noOrganization: {
+      title: "Geen eHerkenning-organisatie gevonden",
+      description: "Log eerst in of koppel eHerkenning. Zodra de sessie een organisatie-identificatie bevat, kunt u IdP's configureren en toegang delegeren voor die organisatie."
+    },
+    idp: {
+      title: "Organisatie-IdP-koppelingen",
+      providerType: "Provider-type",
+      alias: "Keycloak-alias",
+      displayName: "Weergavenaam",
+      issuerUrl: "Issuer / metadata-URL",
+      clientId: "Client-ID",
+      clientSecret: "Client secret",
+      status: "Status",
+      create: "IdP-koppeling provisionen",
+      empty: "Nog geen organisatie-IdP-koppelingen."
+    },
+    members: {
+      title: "Gedelegeerde personen",
+      email: "E-mail",
+      providerAlias: "Provider-alias",
+      role: "Rol",
+      status: "Status",
+      create: "Toegang delegeren",
+      empty: "Nog geen gedelegeerde personen."
+    },
+    messages: {
+      idpCreated: "IdP-koppeling geprovisioned.",
+      memberCreated: "Gedelegeerde toegang opgeslagen."
+    },
+    errors: {
+      load: "Kon organisatietoegang niet laden.",
+      idpCreate: "Kon IdP-koppeling niet provisionen.",
+      memberCreate: "Kon toegang niet delegeren."
+    }
   },
   participants: {
     title: "Deelnemers",
@@ -572,6 +616,28 @@ export default {
       lastName: "Achternaam",
       newPassword: "Nieuw Wachtwoord (optioneel)",
       confirmPassword: "Bevestig Wachtwoord"
+    },
+    linkedAccounts: {
+      title: "Inlogmethoden",
+      description: "Koppel standaard inlogproviders aan dit portaalaccount. De provider-alias moet als Identity Provider in Keycloak bestaan.",
+      alias: "Keycloak-alias",
+      refresh: "Vernieuwen",
+      status: {
+        linked: "Gekoppeld",
+        notLinked: "Niet gekoppeld"
+      },
+      actions: {
+        link: "Koppelen",
+        relink: "Opnieuw koppelen"
+      },
+      messages: {
+        linked: "De inlogmethode is succesvol gekoppeld.",
+        cancelled: "De koppelflow is geannuleerd.",
+        error: "De koppelflow is mislukt. Probeer het opnieuw."
+      },
+      errors: {
+        loadFailed: "Kon gekoppelde inlogmethoden niet laden"
+      }
     },
     errors: {
       loadFailed: "Kon profiel niet laden",

@@ -8,12 +8,13 @@
 package main
 
 import (
+	fiberSwagger "github.com/swaggo/fiber-swagger"
 	"log"
 	"onboardingportal/config"
+	_ "onboardingportal/docs"
+	"onboardingportal/integrations/satellite"
 	"onboardingportal/server"
 	"onboardingportal/server/routes"
-	fiberSwagger "github.com/swaggo/fiber-swagger"
-	_ "onboardingportal/docs"
 )
 
 func main() {
@@ -21,6 +22,22 @@ func main() {
 	err := config.LoadEnvironment()
 	if err != nil {
 		log.Fatalf("Error loading environment variables: %v", err)
+	}
+
+	// Auto-detect the connected iSHARE framework version and select the latest
+	// supported one; fall back to the configured SATELLITE_VERSION when the
+	// satellite advertises none.
+	if config.SatelliteVersionDetect {
+		if v, ok := satellite.DetectFrameworkVersion(config); ok {
+			if v != config.SatelliteVersion {
+				log.Printf("satellite: detected framework version %q (configured was %q) — using detected", v, config.SatelliteVersion)
+			} else {
+				log.Printf("satellite: detected framework version %q", v)
+			}
+			config.SatelliteVersion = v
+		} else {
+			log.Printf("satellite: no framework version advertised; using configured SATELLITE_VERSION=%q", config.SatelliteVersion)
+		}
 	}
 
 	server, err := server.NewServer(config)

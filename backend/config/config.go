@@ -21,6 +21,7 @@ type Config struct {
 	SatelliteTokenEndpoint      string
 	SatelliteTokenScope         string
 	SatelliteVersion            string
+	SatelliteVersionDetect      bool
 	SatelliteIss                string
 	RegistrarId                 string
 	DataspaceId                 string
@@ -45,6 +46,11 @@ type Config struct {
 	// Simple header-based RBAC
 	RBACHeaderName string
 	RBACAdminToken string
+
+	KeycloakBaseURL       string
+	KeycloakRealm         string
+	KeycloakAdminUsername string
+	KeycloakAdminPassword string
 }
 
 func NewConfig() *Config {
@@ -88,6 +94,10 @@ func (config *Config) LoadEnvironment() error {
 	if config.SatelliteVersion == "" {
 		config.SatelliteVersion = "2.0.1"
 	}
+	// Auto-detect the connected framework version from the satellite's
+	// discovery endpoints at startup (default on). Set to "false" to pin the
+	// configured SATELLITE_VERSION.
+	config.SatelliteVersionDetect = os.Getenv("SATELLITE_VERSION_DETECT") != "false"
 	config.SatelliteIss = os.Getenv("SATELLITE_ISS")
 	config.SatelliteAud = os.Getenv("SATELLITE_AUD")
 	config.RegistrarId = os.Getenv("REGISTRAR_ID")
@@ -140,6 +150,14 @@ func (config *Config) LoadEnvironment() error {
 		config.RBACHeaderName = "X-RBAC-Token"
 	}
 	config.RBACAdminToken = os.Getenv("RBAC_ADMIN_TOKEN")
+
+	config.KeycloakBaseURL = strings.TrimRight(os.Getenv("KEYCLOAK_ADMIN_BASE_URL"), "/")
+	if config.KeycloakBaseURL == "" {
+		config.KeycloakBaseURL = strings.TrimRight(os.Getenv("NEXT_PUBLIC_KEYCLOAK_BASE_URL"), "/")
+	}
+	config.KeycloakRealm = os.Getenv("NEXT_PUBLIC_KEYCLOAK_REALM")
+	config.KeycloakAdminUsername = os.Getenv("KEYCLOAK_ADMIN_USERNAME")
+	config.KeycloakAdminPassword = os.Getenv("KEYCLOAK_ADMIN_PASSWORD")
 
 	config.SatelliteDebug = os.Getenv("SATELLITE_DEBUG") == "true"
 	config.OIDCDisable = os.Getenv("OIDC_DISABLE") == "true"
