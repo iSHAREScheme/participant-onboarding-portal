@@ -5,6 +5,7 @@ import { useRouter } from "next/router"
 import AdminRoute from "components/AdminRoute"
 import { useLanguage } from "../context/LanguageContext"
 import { getPublicEnv } from "config/publicEnv"
+import { PATH } from "const"
 
 import API from 'api/client'
 
@@ -160,48 +161,35 @@ const Admin: NextPage = () => {
   return (
     <AdminRoute fetchData={loadApplications}>
       <div className={styles.container}>
-        <h1 className={styles.title}>{t('admin.title')}</h1>
-        {error && <p className={styles.errorMessage}>{error}</p>}
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>{t('admin.table.headers.applicant')}</th>
-              <th>{t('admin.table.headers.company')}</th>
-              <th>{t('admin.table.headers.role')}</th>
-              <th>
-                {t('admin.table.headers.status')}
-                <svg
-                  className={styles.sortIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                >
-                  <path d="M8 10L4 6H12L8 10Z" fill="currentColor" />
-                </svg>
-              </th>
-              <th>
-                {t('admin.table.headers.nextStepBy')}
-                <svg
-                  className={styles.sortIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                >
-                  <path d="M8 10L4 6H12L8 10Z" fill="currentColor" />
-                </svg>
-              </th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && !applications.length ? (
+        <div className={styles.headerSection}>
+          <h1 className={styles.title}>{t('admin.title')}</h1>
+          <button
+            className={styles.createButton}
+            onClick={() => router.push(PATH.SUBMIT)}
+          >
+            {t('admin.actions.createParty')}
+          </button>
+        </div>
+
+        {isLoading && (
+          <div className={styles.loading}>{t('common.loading')}</div>
+        )}
+        {error && <div className={styles.error}>{error}</div>}
+
+        {!isLoading && !error && (
+          <table className={styles.table}>
+            <thead>
               <tr>
-                <td colSpan={6}>{t('common.loading')}</td>
+                <th>{t('admin.table.headers.applicant')}</th>
+                <th>{t('admin.table.headers.company')}</th>
+                <th>{t('admin.table.headers.role')}</th>
+                <th>{t('admin.table.headers.status')}</th>
+                <th>{t('admin.table.headers.nextStepBy')}</th>
+                <th>{t('admin.table.headers.actions')}</th>
               </tr>
-            ) : (
-              applications.map((app, index) => (
+            </thead>
+            <tbody>
+              {applications.map((app, index) => (
                 <tr key={index}>
                   <td>{app.applicant || t('admin.common.na')}</td>
                   <td>{app.company || t('admin.common.na')}</td>
@@ -221,21 +209,6 @@ const Admin: NextPage = () => {
                         onClick={(e) => handleVerifyClick(e, app.id)}
                       >
                         {t('admin.actions.verify')}
-                        <svg
-                          className={styles.arrowIcon}
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                        >
-                          <path
-                            d="M6 12L10 8L6 4"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
                       </button>
                     )}
                     <button
@@ -246,28 +219,13 @@ const Admin: NextPage = () => {
                       }}
                     >
                       {t('admin.actions.view')}
-                      <svg
-                        className={styles.arrowIcon}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                      >
-                        <path
-                          d="M6 12L10 8L6 4"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
                     </button>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </AdminRoute>
   )

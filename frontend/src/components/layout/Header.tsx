@@ -109,6 +109,14 @@ const Header: React.FC = () => {
               </li>
               <li>
                 <a
+                  href="/participants"
+                  className={currentPath === "/participants" ? styles.active : ""}
+                >
+                  {t("common.participants")}
+                </a>
+              </li>
+              <li>
+                <a
                   href="/users"
                   className={currentPath === "/users" ? styles.active : ""}
                 >

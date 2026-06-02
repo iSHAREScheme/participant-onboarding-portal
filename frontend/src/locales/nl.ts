@@ -21,7 +21,101 @@ export default {
     confirm: "Bevestigen",
     next: "Volgende",
     previous: "Vorige",
-    profile: "Profiel"
+    profile: "Profiel",
+    participants: "Deelnemers"
+  },
+  participants: {
+    title: "Deelnemers",
+    refresh: "Vernieuwen",
+    loading: "Deelnemers laden...",
+    error: "Kan deelnemers niet laden.",
+    empty: "Geen deelnemers gevonden.",
+    search: "Zoek op naam…",
+    filters: {
+      all: "Alle deelnemers",
+      mine: "Mijn deelnemers",
+      active: "Alleen actief",
+      certified: "Alleen gecertificeerd"
+    },
+    noResults: "Geen deelnemers komen overeen met de zoekopdracht.",
+    table: {
+      partyId: "Party ID",
+      name: "Naam",
+      roles: "Rollen",
+      status: "Status",
+      startDate: "Startdatum",
+      endDate: "Einddatum"
+    },
+    pagination: {
+      previous: "Vorige",
+      next: "Volgende",
+      last: "Laatste",
+      page: "Pagina {{current}} van {{total}}"
+    },
+    detail: {
+      back: "Terug naar deelnemers",
+      loading: "Deelnemer laden…",
+      error: "Kan deelnemer niet laden.",
+      notFound: "Deelnemer niet gevonden.",
+      schemaLabel: "Schema",
+      sections: {
+        identity: "Identiteit",
+        adherence: "Naleving",
+        roles: "Rollen",
+        agreements: "Overeenkomsten",
+        authRegistries: "Autorisatieregisters",
+        certificates: "Certificaten",
+        additionalInfo: "Aanvullende informatie",
+        claims: "Claims"
+      },
+      fields: {
+        partyId: "Party ID",
+        name: "Naam",
+        registrarId: "Registrar ID",
+        capabilityUrl: "Capability URL",
+        schemaVersion: "Schemaversie",
+        status: "Status",
+        startDate: "Startdatum",
+        endDate: "Einddatum",
+        role: "Rol",
+        loa: "Mate van zekerheid",
+        legalAdherence: "Juridische naleving",
+        compliancyVerified: "Compliance geverifieerd",
+        framework: "Framework",
+        agreementType: "Type",
+        title: "Titel",
+        signDate: "Ondertekeningsdatum",
+        expiryDate: "Vervaldatum",
+        hash: "Hash",
+        authRegistryName: "Naam",
+        authRegistryId: "Register ID",
+        authRegistryUrl: "URL",
+        dataspaceId: "Dataspace ID",
+        description: "Omschrijving",
+        website: "Website",
+        companyEmail: "E-mail bedrijf",
+        companyPhone: "Telefoon bedrijf",
+        publiclyPublishable: "Openbaar publiceerbaar",
+        tags: "Labels"
+      },
+      empty: {
+        roles: "Geen rollen.",
+        agreements: "Geen overeenkomsten.",
+        authRegistries: "Geen autorisatieregisters.",
+        certificates: "Geen certificaten."
+      },
+      edit: {
+        button: "Bewerken",
+        title: "Deelnemer bewerken",
+        save: "Opslaan",
+        saving: "Opslaan…",
+        saveClaim: "Claim opslaan",
+        cancel: "Annuleren",
+        saved: "Opgeslagen.",
+        saveError: "Kan wijzigingen niet opslaan.",
+        claimsTitle: "Claims"
+      }
+    }
   },
   home: {
     title: "Titel",
@@ -299,7 +393,8 @@ export default {
         company: "Bedrijf",
         role: "Rol",
         status: "Status",
-        nextStepBy: "Volgende stap door"
+        nextStepBy: "Volgende stap door",
+        actions: "Acties"
       }
     },
     status: {
@@ -313,7 +408,8 @@ export default {
     actions: {
       verify: "Verifiëren",
       view: "Bekijken",
-      add: "Toevoegen"
+      add: "Toevoegen",
+      createParty: "Deelnemer aanmaken"
     },
     common: {
       na: "N/B"
@@ -482,6 +578,112 @@ export default {
       updateFailed: "Kon profiel niet bijwerken",
       passwordMismatch: "Wachtwoorden komen niet overeen",
       passwordUpdateFailed: "Kon wachtwoord niet bijwerken"
+    }
+  },
+  submit: {
+    title: "Partijgegevens verzenden",
+    identity: {
+      heading: "Identiteit deelnemer",
+      partyId: "Partij-ID",
+      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyName: "Naam partij",
+      partyNamePlaceholder: "Naam rechtspersoon",
+      alsoKnownAs: "Ook bekend als",
+      alsoKnownAsPlaceholder: "Handelsnaam, merk, …",
+      schemaVersion: "Schemaversie"
+    },
+    claim: {
+      heading: "Claim {{index}} — {{type}}",
+      type: "Type claim",
+      status: "Status",
+      registrarId: "Registrar-ID",
+      startDate: "Startdatum",
+      endDate: "Einddatum",
+      frameworkId: "Framework-ID",
+      capabilityUrl: "Capability-URL",
+      description: "Omschrijving",
+      website: "Website",
+      companyEmail: "Bedrijfs-e-mail",
+      publiclyPublishable: "Openbaar publiceerbaar",
+      authRegistryName: "Naam autorisatieregister",
+      authRegistryId: "ID autorisatieregister",
+      authRegistryUrl: "URL autorisatieregister",
+      dataspaceId: "Dataspace-ID",
+      serviceProviderPartyId: "Partij-ID dienstverlener",
+      agreementType: "Type overeenkomst",
+      agreementId: "Overeenkomst-ID",
+      title: "Titel",
+      verificationHash: "Verificatiehash",
+      roleId: "Rol-ID",
+      loa: "Mate van zekerheid",
+      compliancyVerified: "Compliance geverifieerd",
+      legalAdherence: "Juridische naleving",
+      subjectName: "Naam onderwerp",
+      certificateType: "Type certificaat",
+      x5c: "Certificaat (x5c, base64 DER)",
+      x5t: "Vingerafdruk (x5t#S256)",
+      assertion: "Assertie"
+    },
+    claimTypes: {
+      frameworkCompliance: "Framework-naleving",
+      authRegistry: "Autorisatieregister",
+      frameworkAgreement: "Framework-overeenkomst",
+      frameworkRole: "Framework-rol",
+      x509Certificate: "X.509-certificaat",
+      dataspaceMembership: "Dataspace-lidmaatschap",
+      idpAssertion: "IdP-assertie"
+    },
+    status: {
+      active: "Actief",
+      inactive: "Inactief",
+      revoked: "Ingetrokken",
+      suspended: "Opgeschort"
+    },
+    loa: {
+      low: "Laag",
+      substantial: "Substantieel",
+      high: "Hoog",
+      notApplicable: "Niet van toepassing"
+    },
+    yesNoNa: {
+      yes: "Ja",
+      no: "Nee",
+      notApplicable: "Niet van toepassing"
+    },
+    booleanOptions: {
+      yes: "Ja",
+      no: "Nee"
+    },
+    placeholders: {
+      framework: "bijv. iSHARE",
+      url: "https://…",
+      date: "JJJJ-MM-DD",
+      agreementType: "bijv. AccessionAgreement",
+      roleId: "bijv. dataConsumer",
+      certificateType: "bijv. signing"
+    },
+    actions: {
+      addClaim: "Claim toevoegen",
+      addAlsoKnownAs: "Ook bekend als toevoegen",
+      remove: "Verwijderen",
+      create: "Aanmaken",
+      submitting: "Bezig met verzenden…"
+    },
+    messages: {
+      submitError: "Verzenden van partij mislukt. {{message}}",
+      submitSuccess: "Partij succesvol verzonden."
+    },
+    upload: {
+      or: "of",
+      browse: "Bestanden bladeren",
+      certText: "Sleep uw certificaat hierheen",
+      agreementText: "Sleep de getekende overeenkomst (PDF) hierheen",
+      certInvalidType: "Ongeldig bestandstype. Toegestaan: .pem, .crt, .cer, .der",
+      agreementInvalidType: "Ongeldig bestandstype. Upload een PDF.",
+      certTooLarge: "Certificaat overschrijdt de limiet van 1 MB.",
+      agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
+      certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
+      agreementReadError: "Kon het PDF-bestand niet lezen."
     }
   }
 };

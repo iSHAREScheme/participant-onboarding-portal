@@ -479,3 +479,60 @@ func normalizeWebsiteURL(raw string) string {
 
 	return trimmed
 }
+
+// ---------------------------------------------------------------------------
+// iSHARE v3.0 party creation (POST /parties, `register-new-party`).
+//
+// Unlike the 2.0.1 / 2.1.1 ep_creation payloads, the v3 satellite accepts the
+// claim-based `party` schema directly, so we forward it almost verbatim. The
+// claims stay as generic maps to preserve every type-specific field (including
+// the literal "x5t#s256" key) without a lossy struct round-trip. There is no
+// SPOR / signed_request in v3 — creation is gated by the satellite-owner Bearer
+// token plus claim validation on the satellite side.
+// ---------------------------------------------------------------------------
+
+// epCreation30Request is the v3.0 `party` payload sent to the satellite.
+type epCreation30Request struct {
+	ID            string                   `json:"id"`
+	Name          string                   `json:"name"`
+	AlsoKnownAs   []string                 `json:"alsoKnownAs,omitempty"`
+	SchemaVersion string                   `json:"schemaVersion"`
+	Claims        []map[string]interface{} `json:"claims"`
+}
+
+// BuildEpCreation30RequestFromRequest assembles the v3.0 party payload:
+//   - `id` is the normalized did:ishare identifier
+//   - `alsoKnownAs` carries the portal-supplied aliases (already cleaned)
+//   - `schemaVersion` is pinned to "v3.0" as the spec requires
+//   - each claim's `registrarId` defaults to the configured registrar and
+//     `status` defaults to "active" when the portal left them blank; all other
+//     claim fields pass through untouched.
+func BuildEpCreation30RequestFromRequest(request *requests.PartyV3CreateRequest, partyDID string, aliases []string, registrarID string) epCreation30Request {
+	claims := make([]map[string]interface{}, 0, len(request.Claims))
+	for _, claim := range request.Claims {
+		if claim == nil {
+			continue
+		}
+		normalized := make(map[string]interface{}, len(claim))
+		for k, v := range claim {
+			normalized[k] = v
+		}
+		if registrarID != "" {
+			if existing, ok := normalized["registrarId"].(string); !ok || strings.TrimSpace(existing) == "" {
+				normalized["registrarId"] = registrarID
+			}
+		}
+		if status, ok := normalized["status"].(string); !ok || strings.TrimSpace(status) == "" {
+			normalized["status"] = "active"
+		}
+		claims = append(claims, normalized)
+	}
+
+	return epCreation30Request{
+		ID:            partyDID,
+		Name:          request.Name,
+		AlsoKnownAs:   aliases,
+		SchemaVersion: "v3.0",
+		Claims:        claims,
+	}
+}

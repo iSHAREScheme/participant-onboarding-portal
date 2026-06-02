@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { NextPage } from "next";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FormInput, Button, FormSelect } from "components";
 import { useSubmitInfo } from "hooks";
+import { useLanguage } from "context/LanguageContext";
 import styles from "styles/Submit.module.css";
 import ProtectedRoute from "../components/ProtectedRoute";
+import SubmitClaimsForm from "../components/SubmitClaimsForm";
+import { getSatelliteVersion, usesClaimModel } from "config/publicEnv";
 import {
   AdherenceStatusOptions,
   AuthorisationRegistryIDOptions,
@@ -87,16 +90,21 @@ const validationSchema = Yup.object({
 });
 
 const Submit: NextPage = () => {
+  const { t } = useLanguage();
+  const satelliteVersion = getSatelliteVersion();
   const { createParty, loading, error, response } = useSubmitInfo();
   const [showAuthRegistryForm, setShowAuthRegistryForm] =
     useState<boolean>(false);
   const [showAgreementForm, setShowAgreementForm] = useState<boolean>(false);
-  const [showCertificateForm, setShowCertificateForm] =
-    useState<boolean>(false);
   const [showRoleForm, setShowRoleForm] = useState<boolean>(false);
+
+  const certInputRef = useRef<HTMLInputElement>(null);
+  const [certError, setCertError] = useState<string>("");
+  const [isDraggingCert, setIsDraggingCert] = useState<boolean>(false);
 
   const formik = useFormik({
     initialValues: {
+      certificate: null as File | null,
       party_id: "",
       party_name: "",
       capability_url: "",
@@ -190,12 +198,36 @@ const Submit: NextPage = () => {
     setShowAgreementForm(false);
   };
 
-  const handleAddCertificate = () => {
-    setShowCertificateForm(true);
+  const handleCertificateFile = (file: File) => {
+    setCertError("");
+    if (!/\.(pem|crt|cer|der)$/i.test(file.name)) {
+      setCertError("Invalid file type. Allowed: .pem, .crt, .cer, .der");
+      return;
+    }
+    if (file.size > 1 * 1024 * 1024) {
+      setCertError("File size exceeds 1MB limit");
+      return;
+    }
+    formik.setFieldValue("certificate", file);
   };
-  const handleSaveCertificate = () => { };
-  const handleCancelCertificate = () => {
-    setShowCertificateForm(false);
+
+  const handleCertInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleCertificateFile(file);
+    // Reset so the same file can be selected again
+    e.target.value = "";
+  };
+
+  const handleCertDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingCert(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleCertificateFile(file);
+  };
+
+  const removeCertificate = () => {
+    formik.setFieldValue("certificate", null);
+    setCertError("");
   };
 
   const handleAddRole = () => {
@@ -220,7 +252,10 @@ const Submit: NextPage = () => {
   return (
     <ProtectedRoute fetchData={() => { }}>
       <div className={styles.container}>
-        <h1 className={styles.title}>Submit Party Information</h1>
+        <h1 className={styles.title}>{t("submit.title")}</h1>
+        {usesClaimModel(satelliteVersion) ? (
+          <SubmitClaimsForm />
+        ) : (
         <form onSubmit={formik.handleSubmit}>
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}> Participant Details </h2>
@@ -329,6 +364,58 @@ const Submit: NextPage = () => {
                                 error={formik.touched.status ? formik.errors.status : undefined}
                             /> */}
             </div>
+          </div>
+          <div className={styles.section}>
+            <div className={styles.sectionBar}></div>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}> Certificate </h2>
+            </div>
+            <div
+              className={`${styles.uploadContainer} ${
+                isDraggingCert ? styles.dragActive : ""
+              }`}
+              onDrop={handleCertDrop}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDraggingCert(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDraggingCert(false);
+              }}
+              onClick={() => certInputRef.current?.click()}
+            >
+              <input
+                type="file"
+                ref={certInputRef}
+                accept=".pem,.crt,.cer,.der"
+                onChange={handleCertInput}
+                style={{ display: "none" }}
+              />
+              <div className={styles.uploadIcon}>🔒</div>
+              <div className={styles.uploadText}>
+                Drag and drop your certificate here
+              </div>
+              <div className={styles.orText}>or</div>
+              <div className={styles.browseButton}>Browse files</div>
+            </div>
+            {certError && (
+              <div className={styles.errorMessage}>{certError}</div>
+            )}
+            {formik.values.certificate && (
+              <div className={styles.fileInfo}>
+                <span className={styles.fileName}>
+                  {formik.values.certificate.name}
+                </span>
+                <button
+                  type="button"
+                  className={styles.removeButton}
+                  onClick={removeCertificate}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
@@ -869,6 +956,7 @@ const Submit: NextPage = () => {
             </Button>
           </div>
         </form>
+        )}
       </div>
     </ProtectedRoute>
   );

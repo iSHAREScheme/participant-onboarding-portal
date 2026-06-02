@@ -18,6 +18,10 @@ func ConfigureRoutes(server *s.Server, config *config.Config) {
 	groupParty := server.App.Group("/party")
 	GroupPartyRequests(server, groupParty, config)
 
+	// iSHARE v3.0 claim-based party creation (register-new-party)
+	groupParties := server.App.Group("/parties")
+	GroupPartiesRequests(server, groupParties, config)
+
 	// Add settings routes
 	groupSettings := server.App.Group("/")
 	GroupSettingsRequests(server, groupSettings, config)
@@ -45,6 +49,20 @@ func GroupPartyRequests(server *s.Server, group fiber.Router, config *config.Con
 	group.Get("/proposals/:id/agreement", middlewares.RequireAdminRole(), handler.DownloadAgreement)
 }
 
+func GroupPartiesRequests(server *s.Server, group fiber.Router, config *config.Config) {
+	handler := handlers.NewHandlerParty(server, config)
+
+	group.Post("/", handler.CreateParties)
+
+	// Admin-protected party/claim updates (proxied to the satellite).
+	//   PUT   /parties/:id                  → v2.2 full party-update
+	//   PATCH /parties/:id                  → v3.0 update-party-information
+	//   PATCH /parties/:id/claims/:claimId  → v3.0 update-claim-information
+	group.Put("/:id", middlewares.RequireAdminRole(), handler.UpdateParty)
+	group.Patch("/:id", middlewares.RequireAdminRole(), handler.PatchParty)
+	group.Patch("/:id/claims/:claimId", middlewares.RequireAdminRole(), handler.PatchClaim)
+}
+
 func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.Config) {
 	handler := handlers.NewHandlerSettings(server, config)
 
@@ -57,6 +75,8 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.Config) {
 	handler := handlers.NewHandlerRegistry(server, config)
 	group.Get("/", handler.GetRegistry)
+	group.Get("/participants", middlewares.RequireAdminRole(), handler.GetParticipants)
+	group.Get("/participants/detail", middlewares.RequireAdminRole(), handler.GetParticipantDetail)
 	group.Post("/certificate/validate", handler.VerifyTrustedCertificate)
 }
 

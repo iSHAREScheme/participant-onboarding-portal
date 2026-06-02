@@ -21,4 +21,7 @@ module.exports = [
   'NEXT_PUBLIC_PARTY_NAME',
   'NEXT_PUBLIC_PARTY_REGISTER_URL',
   'NEXT_PUBLIC_PARTY_CAPABILITIES_URL',
+  // Backend var (shared via the root .env). Surfaced to the client so the UI can
+  // select the iSHARE schema version: major 3+ => v3, otherwise v2.
+  'SATELLITE_VERSION',
 ];

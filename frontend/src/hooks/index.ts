@@ -1,5 +1,6 @@
-import { useSubmitInfo } from './party';
+import { useSubmitInfo, useSubmitParty } from './party';
 
 export {
-    useSubmitInfo
+    useSubmitInfo,
+    useSubmitParty
 }

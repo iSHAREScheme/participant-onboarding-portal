@@ -22,7 +22,101 @@ export default {
     confirm: "Confirm",
     next: "Next",
     previous: "Previous",
-    profile: "Profile"
+    profile: "Profile",
+    participants: "Participants"
+  },
+  participants: {
+    title: "Participants",
+    refresh: "Refresh",
+    loading: "Loading participants...",
+    error: "Failed to load participants.",
+    empty: "No participants found.",
+    search: "Search by name…",
+    filters: {
+      all: "All participants",
+      mine: "My participants",
+      active: "Active only",
+      certified: "Certified only"
+    },
+    noResults: "No participants match your search.",
+    table: {
+      partyId: "Party ID",
+      name: "Name",
+      roles: "Roles",
+      status: "Status",
+      startDate: "Start date",
+      endDate: "End date"
+    },
+    pagination: {
+      previous: "Previous",
+      next: "Next",
+      last: "Last",
+      page: "Page {{current}} of {{total}}"
+    },
+    detail: {
+      back: "Back to participants",
+      loading: "Loading participant…",
+      error: "Failed to load participant.",
+      notFound: "Participant not found.",
+      schemaLabel: "Schema",
+      sections: {
+        identity: "Identity",
+        adherence: "Adherence",
+        roles: "Roles",
+        agreements: "Agreements",
+        authRegistries: "Authorisation registries",
+        certificates: "Certificates",
+        additionalInfo: "Additional information",
+        claims: "Claims"
+      },
+      fields: {
+        partyId: "Party ID",
+        name: "Name",
+        registrarId: "Registrar ID",
+        capabilityUrl: "Capability URL",
+        schemaVersion: "Schema version",
+        status: "Status",
+        startDate: "Start date",
+        endDate: "End date",
+        role: "Role",
+        loa: "Level of assurance",
+        legalAdherence: "Legal adherence",
+        compliancyVerified: "Compliancy verified",
+        framework: "Framework",
+        agreementType: "Type",
+        title: "Title",
+        signDate: "Sign date",
+        expiryDate: "Expiry date",
+        hash: "Hash",
+        authRegistryName: "Name",
+        authRegistryId: "Registry ID",
+        authRegistryUrl: "URL",
+        dataspaceId: "Dataspace ID",
+        description: "Description",
+        website: "Website",
+        companyEmail: "Company email",
+        companyPhone: "Company phone",
+        publiclyPublishable: "Publicly publishable",
+        tags: "Tags"
+      },
+      empty: {
+        roles: "No roles.",
+        agreements: "No agreements.",
+        authRegistries: "No authorisation registries.",
+        certificates: "No certificates."
+      },
+      edit: {
+        button: "Edit",
+        title: "Edit participant",
+        save: "Save",
+        saving: "Saving…",
+        saveClaim: "Save claim",
+        cancel: "Cancel",
+        saved: "Saved.",
+        saveError: "Failed to save changes.",
+        claimsTitle: "Claims"
+      }
+    }
   },
   home: {
     title: "Onboarding",
@@ -303,7 +397,8 @@ export default {
         company: "Company",
         role: "Role",
         status: "Status",
-        nextStepBy: "Next step by"
+        nextStepBy: "Next step by",
+        actions: "Actions"
       }
     },
     status: {
@@ -317,7 +412,8 @@ export default {
     actions: {
       verify: "Verify",
       view: "View",
-      add: "Add"
+      add: "Add",
+      createParty: "Create party"
     },
     common: {
       na: "N/A"
@@ -486,6 +582,112 @@ export default {
       updateFailed: "Failed to update profile",
       passwordMismatch: "Passwords do not match",
       passwordUpdateFailed: "Failed to update password"
+    }
+  },
+  submit: {
+    title: "Submit Party Information",
+    identity: {
+      heading: "Participant Identity",
+      partyId: "Party ID",
+      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyName: "Party Name",
+      partyNamePlaceholder: "Legal entity name",
+      alsoKnownAs: "Also Known As",
+      alsoKnownAsPlaceholder: "Trade name, brand, …",
+      schemaVersion: "Schema Version"
+    },
+    claim: {
+      heading: "Claim {{index}} — {{type}}",
+      type: "Claim Type",
+      status: "Status",
+      registrarId: "Registrar ID",
+      startDate: "Start Date",
+      endDate: "End Date",
+      frameworkId: "Framework ID",
+      capabilityUrl: "Capability URL",
+      description: "Description",
+      website: "Website",
+      companyEmail: "Company Email",
+      publiclyPublishable: "Publicly Publishable",
+      authRegistryName: "Authorisation Registry Name",
+      authRegistryId: "Authorisation Registry ID",
+      authRegistryUrl: "Authorisation Registry URL",
+      dataspaceId: "Dataspace ID",
+      serviceProviderPartyId: "Service Provider Party ID",
+      agreementType: "Agreement Type",
+      agreementId: "Agreement ID",
+      title: "Title",
+      verificationHash: "Verification Hash",
+      roleId: "Role ID",
+      loa: "Level of Assurance",
+      compliancyVerified: "Compliancy Verified",
+      legalAdherence: "Legal Adherence",
+      subjectName: "Subject Name",
+      certificateType: "Certificate Type",
+      x5c: "Certificate (x5c, base64 DER)",
+      x5t: "Thumbprint (x5t#S256)",
+      assertion: "Assertion"
+    },
+    claimTypes: {
+      frameworkCompliance: "Framework Compliance",
+      authRegistry: "Authorisation Registry",
+      frameworkAgreement: "Framework Agreement",
+      frameworkRole: "Framework Role",
+      x509Certificate: "X.509 Certificate",
+      dataspaceMembership: "Dataspace Membership",
+      idpAssertion: "IdP Assertion"
+    },
+    status: {
+      active: "Active",
+      inactive: "Inactive",
+      revoked: "Revoked",
+      suspended: "Suspended"
+    },
+    loa: {
+      low: "Low",
+      substantial: "Substantial",
+      high: "High",
+      notApplicable: "Not applicable"
+    },
+    yesNoNa: {
+      yes: "Yes",
+      no: "No",
+      notApplicable: "Not applicable"
+    },
+    booleanOptions: {
+      yes: "Yes",
+      no: "No"
+    },
+    placeholders: {
+      framework: "e.g. iSHARE",
+      url: "https://…",
+      date: "YYYY-MM-DD",
+      agreementType: "e.g. AccessionAgreement",
+      roleId: "e.g. dataConsumer",
+      certificateType: "e.g. signing"
+    },
+    actions: {
+      addClaim: "Add Claim",
+      addAlsoKnownAs: "Add Also Known As",
+      remove: "Remove",
+      create: "Create",
+      submitting: "Submitting…"
+    },
+    messages: {
+      submitError: "Failed to submit party. {{message}}",
+      submitSuccess: "Party submitted successfully."
+    },
+    upload: {
+      or: "or",
+      browse: "Browse files",
+      certText: "Drag and drop your certificate here",
+      agreementText: "Drag and drop the signed agreement (PDF) here",
+      certInvalidType: "Invalid file type. Allowed: .pem, .crt, .cer, .der",
+      agreementInvalidType: "Invalid file type. Please upload a PDF.",
+      certTooLarge: "Certificate exceeds the 1 MB limit.",
+      agreementTooLarge: "PDF exceeds the 10 MB limit.",
+      certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
+      agreementReadError: "Could not read the PDF file."
     }
   }
 };

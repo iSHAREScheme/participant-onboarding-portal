@@ -17,6 +17,7 @@ type Config struct {
 	ServerPort                  string
 	SatelliteBaseUrl            string
 	SatelliteEpCreationEndpoint string
+	SatellitePartiesEndpoint    string
 	SatelliteTokenEndpoint      string
 	SatelliteTokenScope         string
 	SatelliteVersion            string
@@ -68,6 +69,12 @@ func (config *Config) LoadEnvironment() error {
 	config.SatelliteEpCreationEndpoint = os.Getenv("SATELLITE_EP_CREATION_ENDPOINT")
 	if config.SatelliteEpCreationEndpoint == "" {
 		config.SatelliteEpCreationEndpoint = "/ep_creation"
+	}
+	// v3.0 satellites expose the standard iSHARE `POST /parties` endpoint for
+	// claim-based party creation (`register-new-party`) instead of ep_creation.
+	config.SatellitePartiesEndpoint = os.Getenv("SATELLITE_PARTIES_ENDPOINT")
+	if config.SatellitePartiesEndpoint == "" {
+		config.SatellitePartiesEndpoint = "/parties"
 	}
 	config.SatelliteTokenEndpoint = os.Getenv("SATELLITE_TOKEN_ENDPOINT")
 	if config.SatelliteTokenEndpoint == "" {

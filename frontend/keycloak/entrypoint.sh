@@ -2,7 +2,6 @@
 set -eu
 
 IMP="${KC_IMPORT_FILE:-/opt/keycloak/data/import/realm-export.json}"
-STRAT="${KC_IMPORT_STRATEGY:-IGNORE_EXISTING}"
 
 echo "[kc-entrypoint] import file: $IMP"
 if [ ! -f "$IMP" ]; then
@@ -291,7 +290,6 @@ start_with_bootstrap() {
 
   /opt/keycloak/bin/kc.sh "$MODE" \
     --import-realm \
-    --import-realm-strategy="$STRAT" \
     ${EH_CHAIN_PEM:+--truststore-paths=/tmp/trust} \
     "$@" &
   KC_PID=$!

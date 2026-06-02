@@ -50,6 +50,122 @@ export interface ProposalData {
   }
 }
 
+// ---------------------------------------------------------------------------
+// iSHARE v3 claim-based participant model
+// Mirrors the schemas in the v3 OpenAPI spec:
+// https://raw.githubusercontent.com/iSHAREScheme/openapi/v3.0/ishare_openapi_spec.yaml
+// A party is reduced to identity + a list of polymorphic claims, each
+// discriminated by `type` and extending the shared claim skeleton.
+// ---------------------------------------------------------------------------
+
+export type ClaimStatus = "active" | "inactive" | "revoked" | "suspended"
+
+export type ClaimType =
+  | "frameworkCompliance"
+  | "authRegistry"
+  | "frameworkAgreement"
+  | "frameworkRole"
+  | "x509Certificate"
+  | "dataspaceMembership"
+  | "idpAssertion"
+
+export type Loa = "low" | "substantial" | "high" | "not-applicable"
+export type YesNoNa = "yes" | "no" | "not-applicable"
+
+/** Fields shared by every claim (claimSkeleton in the spec). */
+export interface ClaimBase {
+  id?: string
+  type: ClaimType
+  registrarId: string
+  status: ClaimStatus
+  startDate?: string
+  endDate?: string
+}
+
+export interface AdditionalInfo {
+  description?: string
+  logo?: string
+  website?: string
+  companyEmail?: string
+  companyPhone?: string
+  publiclyPublishable: boolean
+  tags?: string
+}
+
+export interface FrameworkComplianceClaim extends ClaimBase {
+  type: "frameworkCompliance"
+  frameworkId: string
+  capabilityUrl?: string
+  additionalInfo?: AdditionalInfo
+}
+
+export interface AuthRegistryClaim extends ClaimBase {
+  type: "authRegistry"
+  name: string
+  authRegistryId: string
+  authUrl: string
+  dataspaceId?: string
+  serviceProviderPartyId?: string
+}
+
+export interface FrameworkAgreementClaim extends ClaimBase {
+  type: "frameworkAgreement"
+  frameworkId: string
+  agreementType: string
+  agreementId: string
+  title: string
+  verificationHash?: string
+}
+
+export interface FrameworkRoleClaim extends ClaimBase {
+  type: "frameworkRole"
+  frameworkId: string
+  roleId: string
+  title?: string
+  loa: Loa
+  compliancyVerified: YesNoNa
+  legalAdherence: YesNoNa
+}
+
+export interface X509CertificateClaim extends ClaimBase {
+  type: "x509Certificate"
+  subjectName: string
+  certificateType: string
+  x5c: string
+  "x5t#s256": string
+}
+
+export interface DataspaceMembershipClaim extends ClaimBase {
+  type: "dataspaceMembership"
+  dataspaceId: string
+  capabilityUrl?: string
+  legalAdherence: YesNoNa
+  additionalInfo?: AdditionalInfo
+}
+
+export interface IdpAssertionClaim extends ClaimBase {
+  type: "idpAssertion"
+  assertion: string
+}
+
+export type Claim =
+  | FrameworkComplianceClaim
+  | AuthRegistryClaim
+  | FrameworkAgreementClaim
+  | FrameworkRoleClaim
+  | X509CertificateClaim
+  | DataspaceMembershipClaim
+  | IdpAssertionClaim
+
+/** v3 participant identity wrapper (party in the spec). */
+export interface Party {
+  id: string
+  name: string
+  alsoKnownAs?: string[]
+  schemaVersion: "v3.0"
+  claims: Claim[]
+}
+
 export class API {
   public client: AxiosInstance
   constructor () {
@@ -74,6 +190,13 @@ export class API {
     return this.client.post('/party', data)
   }
 
+  // iSHARE v3 — create a claim-based participant.
+  // Backend: POST /parties forwards this payload to the satellite's v3
+  //   `register-new-party` endpoint (gated by SATELLITE_VERSION starting "3").
+  submitParty (party: Party) {
+    return this.client.post('/parties', party)
+  }
+
   fetchProposalData (userId: string) {
     return this.client.get(`/party/proposals/users/${userId}`)
   }
@@ -96,6 +219,45 @@ export class API {
 
   fetchRegistry () {
     return this.client.get(`/registry`)
+  }
+
+  // Admin-only: list one page of participants from the satellite registry.
+  // Pagination, name search and the active/certified filters are evaluated by
+  // the satellite; the backend returns { data, page, pageSize, total, totalPages }.
+  fetchParticipants (params?: {
+    page?: number
+    pageSize?: number
+    name?: string
+    activeOnly?: boolean
+    certifiedOnly?: boolean
+    mineOnly?: boolean
+  }) {
+    return this.client.get(`/registry/participants`, { params })
+  }
+
+  // Admin-only: fetch a single participant by its id/EORI (exact match) for the
+  // detail view. Backend returns { data: <party object> }.
+  fetchParticipantDetail (id: string) {
+    return this.client.get(`/registry/participants/detail`, {
+      params: { eori: id },
+    })
+  }
+
+  // Admin-only party updates (proxied to the satellite).
+  // v2.2: full replace via PUT /parties/{id}.
+  updateParty (id: string, body: any) {
+    return this.client.put(`/parties/${encodeURIComponent(id)}`, body)
+  }
+  // v3.0: partial update via PATCH /parties/{id} (update-party-information).
+  patchParty (id: string, body: any) {
+    return this.client.patch(`/parties/${encodeURIComponent(id)}`, body)
+  }
+  // v3.0: partial claim update via PATCH /parties/{id}/claims/{claimId}.
+  patchClaim (id: string, claimId: string, body: any) {
+    return this.client.patch(
+      `/parties/${encodeURIComponent(id)}/claims/${encodeURIComponent(claimId)}`,
+      body
+    )
   }
 
   // create/update

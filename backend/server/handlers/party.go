@@ -312,6 +312,235 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 	return responses.MessageResponse(c, fiber.StatusOK, "Your request is successfully accepted. Verification process started.")
 }
 
+// CreateParties godoc
+// @Summary      Create a v3.0 claim-based party in the Satellite
+// @Description  Forwards the iSHARE v3.0 claim-based `party` payload to the Satellite's `POST /parties` (register-new-party) endpoint.
+// @Tags         parties
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      requests.PartyV3CreateRequest  true  "v3.0 party payload"
+// @Success      200      {object}  map[string]string
+// @Failure      400      {object}  map[string]string
+// @Failure      500      {object}  map[string]string
+// @Router       /parties [post]
+func (h *HandlerParty) CreateParties(c *fiber.Ctx) error {
+	// The claim model is a 3.x concept; guard against accidentally posting it to
+	// a 2.x satellite that speaks the ep_creation dialect.
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest,
+			"The /parties endpoint requires a 3.x satellite (set SATELLITE_VERSION).")
+	}
+
+	// Parse the claim-based party. Unknown top-level fields are tolerated and
+	// unknown *claim* fields are required (the claim model is extensible), so we
+	// deliberately do not use DisallowUnknownFields here.
+	request := requests.PartyV3CreateRequest{}
+	if err := json.Unmarshal(c.Body(), &request); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid create party request data: "+err.Error())
+	}
+
+	if strings.TrimSpace(request.Name) == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "name is required")
+	}
+	if len(request.Claims) == 0 {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "at least one claim is required")
+	}
+
+	// Normalize identity to a did:ishare id (+ EORI alias) the way the 2.1.1
+	// flavor does, while leaving non-ishare DIDs (did:web, did:ebsi, …) intact.
+	partyDID, eori := deriveV3Identity(request.ID)
+	if partyDID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "id is required")
+	}
+	aliases := cleanAliases(request.AlsoKnownAs)
+	if len(aliases) == 0 && eori != "" {
+		aliases = []string{satellite.BuildEoriAlias(eori)}
+	}
+
+	// Enforce the framework's minimum-claims rule (spec: register-new-party).
+	if err := validateMinimumClaims(&request); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+
+	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create satellite owner access token.")
+	}
+
+	client := &http.Client{}
+
+	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
+	}
+
+	payload := satellite.BuildEpCreation30RequestFromRequest(&request, partyDID, aliases, h.Config.RegistrarId)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to prepare request payload.")
+	}
+
+	partiesURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatellitePartiesEndpoint)
+	req, err := http.NewRequest("POST", partiesURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request to satellite.")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to send request to satellite.")
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read response body.")
+	}
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: parties status=%d body=%s", res.StatusCode, string(body))
+	}
+
+	// The satellite returns 200 (spec) or 201 on success; the body is a signed
+	// partyResponse JWT we don't need to surface to the portal user.
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusCreated {
+		msg := extractSatelliteError(body)
+		if msg == "" {
+			msg = fmt.Sprintf("remote error, status %d", res.StatusCode)
+		}
+		return responses.ErrorResponse(c, res.StatusCode, msg)
+	}
+
+	return responses.MessageResponse(c, fiber.StatusOK, "Your request is successfully accepted. Verification process started.")
+}
+
+func truncateForLog(b []byte) string {
+	const max = 600
+	if len(b) > max {
+		return string(b[:max]) + "…"
+	}
+	return string(b)
+}
+
+// forwardPartyWrite proxies a write (PUT/PATCH) to the satellite's party/claim
+// update endpoints. The request body is forwarded verbatim — the front-end
+// builds the payload that matches the satellite's schema version — and the
+// owner access token is attached. The satellite's response is passed back.
+func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath string) error {
+	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create access token")
+	}
+
+	client := &http.Client{}
+	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	}
+
+	reqURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, satellitePath)
+	body := c.Body()
+
+	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: %s %s body=%s", method, reqURL, truncateForLog(body))
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to reach satellite")
+	}
+	defer res.Body.Close()
+
+	respBody, _ := io.ReadAll(res.Body)
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: %s %s -> %d body=%s", method, reqURL, res.StatusCode, truncateForLog(respBody))
+	}
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		msg := extractSatelliteError(respBody)
+		if msg == "" {
+			msg = fmt.Sprintf("satellite update failed: status %d", res.StatusCode)
+		}
+		return responses.ErrorResponse(c, res.StatusCode, msg)
+	}
+
+	c.Set("Content-Type", "application/json")
+	return c.Status(res.StatusCode).Send(respBody)
+}
+
+// UpdateParty godoc
+// @Summary      Update a party (v2.2, full replace)
+// @Description  Proxies to the Satellite's PUT /parties/{id} (iSHARE 2.2 party-update). The body must be a complete party_creation_request — the existing party is replaced.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id} [put]
+func (h *HandlerParty) UpdateParty(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "2") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PUT update requires a 2.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPut, "/parties/"+url.PathEscape(id))
+}
+
+// PatchParty godoc
+// @Summary      Update party information (v3.0, partial)
+// @Description  Proxies to the Satellite's PATCH /parties/{id} (iSHARE 3.0 update-party-information). Only the supplied fields are changed.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id} [patch]
+func (h *HandlerParty) PatchParty(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PATCH update requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id))
+}
+
+// PatchClaim godoc
+// @Summary      Update claim information (v3.0, partial)
+// @Description  Proxies to the Satellite's PATCH /parties/{partyId}/claims/{claimId} (iSHARE 3.0 update-claim-information).
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id       path  string  true  "Party id / EORI"
+// @Param        claimId  path  string  true  "Claim id"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]string
+// @Router       /parties/{id}/claims/{claimId} [patch]
+func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim PATCH update requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	claimId := strings.TrimSpace(c.Params("claimId"))
+	if id == "" || claimId == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
+}
+
 type ProposalData struct {
 	Roles struct {
 		DataOwner    bool `json:"dataOwner"`
@@ -901,6 +1130,84 @@ func epCreationFlavorFromVersion(raw string) epCreationFlavor {
 		return epCreationFlavor{UseDidIdentifiers: true}
 	}
 	return epCreationFlavor{UseDidIdentifiers: false}
+}
+
+// deriveV3Identity turns the portal-supplied party id into a did:ishare id and
+// the bare EORI it was derived from. A did:ishare id is normalized through the
+// EORI form; any other DID method (did:web, did:ebsi, …) is preserved verbatim
+// with no EORI alias; a plain EORI/registration number is promoted to a DID.
+func deriveV3Identity(rawID string) (did string, eori string) {
+	trimmed := strings.TrimSpace(rawID)
+	if trimmed == "" {
+		return "", ""
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "did:ishare:") {
+		eori = normalizePartyID(trimmed[len("did:ishare:"):])
+		return satellite.BuildDidFromPartyID(eori), eori
+	}
+	if strings.HasPrefix(lower, "did:") {
+		return trimmed, ""
+	}
+	eori = normalizePartyID(trimmed)
+	return satellite.BuildDidFromPartyID(eori), eori
+}
+
+// cleanAliases trims, de-duplicates and drops empty alsoKnownAs entries.
+func cleanAliases(aliases []string) []string {
+	seen := map[string]bool{}
+	cleaned := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		a := strings.TrimSpace(alias)
+		if a == "" || seen[a] {
+			continue
+		}
+		seen[a] = true
+		cleaned = append(cleaned, a)
+	}
+	return cleaned
+}
+
+// validateMinimumClaims enforces the v3 "register-new-party" rule: a party must
+// provide frameworkCompliance, frameworkAgreement and frameworkRole claims plus
+// at least one identity-proof claim (x509Certificate or idpAssertion).
+func validateMinimumClaims(request *requests.PartyV3CreateRequest) error {
+	present := map[string]bool{}
+	for _, claim := range request.Claims {
+		if t, ok := claim["type"].(string); ok {
+			present[strings.TrimSpace(t)] = true
+		}
+	}
+
+	var missing []string
+	for _, required := range []string{"frameworkCompliance", "frameworkAgreement", "frameworkRole"} {
+		if !present[required] {
+			missing = append(missing, required)
+		}
+	}
+	if !present["x509Certificate"] && !present["idpAssertion"] {
+		missing = append(missing, "x509Certificate or idpAssertion")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required claim(s): %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// extractSatelliteError pulls a human-readable message out of a satellite error
+// body, tolerating the common JSON envelopes; returns "" when none is found.
+func extractSatelliteError(body []byte) string {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	for _, key := range []string{"message", "error_description", "error", "detail"} {
+		if v, ok := parsed[key].(string); ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // ModifyProposal godoc

@@ -1,0 +1,470 @@
+.container {
+  /* Fill the scroll area (.main) and lay the page out as a column so the table
+     region absorbs any slack and pagination stays pinned in view — the page
+     itself never scrolls. */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Scroll container for the table: it takes the leftover height and only ever
+   scrolls internally on very short viewports — the surrounding page does not. */
+.tableWrap {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Icon-only refresh button sitting in the toolbar next to the filter. */
+.refreshButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background-color: var(--button-primary, #0066EE);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.refreshButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+
+.refreshButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  /* Fixed layout keeps column widths constant regardless of the rows currently
+     shown, so the table no longer resizes when you search/filter. */
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  padding: 0 1rem;
+  /* Fixed, uniform (compact) row height so the whole table fits the viewport
+     without scrolling, and never changes height between pages. */
+  height: 40px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid #eee;
+  /* Keep every cell on a single line so row height stays constant; long
+     EORIs/names are truncated with an ellipsis (full value shown on hover via
+     the title attribute). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Stable column widths (sum to 100%). Scoped to tablet/desktop; on mobile the
+   table becomes a stacked card layout where fixed column widths don't apply. */
+@media (min-width: 641px) {
+  .table th:nth-child(1),
+  .table td:nth-child(1) {
+    width: 24%;
+  }
+  .table th:nth-child(2),
+  .table td:nth-child(2) {
+    width: 20%;
+  }
+  .table th:nth-child(3),
+  .table td:nth-child(3) {
+    width: 20%;
+  }
+  .table th:nth-child(4),
+  .table td:nth-child(4) {
+    width: 12%;
+  }
+  .table th:nth-child(5),
+  .table td:nth-child(5) {
+    width: 12%;
+  }
+  .table th:nth-child(6),
+  .table td:nth-child(6) {
+    width: 12%;
+  }
+}
+
+.table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+}
+
+/* Rows link through to the participant detail view. */
+.clickableRow {
+  cursor: pointer;
+}
+.clickableRow:hover td {
+  background: #f4f9ff;
+}
+.clickableRow:focus-visible {
+  outline: 2px solid var(--button-primary, #0066ee);
+  outline-offset: -2px;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.active {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.inactive {
+  background: #fbe9e7;
+  color: #d32f2f;
+}
+
+/* The roles cell opts out of the table's overflow clipping so the "+N" hover
+   tooltip can pop out above the row. (The first role badge still truncates via
+   its own overflow rule, so the column width stays stable.) */
+.table td.rolesCell {
+  overflow: visible;
+}
+
+.roleList {
+  display: flex;
+  /* Stay on one line so a multi-role party doesn't make its row taller; only
+     the first role is shown, with a "+N" badge standing in for the rest. */
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  /* visible (not hidden) so the tooltip anchored to the "+N" badge isn't
+     clipped; the badge itself still truncates via its own overflow. */
+  overflow: visible;
+}
+
+.roleBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: #e3f2fd;
+  color: #1976d2;
+  /* Let a long role name truncate inside the flex row rather than push the
+     "+N" badge out of view. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Circular counter for the roles a party has beyond the one on display. Same
+   colour as the role badge; hovering reveals the remaining roles in a tooltip. */
+.roleMore {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: 9999px;
+  background: #e3f2fd;
+  color: #1976d2;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* Tooltip that pops up above the "+N" badge listing the remaining roles. It is
+   rendered into a body portal with fixed positioning (left/top set inline to the
+   badge's centre/top), so the table's scroll container can never clip it. */
+.roleTooltip {
+  position: fixed;
+  transform: translate(-50%, calc(-100% - 10px));
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.7rem;
+  background: #1f2937;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  /* Don't intercept the pointer, so moving toward it never flickers the hover. */
+  pointer-events: none;
+}
+
+/* Downward arrow connecting the tooltip to the badge. */
+.roleTooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+}
+
+.roleTooltipItem {
+  display: block;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.error {
+  text-align: center;
+  padding: 2rem;
+  color: #d32f2f;
+  background: #fbe9e7;
+  border-radius: 8px;
+}
+
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.pageButton {
+  background-color: var(--button-primary, #0066EE);
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--button-border-radius, 40px);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.pageButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+
+.pageButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pageInfo {
+  font-size: 0.95rem;
+  color: #495057;
+}
+
+/* Numbered page buttons (between Previous and Last). */
+.pageNumber {
+  min-width: 38px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: var(--text-secondary, #013a57);
+  cursor: pointer;
+  font-size: 14px;
+  text-align: center;
+}
+
+.pageNumber:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+/* The current page: filled and non-interactive (it is the disabled item, but
+   must stay highlighted rather than greyed). */
+.pageNumberActive,
+.pageNumberActive:disabled {
+  background-color: var(--button-primary, #0066ee);
+  border-color: var(--button-primary, #0066ee);
+  color: white;
+  cursor: default;
+  opacity: 1;
+}
+
+.pageEllipsis {
+  min-width: 24px;
+  padding: 8px 2px;
+  color: #495057;
+  text-align: center;
+  user-select: none;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  margin-bottom: 0.75rem;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 240px;
+  height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--button-primary, #0066EE);
+}
+
+.statusSelect {
+  height: 40px;
+  padding: 0 0.9rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.statusSelect:focus {
+  outline: none;
+  border-color: var(--button-primary, #0066EE);
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+   --------------------------------------------------------------------------- */
+
+/* Tablet / small desktop: trim the page gutters. */
+@media (max-width: 1024px) {
+  .container {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Mobile: stack the toolbar and render each table row as a card so the 6-column
+   table stays readable without horizontal scrolling. */
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .toolbar {
+    gap: 0.5rem;
+  }
+  /* Search takes the first line; filter + refresh share the second. */
+  .searchInput {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .statusSelect {
+    flex: 1 1 auto;
+  }
+
+  /* Turn the table into a list of cards. */
+  .table {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .table thead {
+    display: none; /* labels are shown per-cell via data-label */
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tr {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    margin-bottom: 0.6rem;
+    padding: 0.15rem 0.85rem;
+  }
+  /* Blank spacer rows (used to keep desktop height constant) aren't needed. */
+  .table tr[aria-hidden="true"] {
+    display: none;
+  }
+  .table td {
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    border-top: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-word;
+  }
+  .table td:last-child {
+    border-bottom: none;
+  }
+  /* The column name, shown as the label on the left of each card row. */
+  .table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-weight: 600;
+    color: #495057;
+    text-align: left;
+    white-space: nowrap;
+    word-break: normal;
+  }
+  /* Keep the roles on the right, aligned with the other values. */
+  .rolesCell .roleList {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* Slightly smaller pagination controls so the pager stays on one or two rows. */
+  .pageButton {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .pageNumber {
+    min-width: 32px;
+    padding: 6px 6px;
+    font-size: 13px;
+  }
+}
