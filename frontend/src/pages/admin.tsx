@@ -177,7 +177,8 @@ const Admin: NextPage = () => {
         {error && <div className={styles.error}>{error}</div>}
 
         {!isLoading && !error && (
-          <table className={styles.table}>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
             <thead>
               <tr>
                 <th>{t('admin.table.headers.applicant')}</th>
@@ -191,18 +192,18 @@ const Admin: NextPage = () => {
             <tbody>
               {applications.map((app, index) => (
                 <tr key={index}>
-                  <td>{app.applicant || t('admin.common.na')}</td>
-                  <td>{app.company || t('admin.common.na')}</td>
-                  <td>{app.role || t('admin.common.na')}</td>
-                  <td>
+                  <td data-label={t('admin.table.headers.applicant')}>{app.applicant || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.company')}>{app.company || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.role')}>{app.role || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.status')}>
                     <span
                       className={`${styles.status} ${getStatusStyle(app.status)}`}
                     >
                       {t(`admin.status.${app.status.toLowerCase().replace(/\s+/g, '_')}`)}
                     </span>
                   </td>
-                  <td>{app.nextStepBy || t('admin.common.na')}</td>
-                  <td className={styles.actions}>
+                  <td data-label={t('admin.table.headers.nextStepBy')}>{app.nextStepBy || t('admin.common.na')}</td>
+                  <td className={styles.actions} data-label={t('admin.table.headers.actions')}>
                     {!["Completed", "Rejected", "Sign agreements"].includes(app.status) && (
                       <button
                         className={styles.verifyButton}
@@ -224,7 +225,8 @@ const Admin: NextPage = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
     </AdminRoute>

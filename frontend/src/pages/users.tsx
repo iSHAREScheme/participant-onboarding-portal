@@ -375,7 +375,8 @@ const Users: NextPage = () => {
         {error && <div className={styles.error}>{error}</div>}
 
         {!isLoading && !error && (
-          <table className={styles.table}>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
             <thead>
               <tr>
                 <th>{t("users.table.headers.username")}</th>
@@ -390,10 +391,16 @@ const Users: NextPage = () => {
             <tbody>
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td>{user.username}</td>
-                  <td>{user.email}</td>
-                  <td>{`${user.firstName} ${user.lastName}`}</td>
-                  <td>
+                  <td data-label={t("users.table.headers.username")}>
+                    {user.username}
+                  </td>
+                  <td data-label={t("users.table.headers.email")}>
+                    {user.email}
+                  </td>
+                  <td data-label={t("users.table.headers.name")}>
+                    {`${user.firstName} ${user.lastName}`}
+                  </td>
+                  <td data-label={t("users.table.headers.role")}>
                     <span
                       className={`${styles.role} ${
                         styles[
@@ -408,7 +415,7 @@ const Users: NextPage = () => {
                         : t("users.roles.user")}
                     </span>
                   </td>
-                  <td>
+                  <td data-label={t("users.table.headers.status")}>
                     <span
                       className={`${styles.status} ${
                         user.enabled ? styles.active : styles.inactive
@@ -419,8 +426,10 @@ const Users: NextPage = () => {
                         : t("users.status.inactive")}
                     </span>
                   </td>
-                  <td>{formatDate(user.createdTimestamp)}</td>
-                  <td>
+                  <td data-label={t("users.table.headers.created")}>
+                    {formatDate(user.createdTimestamp)}
+                  </td>
+                  <td data-label={t("users.table.headers.actions")}>
                     <button
                       className={styles.deleteButton}
                       onClick={() => deleteUser(user.id)}
@@ -431,7 +440,8 @@ const Users: NextPage = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
     </AdminRoute>

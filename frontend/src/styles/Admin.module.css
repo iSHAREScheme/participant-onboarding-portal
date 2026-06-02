@@ -1,12 +1,21 @@
 .container {
-  padding: 2rem;
+  /* Fill the scroll area (.main) as a column; the table scrolls internally so
+     the page itself never scrolls. */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   max-width: 1440px;
   margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .title {
-  font-size: 2rem;
-  margin-bottom: 2rem;
+  font-size: 1.5rem;
+  margin: 0;
   color: var(--text-secondary, #013A57);
 }
 
@@ -14,7 +23,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Scroll container for the table so only it scrolls, not the page. */
+.tableWrap {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .createButton {
@@ -41,8 +60,9 @@
 
 .table th,
 .table td {
-  padding: 1rem;
+  padding: 0.6rem 1rem;
   text-align: left;
+  vertical-align: middle;
   border-bottom: 1px solid #eee;
 }
 
@@ -131,4 +151,76 @@
   color: #d32f2f;
   background: #fbe9e7;
   border-radius: 8px;
+}
+
+/* ----- Responsive ----- */
+@media (max-width: 1024px) {
+  .container {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Mobile: render each table row as a card so the table stays readable. */
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem 0.6rem;
+  }
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .table {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .table thead {
+    display: none;
+  }
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+  .table tbody tr:hover {
+    background-color: transparent;
+  }
+  .table tr {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    margin-bottom: 0.6rem;
+    padding: 0.15rem 0.85rem;
+  }
+  .table td {
+    width: auto;
+    min-height: 40px;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: right;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .table td:last-child {
+    border-bottom: none;
+  }
+  .table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-weight: 600;
+    color: #495057;
+    text-align: left;
+    white-space: nowrap;
+  }
+  /* Keep the action buttons from stretching full width in card mode. */
+  .actions {
+    justify-content: flex-end;
+  }
 }

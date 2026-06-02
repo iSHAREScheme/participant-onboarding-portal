@@ -65,41 +65,41 @@ type FilterMode = "all" | "mine" | "active" | "certified";
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 350;
 
-// Windowed page list: always show the first and last BOUNDARY_COUNT pages plus
-// the current page's neighbours, collapsing the gaps with an ellipsis. A single
-// hidden page is shown rather than replaced by "…". e.g. on an early page of 22:
-//   1 2 3 4 … 19 20 21 22
-const PAGINATION_BOUNDARY_COUNT = 4; // pages pinned at each end
-const PAGINATION_SIBLING_COUNT = 1; // pages shown either side of the current one
+// Constant-slot page list: the pager ALWAYS renders the same number of slots
+// (siblings*2 + 5 page slots: first, last, current, two siblings, two ellipsis
+// anchors), so its width never changes as you move between pages — first and
+// last are always shown, the rest is a window around the current page with "…"
+// filling the gaps. e.g. for 22 pages: `1 2 3 4 5 … 22`, `1 … 10 11 12 … 22`,
+// `1 … 18 19 20 21 22` — all the same width.
+const PAGINATION_SIBLINGS = 1; // pages shown either side of the current one
 
 type PageItem = number | "ellipsis";
+
+const range = (start: number, end: number): number[] =>
+  Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => start + i);
 
 const getPaginationItems = (
   current: number,
   total: number,
-  boundaryCount: number = PAGINATION_BOUNDARY_COUNT
+  siblings: number = PAGINATION_SIBLINGS
 ): PageItem[] => {
-  const pages = new Set<number>();
-  const addRange = (from: number, to: number) => {
-    for (let p = Math.max(1, from); p <= Math.min(total, to); p++) pages.add(p);
-  };
-  addRange(1, boundaryCount);
-  addRange(total - boundaryCount + 1, total);
-  addRange(current - PAGINATION_SIBLING_COUNT, current + PAGINATION_SIBLING_COUNT);
+  const totalSlots = siblings * 2 + 5;
+  // Few enough pages to show them all (still a constant count for this set).
+  if (total <= totalSlots) return range(1, total);
 
-  const sorted = Array.from(pages).sort((a, b) => a - b);
-  const items: PageItem[] = [];
-  let prev = 0;
-  for (const p of sorted) {
-    if (p - prev === 2) {
-      items.push(prev + 1); // exactly one page hidden → show it instead of "…"
-    } else if (p - prev > 2) {
-      items.push("ellipsis");
-    }
-    items.push(p);
-    prev = p;
+  const left = Math.max(current - siblings, 1);
+  const right = Math.min(current + siblings, total);
+  const showLeftDots = left > 2;
+  const showRightDots = right < total - 1;
+  const edgeCount = 3 + 2 * siblings; // pages shown on the non-collapsed side
+
+  if (!showLeftDots && showRightDots) {
+    return [...range(1, edgeCount), "ellipsis", total];
   }
-  return items;
+  if (showLeftDots && !showRightDots) {
+    return [1, "ellipsis", ...range(total - edgeCount + 1, total)];
+  }
+  return [1, "ellipsis", ...range(left, right), "ellipsis", total];
 };
 
 // Tracks a CSS media query on the client (stays false during SSR / first paint).
@@ -422,17 +422,31 @@ const Participants: NextPage = () => {
         {showTable && totalPages > 1 && (
           <div className={styles.pagination}>
             <button
-              className={styles.pageButton}
+              className={styles.pageArrow}
               onClick={() => goToPage(page - 1)}
               disabled={page <= 1}
+              aria-label={t("participants.pagination.previous")}
+              title={t("participants.pagination.previous")}
             >
-              {t("participants.pagination.previous")}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
             </button>
 
             {getPaginationItems(
               page,
               totalPages,
-              isNarrow ? 1 : PAGINATION_BOUNDARY_COUNT
+              isNarrow ? 0 : PAGINATION_SIBLINGS
             ).map((item, i) =>
               item === "ellipsis" ? (
                 <span
@@ -458,11 +472,25 @@ const Participants: NextPage = () => {
             )}
 
             <button
-              className={styles.pageButton}
-              onClick={() => goToPage(totalPages)}
+              className={styles.pageArrow}
+              onClick={() => goToPage(page + 1)}
               disabled={page >= totalPages}
+              aria-label={t("participants.pagination.next")}
+              title={t("participants.pagination.next")}
             >
-              {t("participants.pagination.last")}
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </button>
           </div>
         )}

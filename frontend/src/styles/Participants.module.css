@@ -261,45 +261,38 @@
   margin-top: 0.75rem;
 }
 
-.pageButton {
-  background-color: var(--button-primary, #0066EE);
-  color: white;
-  padding: 8px 16px;
-  border: none;
-  border-radius: var(--button-border-radius, 40px);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.pageButton:hover:not(:disabled) {
-  background-color: var(--button-primary-hover, #006699);
-}
-
-.pageButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pageInfo {
-  font-size: 0.95rem;
-  color: #495057;
-}
-
-/* Numbered page buttons (between Previous and Last). */
-.pageNumber {
-  min-width: 38px;
-  padding: 8px 10px;
+/* Every pager slot — number, ellipsis and the two arrows — is the SAME fixed
+   box so the control's width never changes as you page through. */
+.pageNumber,
+.pageArrow,
+.pageEllipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
   border: 1px solid #ddd;
   border-radius: 8px;
   background: white;
   color: var(--text-secondary, #013a57);
-  cursor: pointer;
   font-size: 14px;
-  text-align: center;
 }
 
-.pageNumber:hover:not(:disabled) {
+.pageNumber,
+.pageArrow {
+  cursor: pointer;
+}
+
+.pageNumber:hover:not(:disabled),
+.pageArrow:hover:not(:disabled) {
   background: #f1f5f9;
+}
+
+.pageArrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* The current page: filled and non-interactive (it is the disabled item, but
@@ -313,11 +306,11 @@
   opacity: 1;
 }
 
+/* Ellipsis occupies a full slot (transparent border) so widths stay identical. */
 .pageEllipsis {
-  min-width: 24px;
-  padding: 8px 2px;
+  border-color: transparent;
+  background: transparent;
   color: #495057;
-  text-align: center;
   user-select: none;
 }
 
@@ -457,14 +450,13 @@
     flex-wrap: wrap;
   }
 
-  /* Slightly smaller pagination controls so the pager stays on one or two rows. */
-  .pageButton {
-    padding: 6px 10px;
-    font-size: 13px;
-  }
-  .pageNumber {
-    min-width: 32px;
-    padding: 6px 6px;
+  /* Slightly smaller pager slots so the constant-width control fits a phone. */
+  .pageNumber,
+  .pageArrow,
+  .pageEllipsis {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 4px;
     font-size: 13px;
   }
 }
