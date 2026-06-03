@@ -29,9 +29,11 @@
   margin-bottom: 0.75rem;
 }
 
-/* Scroll container for the table so only it scrolls, not the page. */
+/* Scroll container for the table. It grows to fill the leftover column height so
+   its clientHeight equals the real space available for the table (useFitRows
+   measures this to size each page, so the table never needs to scroll). */
 .tableWrap {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }

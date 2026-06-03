@@ -259,6 +259,12 @@ export class API {
     return this.client.get(`/registry`)
   }
 
+  // Effective iSHARE framework version the backend operates against (auto-detected
+  // at startup or the SATELLITE_VERSION fallback): { version, claimModel }.
+  fetchSatelliteVersion () {
+    return this.client.get(`/registry/version`)
+  }
+
   // Admin-only: list one page of participants from the satellite registry.
   // Pagination, name search and the active/certified filters are evaluated by
   // the satellite; the backend returns { data, page, pageSize, total, totalPages }.

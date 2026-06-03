@@ -8,6 +8,7 @@ import { useKeycloak } from "@react-keycloak/web";
 
 import API from 'api/client'
 import { getPublicEnv } from "config/publicEnv"
+import { sanitizeRichText } from "util/sanitizeHtml"
 
 interface SettingsResponse {
   description?: string;
@@ -23,6 +24,7 @@ const Home: NextPage = () => {
   const [agreements, setAgreements] = useState<string[]>([]);
   const { proposalData, loading: proposalLoading } = useUserProposal();
   const [keycloak] = useKeycloak();
+  const [mounted, setMounted] = useState(false);
 
   const Api = new API()
 
@@ -48,6 +50,12 @@ const Home: NextPage = () => {
 
     fetchDescription();
   }, [t]);
+
+  // The intro text is admin-authored HTML; sanitise + render it on the client only
+  // (DOMPurify needs a DOM), deferring past mount so server/client markup matches.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleProceed = () => {
     const env = getPublicEnv()
@@ -91,7 +99,14 @@ const Home: NextPage = () => {
         <div className={styles.leftSection}>
           <h1 className={styles.title}>{t("home.title")}</h1>
 
-          <p className={styles.description}>{description}</p>
+          {mounted ? (
+            <div
+              className={styles.richText}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(description) }}
+            />
+          ) : (
+            <p className={styles.description}>{description}</p>
+          )}
 
           {agreements.length > 0 && (
             <>

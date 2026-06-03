@@ -1,8 +1,10 @@
-import { useState, useMemo, useCallback, MouseEvent } from "react"
+import { useState, useMemo, useCallback, useEffect, MouseEvent } from "react"
 import { NextPage } from "next"
 import styles from "styles/Admin.module.css"
 import { useRouter } from "next/router"
 import AdminRoute from "components/AdminRoute"
+import Pagination from "components/Pagination"
+import { useFitRows } from "hooks"
 import { useLanguage } from "../context/LanguageContext"
 import { getPublicEnv } from "config/publicEnv"
 import { PATH } from "const"
@@ -107,9 +109,18 @@ const Admin: NextPage = () => {
   const [applications, setApplications] = useState<Application[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState<number>(1)
   const { t } = useLanguage()
 
   const api = useMemo(() => new API(), [])
+
+  // Fill the viewport: how many rows fit decides the client-side page size.
+  // Rows here carry action buttons (~0.5rem padding) on top of the 0.6rem cell
+  // padding, so each is ~53px tall; round up slightly to avoid an internal scroll.
+  const { rows: pageSize, ref: fitRef } = useFitRows({
+    rowHeight: 54,
+    recomputeKey: applications.length,
+  })
 
   const loadApplications = useCallback(async () => {
     const { NEXT_PUBLIC_BASE_SERVER_URL } = getPublicEnv()
@@ -126,6 +137,7 @@ const Admin: NextPage = () => {
       const data: BackendData[] = await response.data
       const transformedData = data.map(transformBackendData)
       setApplications(transformedData)
+      setPage(1)
     } catch (err) {
       console.error("Error fetching applications:", err)
       setError(t('admin.messages.loadFailed'))
@@ -158,6 +170,17 @@ const Admin: NextPage = () => {
     router.replace(`/admin/verify/${applicationId}`)
   }
 
+  // Client-side pagination over the loaded proposals, sized to fill the screen.
+  const size = pageSize ?? 10
+  const totalPages = Math.max(1, Math.ceil(applications.length / size))
+  // Keep the current page in range as the data or page size changes.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+  const pageItems = applications.slice((page - 1) * size, page * size)
+  const blankRows =
+    applications.length > 0 ? Math.max(0, size - pageItems.length) : 0
+
   return (
     <AdminRoute fetchData={loadApplications}>
       <div className={styles.container}>
@@ -171,13 +194,15 @@ const Admin: NextPage = () => {
           </button>
         </div>
 
-        {isLoading && (
-          <div className={styles.loading}>{t('common.loading')}</div>
-        )}
-        {error && <div className={styles.error}>{error}</div>}
+        {/* The scroll container always renders so useFitRows can measure the real
+            available height (its clientHeight) even before the first row loads. */}
+        <div ref={fitRef} className={styles.tableWrap}>
+          {isLoading && (
+            <div className={styles.loading}>{t('common.loading')}</div>
+          )}
+          {error && <div className={styles.error}>{error}</div>}
 
-        {!isLoading && !error && (
-          <div className={styles.tableWrap}>
+          {!isLoading && !error && (
             <table className={styles.table}>
             <thead>
               <tr>
@@ -190,8 +215,8 @@ const Admin: NextPage = () => {
               </tr>
             </thead>
             <tbody>
-              {applications.map((app, index) => (
-                <tr key={index}>
+              {pageItems.map((app) => (
+                <tr key={app.id}>
                   <td data-label={t('admin.table.headers.applicant')}>{app.applicant || t('admin.common.na')}</td>
                   <td data-label={t('admin.table.headers.company')}>{app.company || t('admin.common.na')}</td>
                   <td data-label={t('admin.table.headers.role')}>{app.role || t('admin.common.na')}</td>
@@ -224,9 +249,25 @@ const Admin: NextPage = () => {
                   </td>
                 </tr>
               ))}
+              {/* Pad short pages with blank rows so the table height stays
+                  constant across pages (desktop only; cards on mobile hide them). */}
+              {totalPages > 1 &&
+                Array.from({ length: blankRows }).map((_, i) => (
+                  <tr key={`empty-${i}`} aria-hidden="true">
+                    <td colSpan={6}>&nbsp;</td>
+                  </tr>
+                ))}
             </tbody>
             </table>
-          </div>
+          )}
+        </div>
+
+        {!isLoading && !error && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </div>
     </AdminRoute>

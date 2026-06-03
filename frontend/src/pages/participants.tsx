@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
+import Pagination from "components/Pagination";
 import API from "api/client";
+import { useFitRows } from "hooks";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "styles/Participants.module.css";
 
@@ -60,61 +62,7 @@ const normalize = (p: any): ParticipantRow => {
 
 type FilterMode = "all" | "mine" | "active" | "certified";
 
-// Server-side pagination: one page is fetched from the satellite at a time, so
-// PAGE_SIZE here must match the pageSize we ask the backend for.
-const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 350;
-
-// Constant-slot page list: the pager ALWAYS renders the same number of slots
-// (siblings*2 + 5 page slots: first, last, current, two siblings, two ellipsis
-// anchors), so its width never changes as you move between pages — first and
-// last are always shown, the rest is a window around the current page with "…"
-// filling the gaps. e.g. for 22 pages: `1 2 3 4 5 … 22`, `1 … 10 11 12 … 22`,
-// `1 … 18 19 20 21 22` — all the same width.
-const PAGINATION_SIBLINGS = 1; // pages shown either side of the current one
-
-type PageItem = number | "ellipsis";
-
-const range = (start: number, end: number): number[] =>
-  Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => start + i);
-
-const getPaginationItems = (
-  current: number,
-  total: number,
-  siblings: number = PAGINATION_SIBLINGS
-): PageItem[] => {
-  const totalSlots = siblings * 2 + 5;
-  // Few enough pages to show them all (still a constant count for this set).
-  if (total <= totalSlots) return range(1, total);
-
-  const left = Math.max(current - siblings, 1);
-  const right = Math.min(current + siblings, total);
-  const showLeftDots = left > 2;
-  const showRightDots = right < total - 1;
-  const edgeCount = 3 + 2 * siblings; // pages shown on the non-collapsed side
-
-  if (!showLeftDots && showRightDots) {
-    return [...range(1, edgeCount), "ellipsis", total];
-  }
-  if (showLeftDots && !showRightDots) {
-    return [1, "ellipsis", ...range(total - edgeCount + 1, total)];
-  }
-  return [1, "ellipsis", ...range(left, right), "ellipsis", total];
-};
-
-// Tracks a CSS media query on the client (stays false during SSR / first paint).
-const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
-  return matches;
-};
 
 // "+N" badge for the roles beyond the first one shown. Its hover/focus tooltip
 // is rendered into a body portal with fixed positioning, so the table's scroll
@@ -177,8 +125,15 @@ const Participants: NextPage = () => {
   const [authorized, setAuthorized] = useState(false);
   // Guards against out-of-order responses: only the latest request applies.
   const reqIdRef = useRef(0);
-  // On mobile, show fewer pinned page numbers so the pager stays compact.
-  const isNarrow = useMediaQuery("(max-width: 640px)");
+
+  // The page size is how many rows fit the viewport, so the table fills the
+  // screen on any device. It's null until measured, which lets the first fetch
+  // wait for a real size instead of guessing (and re-fetching).
+  const { rows: pageSize, ref: fitRef } = useFitRows({
+    rowHeight: 41,
+    theadHeight: 41,
+    recomputeKey: participants.length,
+  });
 
   // Debounce the search box, and reset to the first page when the applied term
   // changes (a different result set starts at page 1).
@@ -191,7 +146,22 @@ const Participants: NextPage = () => {
     return () => clearTimeout(id);
   }, [search]);
 
+  // When the fitted page size changes (e.g. the viewport was resized), restart at
+  // page 1 — the satellite's page boundaries move with the page size.
+  const prevSizeRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      prevSizeRef.current !== null &&
+      pageSize !== null &&
+      pageSize !== prevSizeRef.current
+    ) {
+      setPage(1);
+    }
+    prevSizeRef.current = pageSize;
+  }, [pageSize]);
+
   const load = useCallback(async () => {
+    if (!pageSize) return;
     const reqId = ++reqIdRef.current;
     setIsLoading(true);
     setErrorKey(null);
@@ -199,7 +169,7 @@ const Participants: NextPage = () => {
       const api = new API();
       const res = await api.fetchParticipants({
         page,
-        pageSize: PAGE_SIZE,
+        pageSize,
         name: name || undefined,
         activeOnly: filter === "active" || undefined,
         certifiedOnly: filter === "certified" || undefined,
@@ -218,18 +188,18 @@ const Participants: NextPage = () => {
     } finally {
       if (reqId === reqIdRef.current) setIsLoading(false);
     }
-  }, [page, name, filter]);
+  }, [page, name, filter, pageSize]);
 
   // AdminRoute calls this once the admin is authorized (stable identity so it
   // doesn't retrigger AdminRoute's effect); fetching is driven by the effect
   // below.
   const onAuthorized = useCallback(() => setAuthorized(true), []);
 
-  // Fetch whenever we're authorized and the page/search/filter changes — load's
-  // identity changes with those values.
+  // Fetch whenever we're authorized and have a measured page size; load's
+  // identity changes with page/search/filter/pageSize.
   useEffect(() => {
-    if (authorized) load();
-  }, [authorized, load]);
+    if (authorized && pageSize) load();
+  }, [authorized, pageSize, load]);
 
   const formatDate = (value: string): string => {
     if (!value) return "—";
@@ -261,7 +231,7 @@ const Participants: NextPage = () => {
   const showEmpty = !isLoading && !errorKey && participants.length === 0;
   const showTable = participants.length > 0;
   // Pad short pages with blank rows so the table keeps a constant height.
-  const blankRows = Math.max(0, PAGE_SIZE - participants.length);
+  const blankRows = Math.max(0, (pageSize ?? 0) - participants.length);
 
   return (
     <AdminRoute fetchData={onAuthorized}>
@@ -313,19 +283,21 @@ const Participants: NextPage = () => {
           </div>
         )}
 
-        {showInitialLoading && (
-          <div className={styles.loading}>{t("participants.loading")}</div>
-        )}
-        {errorKey && <div className={styles.error}>{t(errorKey)}</div>}
+        {/* The scroll container always renders so useFitRows can measure the real
+            available height (its clientHeight) even before the first row loads. */}
+        <div ref={fitRef} className={styles.tableWrap}>
+          {showInitialLoading && (
+            <div className={styles.loading}>{t("participants.loading")}</div>
+          )}
+          {errorKey && <div className={styles.error}>{t(errorKey)}</div>}
 
-        {showEmpty && (
-          <div className={styles.empty}>
-            {hasQuery ? t("participants.noResults") : t("participants.empty")}
-          </div>
-        )}
+          {showEmpty && (
+            <div className={styles.empty}>
+              {hasQuery ? t("participants.noResults") : t("participants.empty")}
+            </div>
+          )}
 
-        {showTable && (
-          <div className={styles.tableWrap}>
+          {showTable && (
             <table className={styles.table}>
             <thead>
               <tr>
@@ -340,7 +312,7 @@ const Participants: NextPage = () => {
             <tbody>
               {participants.map((p, i) => (
                 <tr
-                  key={`${p.partyId}-${(page - 1) * PAGE_SIZE + i}`}
+                  key={`${p.partyId}-${(page - 1) * (pageSize ?? 0) + i}`}
                   className={styles.clickableRow}
                   role="link"
                   tabIndex={0}
@@ -416,83 +388,15 @@ const Participants: NextPage = () => {
                 ))}
             </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
 
-        {showTable && totalPages > 1 && (
-          <div className={styles.pagination}>
-            <button
-              className={styles.pageArrow}
-              onClick={() => goToPage(page - 1)}
-              disabled={page <= 1}
-              aria-label={t("participants.pagination.previous")}
-              title={t("participants.pagination.previous")}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-            </button>
-
-            {getPaginationItems(
-              page,
-              totalPages,
-              isNarrow ? 0 : PAGINATION_SIBLINGS
-            ).map((item, i) =>
-              item === "ellipsis" ? (
-                <span
-                  key={`ellipsis-${i}`}
-                  className={styles.pageEllipsis}
-                  aria-hidden="true"
-                >
-                  …
-                </span>
-              ) : (
-                <button
-                  key={item}
-                  className={`${styles.pageNumber} ${
-                    item === page ? styles.pageNumberActive : ""
-                  }`}
-                  onClick={() => goToPage(item)}
-                  disabled={item === page}
-                  aria-current={item === page ? "page" : undefined}
-                >
-                  {item}
-                </button>
-              )
-            )}
-
-            <button
-              className={styles.pageArrow}
-              onClick={() => goToPage(page + 1)}
-              disabled={page >= totalPages}
-              aria-label={t("participants.pagination.next")}
-              title={t("participants.pagination.next")}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-          </div>
+        {showTable && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+          />
         )}
       </div>
     </AdminRoute>

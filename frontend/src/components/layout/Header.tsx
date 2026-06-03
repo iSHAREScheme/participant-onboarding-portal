@@ -1,5 +1,7 @@
 import React from "react"
 import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
+import { useRouter } from "next/router"
 import styles from "styles/components/Header.module.css"
 import { useKeycloak } from "@react-keycloak/web"
 import { useLanguage } from "../../context/LanguageContext"
@@ -10,9 +12,9 @@ import { getPublicEnv } from "config/publicEnv"
 import { clearStoredKeycloakTokens } from "util/keycloakTokens"
 
 const Header: React.FC = () => {
-  const [currentPath, setCurrentPath] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
   const { t } = useLanguage()
   const { logoUrl } = useSettings()
   const { keycloak } = useKeycloak()
@@ -32,9 +34,10 @@ const Header: React.FC = () => {
     tenantId && tenantId !== 'default' ? tenantId : defaultAssociationName
   )
 
-  useEffect(() => {
-    setCurrentPath(window.location.pathname)
-  }, [t])
+  // Highlight the nav item for the current route (and its sub-routes, e.g.
+  // /participants/[id]); router.pathname updates on client-side navigation.
+  const isActive = (base: string) =>
+    router.pathname === base || router.pathname.startsWith(`${base}/`)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,7 +53,7 @@ const Header: React.FC = () => {
   }, []);
 
   const handleLogin = () => {
-    keycloak.login(
+    keycloak?.login(
       {
         redirectUri: window.location.origin,
         idpHint,
@@ -63,7 +66,7 @@ const Header: React.FC = () => {
 
   const handleLogout = () => {
     clearStoredKeycloakTokens()
-    keycloak.logout({
+    keycloak?.logout({
       redirectUri: window.location.origin
     });
   };
@@ -75,10 +78,10 @@ const Header: React.FC = () => {
           className={styles.associationName}
           onClick={() => {
             // Don't navigate away if user is in registration process
-            if (window.location.pathname === "/register") {
+            if (router.pathname === "/register") {
               return;
             }
-            window.location.href = "/";
+            router.push("/");
           }}
         >
           <div className={styles.logoGroup}>
@@ -100,36 +103,36 @@ const Header: React.FC = () => {
           <nav className={styles.navbar}>
             <ul>
               <li>
-                <a
+                <Link
                   href="/admin"
-                  className={currentPath === "/admin" ? styles.active : ""}
+                  className={isActive("/admin") ? styles.active : ""}
                 >
                   {t("common.proposals")}
-                </a>
+                </Link>
               </li>
               <li>
-                <a
+                <Link
                   href="/participants"
-                  className={currentPath === "/participants" ? styles.active : ""}
+                  className={isActive("/participants") ? styles.active : ""}
                 >
                   {t("common.participants")}
-                </a>
+                </Link>
               </li>
               <li>
-                <a
+                <Link
                   href="/users"
-                  className={currentPath === "/users" ? styles.active : ""}
+                  className={isActive("/users") ? styles.active : ""}
                 >
                   {t("common.users")}
-                </a>
+                </Link>
               </li>
               <li>
-                <a
+                <Link
                   href="/settings"
-                  className={currentPath === "/settings" ? styles.active : ""}
+                  className={isActive("/settings") ? styles.active : ""}
                 >
                   {t("common.settings")}
-                </a>
+                </Link>
               </li>
             </ul>
           </nav>
@@ -153,10 +156,20 @@ const Header: React.FC = () => {
                 </div>
                 {showDropdown && (
                   <div className={styles.dropdownContent}>
-                    <button onClick={() => window.location.href = '/profile'}>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false)
+                        router.push('/profile')
+                      }}
+                    >
                       <span>{t("common.profile")}</span>
                     </button>
-                    <button onClick={() => window.location.href = '/organization-access'}>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false)
+                        router.push('/organization-access')
+                      }}
+                    >
                       <span>{t("common.organizationAccess")}</span>
                     </button>
                     <button onClick={handleLogout}>

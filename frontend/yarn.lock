@@ -656,6 +656,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/trusted-types@npm:^2.0.7":
+  version: 2.0.7
+  resolution: "@types/trusted-types@npm:2.0.7"
+  checksum: 10c0/4c4855f10de7c6c135e0d32ce462419d8abbbc33713b31d294596c0cc34ae1fa6112a2f9da729c8f7a20707782b0d69da3b1f8df6645b0366d08825ca1522e0c
+  languageName: node
+  linkType: hard
+
 "@typescript-eslint/eslint-plugin@npm:^5.4.2 || ^6.0.0 || 7.0.0 - 7.2.0":
   version: 7.2.0
   resolution: "@typescript-eslint/eslint-plugin@npm:7.2.0"
@@ -1612,6 +1619,18 @@ __metadata:
   dependencies:
     esutils: "npm:^2.0.2"
   checksum: 10c0/c96bdccabe9d62ab6fea9399fdff04a66e6563c1d6fb3a3a063e8d53c3bb136ba63e84250bbf63d00086a769ad53aef92d2bd483f03f837fc97b71cbee6b2520
+  languageName: node
+  linkType: hard
+
+"dompurify@npm:^3.4.7":
+  version: 3.4.7
+  resolution: "dompurify@npm:3.4.7"
+  dependencies:
+    "@types/trusted-types": "npm:^2.0.7"
+  dependenciesMeta:
+    "@types/trusted-types":
+      optional: true
+  checksum: 10c0/b39940e95259bfaea658cb2bec819d47f271f9fe47e4e3cfff1fb7876089264d7c21e36ea09dad0d9a0f70add502ce6787ba9e7467f2c7b996382eb1d8daa375
   languageName: node
   linkType: hard
 
@@ -3461,6 +3480,7 @@ __metadata:
     asn1js: "npm:^3.0.6"
     axios: "npm:^1.11.0"
     cross-spawn: "npm:^7.0.5"
+    dompurify: "npm:^3.4.7"
     eslint: "npm:8.57.1"
     eslint-config-next: "npm:14.2.10"
     formidable: "npm:^3.5.2"
@@ -3472,6 +3492,7 @@ __metadata:
     react: "npm:18.2.0"
     react-dom: "npm:18.2.0"
     react-hot-toast: "npm:^2.4.1"
+    react-simple-wysiwyg: "npm:^3.4.1"
     typescript: "npm:5.6.3"
     yup: "npm:^1.4.0"
   languageName: unknown
@@ -3778,6 +3799,15 @@ __metadata:
   version: 16.13.1
   resolution: "react-is@npm:16.13.1"
   checksum: 10c0/33977da7a5f1a287936a0c85639fec6ca74f4f15ef1e59a6bc20338fc73dc69555381e211f7a3529b8150a1f71e4225525b41b60b52965bda53ce7d47377ada1
+  languageName: node
+  linkType: hard
+
+"react-simple-wysiwyg@npm:^3.4.1":
+  version: 3.4.1
+  resolution: "react-simple-wysiwyg@npm:3.4.1"
+  peerDependencies:
+    react: ">=16.8"
+  checksum: 10c0/0abe2a97811b965e932f8139c44512fcf336005a85bbd00a13e8139d03f70c758ab6f7efea8e2ffa1d965a04b26536c504a447bb0fed16d5f21af7700d27dead
   languageName: node
   linkType: hard
 

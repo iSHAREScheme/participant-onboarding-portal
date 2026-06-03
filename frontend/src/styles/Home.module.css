@@ -40,6 +40,40 @@
   line-height: 1.6;
 }
 
+/* Admin-authored rich text (sanitised HTML) for the introduction. */
+.richText {
+  color: #666;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+.richText p {
+  margin: 0 0 0.75rem;
+}
+.richText p:last-child {
+  margin-bottom: 0;
+}
+.richText ul,
+.richText ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.4rem;
+}
+.richText h1,
+.richText h2,
+.richText h3,
+.richText h4 {
+  margin: 1rem 0 0.5rem;
+  line-height: 1.3;
+  color: #333;
+}
+.richText a {
+  color: var(--button-primary, #0066ee);
+  text-decoration: underline;
+}
+.richText strong,
+.richText b {
+  font-weight: 600;
+}
+
 .agreementText {
   color: var(--text-primary, #003145);
   margin-bottom: 1rem;

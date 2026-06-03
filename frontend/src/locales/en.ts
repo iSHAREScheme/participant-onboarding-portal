@@ -540,15 +540,21 @@ export default {
   },
   settings: {
     title: "Settings",
+    subtitle: "Manage your portal branding, registry details and onboarding agreements.",
     sections: {
       general: "General Settings",
+      system: "iSHARE connection",
+      branding: "Branding",
+      registry: "Registry",
       headerImage: "Header Image",
       introText: "Introduction Text"
     },
     actions: {
-      save: "Save Settings",
+      save: "Save settings",
+      saving: "Saving…",
       upload: "Upload Image",
-      add: "Add"
+      add: "Add",
+      recheck: "Re-check"
     },
     messages: {
       saveSuccess: "Settings saved successfully",
@@ -557,12 +563,23 @@ export default {
       uploadFailed: "Failed to upload logo image",
       backendNotConfigured: "Backend URL not configured"
     },
+    system: {
+      description: "The iSHARE framework version this portal operates against, and its live connection to the Satellite registry.",
+      version: "Framework version",
+      connection: "Connection",
+      connected: "Connected",
+      disconnected: "Disconnected",
+      checking: "Checking…",
+      claimModel: "Claim model (v3)",
+      partyModel: "Party model (v2)",
+      unknown: "Unknown"
+    },
     labels: {
-      headerImage: "Header Image:",
-      introText: "Introduction Text:",
-      agreement: "Agreement:",
-      registrarId: "Registrar ID:",
-      dataspaceId: "Dataspace ID:",
+      headerImage: "Header image",
+      introText: "Introduction text",
+      agreement: "Agreement",
+      registrarId: "Registrar ID",
+      dataspaceId: "Dataspace ID",
       agreements: "Agreements",
       hideCapabilitiesUrl: "Hide capabilities URL field",
       hideCapabilitiesUrlHint: "If enabled, applicants will not see or need to fill the capabilities URL during onboarding."

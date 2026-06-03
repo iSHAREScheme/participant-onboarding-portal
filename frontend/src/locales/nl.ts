@@ -536,15 +536,21 @@ export default {
   },
   settings: {
     title: "Instellingen",
+    subtitle: "Beheer de branding, registergegevens en onboarding-overeenkomsten van uw portaal.",
     sections: {
       general: "Algemene Instellingen",
+      system: "iSHARE-verbinding",
+      branding: "Branding",
+      registry: "Register",
       headerImage: "Header Afbeelding",
       introText: "Introductietekst"
     },
     actions: {
-      save: "Instellingen Opslaan",
+      save: "Instellingen opslaan",
+      saving: "Opslaan…",
       upload: "Afbeelding Uploaden",
-      add: "Toevoegen"
+      add: "Toevoegen",
+      recheck: "Opnieuw controleren"
     },
     messages: {
       saveSuccess: "Instellingen succesvol opgeslagen",
@@ -553,12 +559,23 @@ export default {
       uploadFailed: "Kon logo niet uploaden",
       backendNotConfigured: "Backend URL niet geconfigureerd"
     },
+    system: {
+      description: "De iSHARE-frameworkversie waarmee dit portaal werkt en de live verbinding met het Satellite-register.",
+      version: "Frameworkversie",
+      connection: "Verbinding",
+      connected: "Verbonden",
+      disconnected: "Niet verbonden",
+      checking: "Controleren…",
+      claimModel: "Claim-model (v3)",
+      partyModel: "Party-model (v2)",
+      unknown: "Onbekend"
+    },
     labels: {
-      headerImage: "Header Afbeelding:",
-      introText: "Introductietekst:",
-      registrarId: "Registrar ID:",
-      agreement: "Overeenkomst:",
-      dataspaceId: "Dataspace ID:",
+      headerImage: "Header-afbeelding",
+      introText: "Introductietekst",
+      agreement: "Overeenkomst",
+      registrarId: "Registrar ID",
+      dataspaceId: "Dataspace ID",
       agreements: "Overeenkomsten",
       hideCapabilitiesUrl: "Verberg het capabilities-URL veld",
       hideCapabilitiesUrlHint: "Indien ingeschakeld zien aanmelders dit veld niet en hoeven zij geen capabilities-URL in te vullen."

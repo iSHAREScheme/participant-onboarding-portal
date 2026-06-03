@@ -17,7 +17,10 @@
 /* Scroll container for the table: it takes the leftover height and only ever
    scrolls internally on very short viewports — the surrounding page does not. */
 .tableWrap {
-  flex: 0 1 auto;
+  /* Grow to fill the leftover column height so its clientHeight equals the real
+     space available for the table (useFitRows measures this to size each page,
+     which is why the table never needs to scroll). */
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
