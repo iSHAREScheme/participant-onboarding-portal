@@ -6,6 +6,13 @@ import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import Pagination from "components/Pagination";
 import API from "api/client";
+import {
+  cacheParticipants,
+  cacheParticipantsList,
+  getCachedParticipantsList,
+  saveParticipantsListState,
+  getParticipantsListState,
+} from "util/participantCache";
 import { useFitRows } from "hooks";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "styles/Participants.module.css";
@@ -53,9 +60,24 @@ const normalize = (p: any): ParticipantRow => {
       .filter(Boolean);
   }
 
-  const status = p?.adherence?.status ?? p?.status ?? "";
-  const startDate = p?.adherence?.start_date ?? p?.startDate ?? "";
-  const endDate = p?.adherence?.end_date ?? p?.endDate ?? "";
+  let status = p?.adherence?.status ?? p?.status ?? "";
+  let startDate = p?.adherence?.start_date ?? p?.startDate ?? "";
+  let endDate = p?.adherence?.end_date ?? p?.endDate ?? "";
+
+  // v3 claim model: status and validity live on the frameworkCompliance claim
+  // (the party's overall adherence), not at the top level. Fall back to the
+  // first claim carrying a status/date if no compliance claim is present.
+  if (!status && Array.isArray(p?.claims) && p.claims.length) {
+    const c =
+      p.claims.find((x: any) => x?.type === "frameworkCompliance") ??
+      p.claims.find((x: any) => x?.status || x?.startDate) ??
+      p.claims[0];
+    if (c) {
+      status = c.status ?? "";
+      startDate = c.startDate ?? startDate;
+      endDate = c.endDate ?? endDate;
+    }
+  }
 
   return { partyId, name, roles, status, startDate, endDate };
 };
@@ -114,14 +136,27 @@ const Participants: NextPage = () => {
   const { t } = useLanguage();
   const router = useRouter();
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
-  const [page, setPage] = useState(1);
+  // Restore the list view state (page / search / filter) when returning — e.g.
+  // navigating back from a participant's detail view — so the user lands on the
+  // page they left instead of page 1. (Lazy initialisers read the session store
+  // once on mount.)
+  const [page, setPage] = useState<number>(
+    () => getParticipantsListState()?.page ?? 1
+  );
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   // Holds a translation key (not a message) so the loader needn't depend on t.
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [name, setName] = useState(""); // debounced, applied search term
-  const [filter, setFilter] = useState<FilterMode>("all");
+  const [search, setSearch] = useState<string>(
+    () => getParticipantsListState()?.search ?? ""
+  );
+  // Debounced, applied search term.
+  const [name, setName] = useState<string>(
+    () => getParticipantsListState()?.name ?? ""
+  );
+  const [filter, setFilter] = useState<FilterMode>(
+    () => (getParticipantsListState()?.filter as FilterMode) ?? "all"
+  );
   const [authorized, setAuthorized] = useState(false);
   // Guards against out-of-order responses: only the latest request applies.
   const reqIdRef = useRef(0);
@@ -129,15 +164,26 @@ const Participants: NextPage = () => {
   // The page size is how many rows fit the viewport, so the table fills the
   // screen on any device. It's null until measured, which lets the first fetch
   // wait for a real size instead of guessing (and re-fetching).
+  // No recomputeKey on data load: the table's fixed 40px row height makes the
+  // initial (fallback) measurement exact, so we don't re-measure when the real
+  // rows render — which would otherwise trigger a SECOND satellite fetch at a
+  // slightly different page size. Genuine viewport resizes still re-fit via the
+  // ResizeObserver inside useFitRows. (The pager's height is reserved in the
+  // layout below, so the table area's height is identical before/after load.)
   const { rows: pageSize, ref: fitRef } = useFitRows({
     rowHeight: 41,
     theadHeight: 41,
-    recomputeKey: participants.length,
   });
 
   // Debounce the search box, and reset to the first page when the applied term
-  // changes (a different result set starts at page 1).
+  // changes (a different result set starts at page 1). Skip the first run (mount)
+  // so a restored search term doesn't reset the restored page back to 1.
+  const firstSearchRef = useRef(true);
   useEffect(() => {
+    if (firstSearchRef.current) {
+      firstSearchRef.current = false;
+      return;
+    }
     const term = search.trim();
     const id = setTimeout(() => {
       setName(term);
@@ -145,6 +191,11 @@ const Participants: NextPage = () => {
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [search]);
+
+  // Remember the view state for the SPA session so it's restored on return.
+  useEffect(() => {
+    saveParticipantsListState({ page, name, search, filter });
+  }, [page, name, search, filter]);
 
   // When the fitted page size changes (e.g. the viewport was resized), restart at
   // page 1 — the satellite's page boundaries move with the page size.
@@ -162,9 +213,22 @@ const Participants: NextPage = () => {
 
   const load = useCallback(async () => {
     if (!pageSize) return;
+    const cacheKey = `${page}|${pageSize}|${name}|${filter}`;
+    const cached = getCachedParticipantsList(cacheKey);
     const reqId = ++reqIdRef.current;
-    setIsLoading(true);
-    setErrorKey(null);
+    // Render instantly from the last cached result for this query (e.g. when
+    // navigating back from a detail view), then refresh in the background. A cache
+    // miss — first visit, changed filter/search, or resized viewport — shows the
+    // loading state and fetches as before.
+    if (cached) {
+      setParticipants(cached.rows);
+      setTotalPages(cached.totalPages);
+      setErrorKey(null);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      setErrorKey(null);
+    }
     try {
       const api = new API();
       const res = await api.fetchParticipants({
@@ -178,13 +242,23 @@ const Participants: NextPage = () => {
       // A newer request started while this one was in flight — drop the result.
       if (reqId !== reqIdRef.current) return;
       const body = res.data ?? {};
-      setParticipants(extractParties(body).map(normalize));
-      setTotalPages(Math.max(1, Number(body.totalPages) || 1));
+      const raw = extractParties(body);
+      // Cache the raw party objects so the detail view can render a clicked party
+      // instantly instead of re-fetching it (a single ?eori= lookup is ~2s).
+      cacheParticipants(raw);
+      const rows = raw.map(normalize);
+      const total = Math.max(1, Number(body.totalPages) || 1);
+      setParticipants(rows);
+      setTotalPages(total);
+      cacheParticipantsList(cacheKey, rows, total);
     } catch (e) {
       if (reqId !== reqIdRef.current) return;
-      setErrorKey("participants.error");
-      setParticipants([]);
-      setTotalPages(1);
+      if (!cached) {
+        setErrorKey("participants.error");
+        setParticipants([]);
+        setTotalPages(1);
+      }
+      // On a background-refresh failure, keep the cached rows on screen.
     } finally {
       if (reqId === reqIdRef.current) setIsLoading(false);
     }
@@ -391,13 +465,20 @@ const Participants: NextPage = () => {
           )}
         </div>
 
-        {showTable && (
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-          />
-        )}
+        {/* The pager's height is reserved at all times (even while loading / on a
+            single page) so the scroll container's measured height — and thus the
+            fitted page size — is identical before and after data loads. Without
+            this, the pager appearing after the first fetch shrinks the container
+            and triggers a second, re-fitted fetch. */}
+        <div className={styles.pagerSlot}>
+          {showTable && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
+          )}
+        </div>
       </div>
     </AdminRoute>
   );

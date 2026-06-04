@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"onboardingportal/config"
-	"onboardingportal/utils"
 )
 
 // DetectFrameworkVersion probes the satellite's version-discovery endpoints and
@@ -31,14 +30,14 @@ func DetectFrameworkVersion(cfg *config.Config) (string, bool) {
 		return "", false
 	}
 
-	// Owner client-assertion token, used directly as a bearer for these reads
-	// (same as the registry fetch). /versions and /capabilities are typically
-	// public; the token only matters for /frameworks.
-	token, _ := utils.CreateSatelliteOwnerAccessToken(
-		cfg.SatelliteIss, cfg.SatelliteAud, cfg.SatelliteX5c, cfg.SatellitePrivateKey,
-	)
-
 	client := &http.Client{Timeout: 6 * time.Second}
+
+	// A real access token from the satellite's /connect/token endpoint. The raw
+	// client assertion is not a valid API bearer on conformant satellites, so we
+	// exchange it here too. Best-effort: /versions and /capabilities are typically
+	// public, so if the exchange fails we still probe them unauthenticated — only
+	// /frameworks actually needs the token.
+	token, _ := GetOwnerAccessToken(client, cfg)
 	get := func(path string) (int, []byte) {
 		req, err := http.NewRequest(http.MethodGet, base+path, nil)
 		if err != nil {

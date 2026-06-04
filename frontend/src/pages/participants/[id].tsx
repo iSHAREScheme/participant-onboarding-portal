@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
 import API from "api/client";
+import { cacheParticipants, getCachedParticipant } from "util/participantCache";
 import { useLanguage } from "../../context/LanguageContext";
 import { getSatelliteVersion, usesClaimModel } from "config/publicEnv";
 import styles from "styles/ParticipantDetail.module.css";
@@ -68,6 +69,38 @@ interface ClaimView {
   fields: { label: string; value: ReactNode }[];
 }
 
+// Humanise a claim field key for display ("capabilityUrl" → "Capability Url").
+const claimFieldLabel = (k: string): string =>
+  k
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Map a real iSHARE v3 claim object (as returned by a v3 satellite) to a display
+// card: scalar fields shown as-is (dates formatted, URLs linked), nested
+// additionalInfo flattened in. type/id/status are rendered by the card chrome.
+const claimViewFromReal = (c: any): ClaimView => {
+  const skip = new Set(["type", "id", "status", "additionalInfo"]);
+  const fields: { label: string; value: ReactNode }[] = [];
+  const push = (k: string, v: any) => {
+    if (v === null || v === undefined || typeof v === "object") return;
+    const value =
+      k === "startDate" || k === "endDate"
+        ? fmtDate(v)
+        : /url|website/i.test(k)
+        ? renderLink(str(v))
+        : val(str(v));
+    fields.push({ label: claimFieldLabel(k), value });
+  };
+  Object.entries(c || {}).forEach(([k, v]) => {
+    if (!skip.has(k)) push(k, v);
+  });
+  if (c?.additionalInfo && typeof c.additionalInfo === "object") {
+    Object.entries(c.additionalInfo).forEach(([k, v]) => push(k, v));
+  }
+  return { type: str(c?.type), status: str(c?.status), fields };
+};
+
 const ParticipantDetail: NextPage = () => {
   const { t } = useLanguage();
   const router = useRouter();
@@ -82,25 +115,40 @@ const ParticipantDetail: NextPage = () => {
 
   const load = useCallback(async () => {
     if (!id) return;
-    setIsLoading(true);
-    setErrorKey(null);
+    // Render instantly from the list's cached party if we have it; the satellite
+    // single-party (?eori=) lookup costs ~2s, so we still refresh in the background
+    // but the user doesn't wait. A deep-link / cache miss fetches with the loading
+    // state as before.
+    const cached = getCachedParticipant(id);
+    if (cached) {
+      setParty(cached);
+      setErrorKey(null);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      setErrorKey(null);
+    }
     try {
       const api = new API();
       const res = await api.fetchParticipantDetail(id);
       const data = res?.data?.data ?? null;
       if (data && typeof data === "object") {
         setParty(data);
-      } else {
+        cacheParticipants([data]); // keep the cache fresh for next time
+      } else if (!cached) {
         setParty(null);
         setErrorKey("participants.detail.notFound");
       }
     } catch (e: any) {
-      setParty(null);
-      setErrorKey(
-        e?.response?.status === 404
-          ? "participants.detail.notFound"
-          : "participants.detail.error"
-      );
+      if (!cached) {
+        setParty(null);
+        setErrorKey(
+          e?.response?.status === 404
+            ? "participants.detail.notFound"
+            : "participants.detail.error"
+        );
+      }
+      // On a background-refresh failure, keep the cached party on screen.
     } finally {
       setIsLoading(false);
     }
@@ -114,8 +162,12 @@ const ParticipantDetail: NextPage = () => {
     if (authorized && id) load();
   }, [authorized, id, load]);
 
-  const claimModel = usesClaimModel(getSatelliteVersion());
-  const version = getSatelliteVersion();
+  // Adhere to the schema the satellite actually returned for THIS party: a real
+  // v3 party carries a `claims` array. Fall back to the configured version so a
+  // party-shaped payload still renders.
+  const hasClaims = Array.isArray(party?.claims) && party.claims.length > 0;
+  const claimModel = hasClaims || usesClaimModel(getSatelliteVersion());
+  const version = hasClaims ? str(party?.schemaVersion) || "3.0" : getSatelliteVersion();
   // Editing is available from 2.2 onward (PUT) and on 3.0 (PATCH).
   const canEdit = version.startsWith("3") || version.startsWith("2.2");
   const partyName = party ? str(party.party_name ?? party.name) : "";
@@ -124,8 +176,12 @@ const ParticipantDetail: NextPage = () => {
   const f = (k: string) => t(`participants.detail.fields.${k}`);
   const sec = (k: string) => t(`participants.detail.sections.${k}`);
 
-  // --- 3.0: present the party data reorganised as iSHARE v3 claim cards. ----
+  // --- 3.0 claim cards. A real v3 party carries a `claims` array; older or
+  //     party-shaped payloads are reorganised from the flat fields below. ----
   const deriveClaims = (p: Party): ClaimView[] => {
+    if (Array.isArray(p.claims) && p.claims.length) {
+      return p.claims.map(claimViewFromReal);
+    }
     const out: ClaimView[] = [];
     const adherence = p.adherence ?? {};
     const ai = p.additional_info ?? {};

@@ -271,6 +271,22 @@
   background: #f8f9fa;
   flex: 0 0 auto;
 }
+/* Smaller, contained preview for the favicon (icons are tiny + usually square). */
+.faviconPreview {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #eef0f2;
+  background: #f8f9fa;
+  flex: 0 0 auto;
+  padding: 4px;
+}
+.faviconPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 .previewImg {
   width: 100%;
   height: 100%;
@@ -368,6 +384,168 @@
   background: #fbe9e7;
   color: #d32f2f;
   border: 1px solid #f3c0ba;
+}
+
+/* ---- Tabs ---- */
+.tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #eef0f2;
+  margin-bottom: 1rem;
+}
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--text-secondary, #61265e);
+}
+.tabActive {
+  color: var(--text-secondary, #61265e);
+  border-bottom-color: var(--button-primary, #eb5e55);
+}
+
+/* ---- Theme: colour editor ---- */
+.colorGroup {
+  margin-bottom: 1.25rem;
+}
+.colorGroupTitle {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a94a6;
+  font-weight: 700;
+  margin: 0 0 0.6rem;
+}
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+.colorField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.colorLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+.colorInputRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.colorSwatch {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.colorSwatch::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+.colorSwatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.colorSwatch::-moz-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.colorHex {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+}
+.colorHex:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+.fontSelect {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.fontSelect:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+
+/* ---- Theme: live preview ---- */
+.themePreview {
+  margin-top: 1.25rem;
+}
+.previewCard {
+  background: var(--background-color, #f8f7f4);
+  border: 1px solid var(--border-color, #d4d2d4);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+.previewHeading {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-secondary, #61265e);
+}
+.previewBody {
+  margin: 0 0 1rem;
+  font-family: var(--font-primary);
+  font-size: 0.92rem;
+  color: var(--text-primary, #291d28);
+}
+.previewButtons {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.previewPrimary {
+  border: none;
+  background: var(--button-primary, #eb5e55);
+  color: #fff;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--button-border-radius, 8px);
+  font-family: var(--font-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+.previewPrimary:hover {
+  background: var(--button-primary-hover, #c84152);
+}
+.previewSecondary {
+  border: 1px solid var(--button-secondary, #8e3459);
+  background: transparent;
+  color: var(--button-secondary, #8e3459);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--button-border-radius, 8px);
+  font-family: var(--font-button);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* ---- Responsive ---- */

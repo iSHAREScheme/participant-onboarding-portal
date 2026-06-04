@@ -28,6 +28,15 @@
   overflow: auto;
 }
 
+/* Reserve the pager's height at all times so the table area's height (and the
+   fitted row count) is stable before and after data loads. */
+.pagerSlot {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -244,8 +253,9 @@
 }
 
 .adminRole {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #ece5ec;
+  background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+  color: var(--primary-color, #61265e);
 }
 
 .userRole {

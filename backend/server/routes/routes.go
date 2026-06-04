@@ -73,6 +73,8 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 	group.Post("/settings", middlewares.RequireAdminRole(), handler.UpdateSettings)
 	group.Post("/settings/logo", middlewares.RequireAdminRole(), handler.UploadLogo)
 	group.Get("/settings/logo", handler.GetLogo)
+	group.Post("/settings/favicon", middlewares.RequireAdminRole(), handler.UploadFavicon)
+	group.Get("/settings/favicon", handler.GetFavicon)
 }
 
 func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.Config) {

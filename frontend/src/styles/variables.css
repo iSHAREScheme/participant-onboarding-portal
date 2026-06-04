@@ -1,15 +1,19 @@
 /* Global CSS Custom Properties for Multi-tenant Theming */
 :root {
-  --primary-color: #61365E;
-  --secondary-color: #003145;
-  --accent-color: #004C6C;
+  /* Brand-aligned defaults — keep in sync with src/config/themeTokens.ts
+     (BRAND_THEME_COLORS) and design-conventions.md §11. These are the first-paint
+     values; a deployment can override them from Settings → Theme. */
+  --primary-color: #61265E;
+  --secondary-color: #8E3459;
+  --accent-color: #EF7B66;
   --background-color: #F8F7F4;
-  --text-primary: #003145;
-  --text-secondary: #013A57;
-  --button-primary: #0088cc;
-  --button-primary-hover: #006699;
-  --border-color: #C3CCCD;
-  --error-color: #FF3B30;
+  --text-primary: #291D28;
+  --text-secondary: #61265E;
+  --button-primary: #EB5E55;
+  --button-primary-hover: #C84152;
+  --button-secondary: #8E3459;
+  --border-color: #D4D2D4;
+  --error-color: #C84152;
 
   /* Button specific styling */
   --button-border-radius: 4px;   /* From Button.module.css and Home.module.css */
@@ -17,10 +21,13 @@
   --button-font-weight: 550;     /* From Button.module.css */
   --button-padding: 0.8rem 1.5rem; /* From Button.module.css */
 
-  /* Font families - default system fonts with fallbacks */
-  --font-primary: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-heading: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-button: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Brand fonts: Montserrat (headings/buttons) + Lato (body). Keep in sync with
+     config/fonts.ts (FONT_OPTIONS) and themes.ts default.fonts. The --font-montserrat
+     / --font-lato vars are defined on :root via _document.tsx (fontVariablesClassName);
+     a deployment can override these from Settings → Theme. */
+  --font-primary: var(--font-lato), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-montserrat), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-button: var(--font-montserrat), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   /* Header specific */
   --header-background: #ffffff;
@@ -30,13 +37,21 @@
   --footer-height: 80px;
 
   /* Form specific */
-  --input-border: #C3CCCD;
+  --input-border: #D4D2D4;
   --input-focus: #757575;
   --input-background: #fff;
 
   /* Layout */
   --container-padding: 2rem;
   --border-radius: 8px;
+}
+
+/* Compact header on tablets/phones. The Layout offset uses --header-height too,
+   so reducing it here keeps the content top-padding in sync with the header. */
+@media (max-width: 1024px) {
+  :root {
+    --header-height: 76px;
+  }
 }
 
 /* Theme overrides will be dynamically loaded here based on tenant */

@@ -38,6 +38,15 @@
   overflow: auto;
 }
 
+/* Reserve the pager's height at all times so the table area's height (and the
+   fitted row count) is stable before and after data loads. */
+.pagerSlot {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+}
+
 .createButton {
   background-color: var(--button-primary, #0066EE);
   color: white;

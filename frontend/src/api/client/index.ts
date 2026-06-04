@@ -350,6 +350,10 @@ export class API {
     return this.client.post('/settings/logo', image)
   }
 
+  uploadFavicon (image: FormData) {
+    return this.client.post('/settings/favicon', image)
+  }
+
   fetchLogo () {
     return this.client.get('/settings/logo', {
       responseType: 'blob'

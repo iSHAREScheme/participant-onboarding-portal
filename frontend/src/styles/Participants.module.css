@@ -25,6 +25,17 @@
   overflow: auto;
 }
 
+/* Reserve the pager's height at all times (flex column avoids margin-collapse so
+   the slot stays a fixed height whether or not the pager is shown). This keeps
+   the table area's measured height identical before and after data loads, so the
+   fitted page size — and the satellite fetch — happens exactly once. */
+.pagerSlot {
+  flex: 0 0 auto;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Icon-only refresh button sitting in the toolbar next to the filter. */
 .refreshButton {
   flex: 0 0 auto;
@@ -166,8 +177,9 @@
   border-radius: 20px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #ece5ec;
+  background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+  color: var(--primary-color, #61265e);
   /* Let a long role name truncate inside the flex row rather than push the
      "+N" badge out of view. */
   min-width: 0;
@@ -188,8 +200,9 @@
   height: 1.75rem;
   padding: 0 0.4rem;
   border-radius: 9999px;
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #ece5ec;
+  background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+  color: var(--primary-color, #61265e);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: default;

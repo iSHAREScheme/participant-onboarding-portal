@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { NextPage } from "next";
 import { useFormik } from "formik";
 import * as Yup from "yup";
@@ -8,6 +8,7 @@ import { useLanguage } from "context/LanguageContext";
 import styles from "styles/Submit.module.css";
 import ProtectedRoute from "../components/ProtectedRoute";
 import SubmitClaimsForm from "../components/SubmitClaimsForm";
+import API from "api/client";
 import { getSatelliteVersion, usesClaimModel } from "config/publicEnv";
 import {
   AdherenceStatusOptions,
@@ -91,7 +92,27 @@ const validationSchema = Yup.object({
 
 const Submit: NextPage = () => {
   const { t } = useLanguage();
-  const satelliteVersion = getSatelliteVersion();
+  // The interface (v2 party form vs v3 claims form) must follow the satellite's
+  // actual version. The backend auto-detects it — the same source the Settings
+  // page shows — which can differ from the static client env. Seed from the env
+  // for the first paint, then confirm with the backend.
+  const [claimModel, setClaimModel] = useState<boolean>(() =>
+    usesClaimModel(getSatelliteVersion())
+  );
+  useEffect(() => {
+    let active = true;
+    new API()
+      .fetchSatelliteVersion()
+      .then((res) => {
+        if (active && res?.data) setClaimModel(Boolean(res.data.claimModel));
+      })
+      .catch(() => {
+        /* keep the env-based fallback */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const { createParty, loading, error, response } = useSubmitInfo();
   const [showAuthRegistryForm, setShowAuthRegistryForm] =
     useState<boolean>(false);
@@ -253,7 +274,7 @@ const Submit: NextPage = () => {
     <ProtectedRoute fetchData={() => { }}>
       <div className={styles.container}>
         <h1 className={styles.title}>{t("submit.title")}</h1>
-        {usesClaimModel(satelliteVersion) ? (
+        {claimModel ? (
           <SubmitClaimsForm />
         ) : (
         <form onSubmit={formik.handleSubmit}>

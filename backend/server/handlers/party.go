@@ -33,13 +33,6 @@ type HandlerParty struct {
 	Config *config.Config
 }
 
-// AccessToken represents the OAuth 2.0 access token response.
-type AccessToken struct {
-	AccessToken *string `json:"access_token,omitempty"`
-	TokenType   *string `json:"token_type,omitempty"`
-	ExpiresIn   *int64  `json:"expires_in,omitempty"`
-}
-
 // CreateSatelliteOwnerAccessToken
 func createSatelliteOwnerAccessToken(config *config.Config) (string, error) {
 	iss := config.SatelliteIss
@@ -62,74 +55,6 @@ func joinSatelliteURL(base, endpoint string) string {
 		return trimmedBase + endpoint
 	}
 	return trimmedBase + "/" + endpoint
-}
-
-func (h *HandlerParty) getSatelliteAccessToken(client *http.Client, assertionToken string) (string, error) {
-	if assertionToken == "" {
-		return "", fmt.Errorf("client assertion is empty")
-	}
-
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("scope", h.Config.SatelliteTokenScope)
-	form.Set("client_id", h.Config.SatelliteIss)
-	form.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
-	form.Set("client_assertion", assertionToken)
-
-	tokenURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteTokenEndpoint)
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: requesting access token url=%s scope=%s client_id=%s", tokenURL, h.Config.SatelliteTokenScope, h.Config.SatelliteIss)
-		parts := strings.Split(assertionToken, ".")
-		if len(parts) >= 2 {
-			if header, err := base64.RawURLEncoding.DecodeString(parts[0]); err == nil {
-				log.Printf("satellite: client assertion header=%s", header)
-			} else {
-				log.Printf("satellite: failed to decode assertion header: %v", err)
-			}
-			if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-				log.Printf("satellite: client assertion payload=%s", payload)
-			} else {
-				log.Printf("satellite: failed to decode assertion payload: %v", err)
-			}
-		}
-	}
-
-	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	res, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		if h.Config.SatelliteDebug {
-			log.Printf("satellite: token request failed status=%d body=%s", res.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("satellite token request failed: status %d", res.StatusCode)
-	}
-
-	var tokenResponse AccessToken
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", fmt.Errorf("failed to parse token response: %w", err)
-	}
-	if tokenResponse.AccessToken == nil || *tokenResponse.AccessToken == "" {
-		return "", fmt.Errorf("token response did not contain an access token")
-	}
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: received access token (len=%d)", len(*tokenResponse.AccessToken))
-	}
-
-	return *tokenResponse.AccessToken, nil
 }
 
 func (h *HandlerParty) userCanActForKvk(c *fiber.Ctx, kvk string) bool {
@@ -276,7 +201,7 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 	// Create a new HTTP client
 	client := &http.Client{}
 
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}
@@ -394,7 +319,7 @@ func (h *HandlerParty) CreateParties(c *fiber.Ctx) error {
 
 	client := &http.Client{}
 
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}
@@ -459,7 +384,7 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 	}
 
 	client := &http.Client{}
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
 	}
@@ -1065,7 +990,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	// Create a new HTTP client
 	client := &http.Client{}
 
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}

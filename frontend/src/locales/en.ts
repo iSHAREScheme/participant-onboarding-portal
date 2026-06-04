@@ -24,7 +24,8 @@ export default {
     previous: "Previous",
     profile: "Profile",
     participants: "Participants",
-    organizationAccess: "Organization access"
+    organizationAccess: "Organization access",
+    menu: "Menu"
   },
   organizationAccess: {
     title: "Organization access",
@@ -583,6 +584,53 @@ export default {
       agreements: "Agreements",
       hideCapabilitiesUrl: "Hide capabilities URL field",
       hideCapabilitiesUrlHint: "If enabled, applicants will not see or need to fill the capabilities URL during onboarding."
+    },
+    tabs: {
+      general: "General",
+      theme: "Theme"
+    },
+    theme: {
+      title: "Colours & fonts",
+      description: "Customise the portal's colours and fonts to match your organisation's brand. Defaults follow the iSHARE brand guidelines. Changes preview live and apply to everyone once you save.",
+      logo: "Logo & favicon",
+      logoHint: "Upload your organisation's logo (PNG, JPG or SVG). It appears in the portal header; if none is set, the default iSHARE logo is used.",
+      favicon: "Browser tab icon",
+      faviconHint: "Shown in the browser tab. A square PNG, SVG or ICO works best; uses the iSHARE icon if not set.",
+      fonts: {
+        heading: "Heading font",
+        body: "Body font"
+      },
+      groups: {
+        brand: "Brand",
+        buttons: "Buttons",
+        text: "Text",
+        surface: "Surfaces",
+        typography: "Typography"
+      },
+      tokens: {
+        primary: "Primary",
+        secondary: "Secondary",
+        accent: "Accent",
+        buttonPrimary: "Primary button",
+        buttonPrimaryHover: "Primary button (hover)",
+        buttonSecondary: "Secondary button",
+        textPrimary: "Body text",
+        textSecondary: "Headings",
+        background: "Background",
+        borderColor: "Borders",
+        errorColor: "Error"
+      },
+      actions: {
+        reset: "Reset to brand defaults"
+      },
+      preview: "Preview",
+      previewHeading: "The quick brown fox",
+      previewBody: "This is how headings, body text and buttons look with the selected colours.",
+      previewPrimaryBtn: "Primary action",
+      previewSecondaryBtn: "Secondary",
+      messages: {
+        resetDone: "Colours reset to brand defaults — save to apply."
+      }
     }
   },
   verify: {

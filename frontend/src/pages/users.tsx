@@ -476,13 +476,15 @@ const Users: NextPage = () => {
           )}
         </div>
 
-        {!isLoading && !error && (
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        )}
+        <div className={styles.pagerSlot}>
+          {!isLoading && !error && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
+          )}
+        </div>
       </div>
     </AdminRoute>
   );

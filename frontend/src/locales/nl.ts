@@ -23,7 +23,8 @@ export default {
     previous: "Vorige",
     profile: "Profiel",
     participants: "Deelnemers",
-    organizationAccess: "Organisatietoegang"
+    organizationAccess: "Organisatietoegang",
+    menu: "Menu"
   },
   organizationAccess: {
     title: "Organisatietoegang",
@@ -579,6 +580,53 @@ export default {
       agreements: "Overeenkomsten",
       hideCapabilitiesUrl: "Verberg het capabilities-URL veld",
       hideCapabilitiesUrlHint: "Indien ingeschakeld zien aanmelders dit veld niet en hoeven zij geen capabilities-URL in te vullen."
+    },
+    tabs: {
+      general: "Algemeen",
+      theme: "Thema"
+    },
+    theme: {
+      title: "Kleuren & lettertypen",
+      description: "Pas de kleuren en lettertypen van het portaal aan op de huisstijl van uw organisatie. De standaardwaarden volgen de iSHARE-huisstijl. Wijzigingen worden direct getoond en gelden voor iedereen zodra u opslaat.",
+      logo: "Logo & favicon",
+      logoHint: "Upload het logo van uw organisatie (PNG, JPG of SVG). Het verschijnt in de portaalheader; als er geen is ingesteld, wordt het standaard iSHARE-logo gebruikt.",
+      favicon: "Browsertabicoon",
+      faviconHint: "Wordt getoond in de browsertab. Een vierkante PNG, SVG of ICO werkt het best; gebruikt het iSHARE-icoon als er geen is ingesteld.",
+      fonts: {
+        heading: "Koplettertype",
+        body: "Bodylettertype"
+      },
+      groups: {
+        brand: "Huisstijl",
+        buttons: "Knoppen",
+        text: "Tekst",
+        surface: "Oppervlakken",
+        typography: "Typografie"
+      },
+      tokens: {
+        primary: "Primair",
+        secondary: "Secundair",
+        accent: "Accent",
+        buttonPrimary: "Primaire knop",
+        buttonPrimaryHover: "Primaire knop (hover)",
+        buttonSecondary: "Secundaire knop",
+        textPrimary: "Bodytekst",
+        textSecondary: "Koppen",
+        background: "Achtergrond",
+        borderColor: "Randen",
+        errorColor: "Fout"
+      },
+      actions: {
+        reset: "Terug naar huisstijl"
+      },
+      preview: "Voorbeeld",
+      previewHeading: "De snelle bruine vos",
+      previewBody: "Zo zien koppen, bodytekst en knoppen eruit met de gekozen kleuren.",
+      previewPrimaryBtn: "Primaire actie",
+      previewSecondaryBtn: "Secundair",
+      messages: {
+        resetDone: "Kleuren teruggezet naar de huisstijl — sla op om toe te passen."
+      }
     }
   },
   verify: {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"onboardingportal/config"
+	"onboardingportal/integrations/satellite"
 	"onboardingportal/responses"
 	s "onboardingportal/server"
 	"strconv"
@@ -103,11 +104,14 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 	certifiedOnly := c.Query("certifiedOnly") == "true"
 	mineOnly := c.Query("mineOnly") == "true"
 
-	// "My participants" can't be delegated to the satellite (it ignores
-	// registrar query params), so fetch the whole matching set and
-	// filter/paginate it here instead.
-	if mineOnly {
-		return h.getMyParticipants(c, page, pageSize, name, activeOnly, certifiedOnly)
+	// Some filters can't be delegated to the satellite, so we fetch the whole
+	// matching set and filter/paginate in-memory:
+	//   - "mine" (the satellite ignores registrar query params), and
+	//   - active/certified on a v3 claim-model satellite (it ignores
+	//     active_only/certified_only — that state lives in the claims).
+	claimModel := strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3")
+	if mineOnly || (claimModel && (activeOnly || certifiedOnly)) {
+		return h.getFilteredParticipants(c, page, pageSize, name, activeOnly, certifiedOnly, mineOnly, claimModel)
 	}
 
 	data, total, totalPages, err := h.fetchPartiesPage(page, pageSize, name, activeOnly, certifiedOnly)
@@ -124,32 +128,49 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 	})
 }
 
-// getMyParticipants returns only the parties registered under this portal's
-// registrar. The satellite cannot filter /parties by registrar, so we page
-// through the whole (satellite-filtered) result set, keep the parties whose
-// registrar_id matches ours, and paginate that filtered list in-memory. This
-// full fetch only happens for the "My participants" view; the default list
-// stays a single satellite page.
-func (h *HandlerRegistry) getMyParticipants(c *fiber.Ctx, page, pageSize int, name string, activeOnly, certifiedOnly bool) error {
+// getFilteredParticipants fetches the whole matching result set and applies the
+// filters the satellite can't do server-side, then paginates in-memory:
+//   - mineOnly: keep parties registered under this portal's registrar, and
+//   - on a v3 claim-model satellite, active/certified (which the satellite
+//     ignores — that state lives in the claims).
+// The default list (unfiltered, or v2 active/certified) stays a single page.
+func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize int, name string, activeOnly, certifiedOnly, mineOnly, claimModel bool) error {
 	registrar := h.resolveRegistrarId()
-	if registrar == "" {
+	if mineOnly && registrar == "" {
 		// No registrar configured → we can't identify "our" parties.
 		return c.JSON(fiber.Map{
-			"data":        []interface{}{},
-			"page":        page,
-			"pageSize":    pageSize,
-			"total":       0,
-			"totalPages":  1,
-			"registrarId": "",
+			"data": []interface{}{}, "page": page, "pageSize": pageSize,
+			"total": 0, "totalPages": 1, "registrarId": "",
 		})
 	}
 
-	all, err := h.fetchAllSatelliteParties(name, activeOnly, certifiedOnly)
+	// v3 ignores active_only/certified_only, so apply them in-memory below; v2
+	// can filter them server-side, so let the satellite do it.
+	satActive := activeOnly && !claimModel
+	satCertified := certifiedOnly && !claimModel
+
+	all, err := h.fetchAllSatelliteParties(name, satActive, satCertified)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
 
-	filtered := filterByRegistrar(all, registrar)
+	filtered := make([]interface{}, 0, len(all))
+	for _, p := range all {
+		m, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if mineOnly && !partyMatchesRegistrar(m, registrar) {
+			continue
+		}
+		if claimModel && activeOnly && !partyIsActive(m) {
+			continue
+		}
+		if claimModel && certifiedOnly && !partyIsCertified(m) {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
 
 	total := len(filtered)
 	totalPages := 1
@@ -169,20 +190,19 @@ func (h *HandlerRegistry) getMyParticipants(c *fiber.Ctx, page, pageSize int, na
 	if end > total {
 		end = total
 	}
-	pageData := filtered[start:end]
 
 	if h.Config.SatelliteDebug {
-		log.Printf("satellite: my participants registrar=%q matched=%d of %d page=%d/%d", registrar, total, len(all), page, totalPages)
+		log.Printf("satellite: filtered participants mine=%t active=%t certified=%t claimModel=%t matched=%d of %d page=%d/%d", mineOnly, activeOnly, certifiedOnly, claimModel, total, len(all), page, totalPages)
 	}
 
-	return c.JSON(fiber.Map{
-		"data":        pageData,
-		"page":        page,
-		"pageSize":    pageSize,
-		"total":       total,
-		"totalPages":  totalPages,
-		"registrarId": registrar,
-	})
+	resp := fiber.Map{
+		"data": filtered[start:end], "page": page, "pageSize": pageSize,
+		"total": total, "totalPages": totalPages,
+	}
+	if mineOnly {
+		resp["registrarId"] = registrar
+	}
+	return c.JSON(resp)
 }
 
 // resolveRegistrarId returns the registrar that identifies "us": the configured
@@ -195,18 +215,65 @@ func (h *HandlerRegistry) resolveRegistrarId() string {
 	return strings.TrimSpace(h.Config.SatelliteIss)
 }
 
-// filterByRegistrar keeps only the parties whose registrar_id equals the given
-// registrar. An empty registrar matches nothing (we can't identify "ours").
-func filterByRegistrar(parties []interface{}, registrar string) []interface{} {
-	out := []interface{}{}
+// partyMatchesRegistrar reports whether a party was registered under the given
+// registrar. v2 carries a top-level registrar_id; v3 carries it per claim.
+func partyMatchesRegistrar(m map[string]interface{}, registrar string) bool {
 	if registrar == "" {
-		return out
+		return false
 	}
-	for _, p := range parties {
-		if m, ok := p.(map[string]interface{}); ok {
-			if rid, _ := m["registrar_id"].(string); rid == registrar {
-				out = append(out, p)
+	if rid, _ := m["registrar_id"].(string); rid == registrar {
+		return true
+	}
+	for _, c := range partyClaims(m) {
+		if rid, _ := c["registrarId"].(string); rid == registrar {
+			return true
+		}
+	}
+	return false
+}
+
+// partyIsActive reports whether a party is active. v2 reads adherence.status;
+// v3 reads the frameworkCompliance claim's status.
+func partyIsActive(m map[string]interface{}) bool {
+	if a, ok := m["adherence"].(map[string]interface{}); ok {
+		if s, _ := a["status"].(string); strings.EqualFold(s, "active") {
+			return true
+		}
+	}
+	for _, c := range partyClaims(m) {
+		if t, _ := c["type"].(string); t == "frameworkCompliance" {
+			if s, _ := c["status"].(string); strings.EqualFold(s, "active") {
+				return true
 			}
+		}
+	}
+	return false
+}
+
+// partyIsCertified reports whether a party has a registered certificate. v2
+// carries a certificates array; v3 carries an x509Certificate claim.
+func partyIsCertified(m map[string]interface{}) bool {
+	if certs, ok := m["certificates"].([]interface{}); ok && len(certs) > 0 {
+		return true
+	}
+	for _, c := range partyClaims(m) {
+		if t, _ := c["type"].(string); t == "x509Certificate" {
+			return true
+		}
+	}
+	return false
+}
+
+// partyClaims returns the party's v3 claim objects (nil for a v2 party).
+func partyClaims(m map[string]interface{}) []map[string]interface{} {
+	arr, ok := m["claims"].([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(arr))
+	for _, c := range arr {
+		if cm, ok := c.(map[string]interface{}); ok {
+			out = append(out, cm)
 		}
 	}
 	return out
@@ -298,13 +365,15 @@ func (h *HandlerRegistry) fetchPartyByID(id string) (interface{}, error) {
 // optional query string such as "?role=AuthorisationRegistry"), then unwraps
 // the signed parties_token JWT and returns its decoded payload.
 func (h *HandlerRegistry) fetchSatelliteParties(query string) (map[string]interface{}, error) {
-	// Get access token using the same method as in the party handler.
-	accessToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create access token")
-	}
-
 	client := &http.Client{}
+
+	// Exchange the owner client assertion at /connect/token for a real access
+	// token and use THAT as the API bearer. Sending the raw assertion as a bearer
+	// only works against lenient satellites; conformant ones reject it (401).
+	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to obtain satellite access token")
+	}
 
 	req, err := http.NewRequest("GET", h.Config.SatelliteBaseUrl+"/parties"+query, nil)
 	if err != nil {
@@ -339,8 +408,13 @@ func (h *HandlerRegistry) fetchSatelliteParties(query string) (map[string]interf
 		return nil, fmt.Errorf("Failed to parse registry data")
 	}
 
-	// Unwrap the parties_token JWT (header.payload.signature) to get the data.
-	parts := strings.Split(registryData.PartiesToken, ".")
+	// Unwrap the signed parties JWT (header.payload.signature). v2 returns it as
+	// `parties_token`, v3 as `partiesToken` — use whichever the satellite sent.
+	partiesToken := registryData.PartiesToken
+	if partiesToken == "" {
+		partiesToken = registryData.PartiesTokenV3
+	}
+	parts := strings.Split(partiesToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("Invalid JWT format")
 	}

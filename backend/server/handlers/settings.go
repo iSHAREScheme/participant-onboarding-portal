@@ -7,6 +7,7 @@ import (
 	s "onboardingportal/server"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/datatypes"
+	"encoding/json"
 	"os"
 	"log"
 	"fmt"
@@ -47,6 +48,8 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 			"dataspaceId": "",
 			"agreements":  []string{},
 			"logoPath":    "",
+			"faviconPath": "",
+			"theme":       nil,
 		})
 	}
 
@@ -65,11 +68,15 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /settings [put]
 func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
+	// Pointer fields give merge semantics: only fields present in the request
+	// body are updated. This lets the Theme tab save just `theme` without wiping
+	// description/registrarId/etc, and vice-versa for the General tab.
 	var input struct {
-		Description string   `json:"description"`
-		RegistrarId string   `json:"registrarId"`
-		DataspaceId string   `json:"dataspaceId"`
-		Agreements  []string `json:"agreements"`
+		Description *string         `json:"description"`
+		RegistrarId *string         `json:"registrarId"`
+		DataspaceId *string         `json:"dataspaceId"`
+		Agreements  *[]string       `json:"agreements"`
+		Theme       json.RawMessage `json:"theme"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -77,24 +84,32 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 
 	var settings models.Settings
-	result := h.Server.DB.First(&settings)
+	creating := h.Server.DB.First(&settings).Error != nil
 
-	if result.Error != nil {
-		// Create new settings if none exist
-		settings = models.Settings{
-			Description: input.Description,
-			RegistrarId: input.RegistrarId,
-			DataspaceId: input.DataspaceId,
-			Agreements:  datatypes.JSONSlice[string](input.Agreements),
+	if input.Description != nil {
+		settings.Description = *input.Description
+	}
+	if input.RegistrarId != nil {
+		settings.RegistrarId = *input.RegistrarId
+	}
+	if input.DataspaceId != nil {
+		settings.DataspaceId = *input.DataspaceId
+	}
+	if input.Agreements != nil {
+		settings.Agreements = datatypes.JSONSlice[string](*input.Agreements)
+	}
+	if len(input.Theme) > 0 {
+		settings.Theme = datatypes.JSON(input.Theme)
+	}
+
+	if creating {
+		if err := h.Server.DB.Create(&settings).Error; err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save settings")
 		}
-		h.Server.DB.Create(&settings)
 	} else {
-		// Update existing settings
-		settings.Description = input.Description
-		settings.RegistrarId = input.RegistrarId
-		settings.DataspaceId = input.DataspaceId
-		settings.Agreements = datatypes.JSONSlice[string](input.Agreements)
-		h.Server.DB.Save(&settings)
+		if err := h.Server.DB.Save(&settings).Error; err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update settings")
+		}
 	}
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Settings updated successfully")
@@ -220,4 +235,107 @@ func (h *HandlerSettings) GetLogo(c *fiber.Ctx) error {
 
 	// Serve the file with proper content type
 	return c.SendFile(settings.LogoPath)
+}
+
+// UploadFavicon godoc
+// @Summary      Upload or update the favicon
+// @Description  Accepts a favicon file (ico, png, svg) and stores it. Replaces existing favicon if present.
+// @Tags         settings
+// @Accept       mpfd
+// @Produce      json
+// @Param        favicon  formData  file  true  "Favicon file (ico, png, svg)"
+// @Success      200   {object}  map[string]string
+// @Failure      400   {object}  map[string]string
+// @Failure      500   {object}  map[string]string
+// @Router       /settings/favicon [post]
+func (h *HandlerSettings) UploadFavicon(c *fiber.Ctx) error {
+	file, err := c.FormFile("favicon")
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Favicon file is required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowedExtensions := map[string]bool{
+		".ico": true,
+		".png": true,
+		".svg": true,
+	}
+	if !allowedExtensions[ext] {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid file type. Only ico, png, svg are allowed")
+	}
+
+	// Favicons are tiny; cap at 1MB.
+	if file.Size > int64(1*1024*1024) {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "File size exceeds 1MB limit")
+	}
+
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		log.Printf("Failed to ensure uploads dir: %v", err)
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create upload directory")
+	}
+
+	var settings models.Settings
+	result := h.Server.DB.First(&settings)
+
+	// Delete old favicon file if it exists
+	if result.Error == nil && settings.FaviconPath != "" {
+		if err := os.Remove(settings.FaviconPath); err != nil {
+			log.Printf("Failed to remove old favicon file: %v", err)
+		}
+	}
+
+	timestamp := time.Now().Format("20060102150405")
+	faviconPath := fmt.Sprintf("%s/%s_favicon%s", uploadDir, timestamp, ext)
+
+	if err := c.SaveFile(file, faviconPath); err != nil {
+		log.Printf("Failed to save favicon file: %v", err)
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save favicon file")
+	}
+
+	if result.Error != nil {
+		settings = models.Settings{FaviconPath: faviconPath}
+		if err := h.Server.DB.Create(&settings).Error; err != nil {
+			if removeErr := os.Remove(faviconPath); removeErr != nil {
+				log.Printf("Failed to remove favicon file during rollback: %v", removeErr)
+			}
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save settings")
+		}
+	} else {
+		settings.FaviconPath = faviconPath
+		if err := h.Server.DB.Save(&settings).Error; err != nil {
+			if removeErr := os.Remove(faviconPath); removeErr != nil {
+				log.Printf("Failed to remove favicon file during rollback: %v", removeErr)
+			}
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update settings")
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":     "Favicon uploaded successfully",
+		"faviconPath": faviconPath,
+	})
+}
+
+// GetFavicon godoc
+// @Summary      Get favicon file
+// @Description  Returns the uploaded favicon file
+// @Tags         settings
+// @Produce      image/x-icon,image/png,image/svg+xml
+// @Success      200  {file}  file
+// @Failure      404  {object}  map[string]string
+// @Router       /settings/favicon [get]
+func (h *HandlerSettings) GetFavicon(c *fiber.Ctx) error {
+	var settings models.Settings
+	result := h.Server.DB.First(&settings)
+
+	if result.Error != nil || settings.FaviconPath == "" {
+		return responses.ErrorResponse(c, fiber.StatusNotFound, "Favicon not found")
+	}
+
+	if _, err := os.Stat(settings.FaviconPath); os.IsNotExist(err) {
+		return responses.ErrorResponse(c, fiber.StatusNotFound, "Favicon file not found")
+	}
+
+	return c.SendFile(settings.FaviconPath)
 }

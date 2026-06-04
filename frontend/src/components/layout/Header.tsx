@@ -13,6 +13,7 @@ import { clearStoredKeycloakTokens } from "util/keycloakTokens"
 
 const Header: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { t } = useLanguage()
@@ -25,6 +26,10 @@ const Header: React.FC = () => {
   const idpOnly = env.NEXT_PUBLIC_IDP_ONLY === "true"
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const adminRoutesDisabled = env.NEXT_PUBLIC_DISABLE_ADMIN_ROUTES === "true"
+  const showAdminNav =
+    !!keycloak?.authenticated &&
+    keycloak.hasRealmRole("onboarding-admin") &&
+    !adminRoutesDisabled
   const idpHint =
     idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
       ? keycloakIdp
@@ -52,6 +57,11 @@ const Header: React.FC = () => {
     };
   }, []);
 
+  // Close the mobile nav drop-down after navigating to a route.
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [router.pathname]);
+
   const handleLogin = () => {
     keycloak?.login(
       {
@@ -73,7 +83,27 @@ const Header: React.FC = () => {
 
   return (
     <header className={styles.header}>
-      <div className={styles.container}>
+      <div
+        className={`${styles.container} ${
+          showAdminNav ? styles.withDrawer : ""
+        }`}
+      >
+        {showAdminNav && (
+          <button
+            type="button"
+            className={`${styles.hamburger} ${
+              mobileNavOpen ? styles.hamburgerOpen : ""
+            }`}
+            aria-label={t("common.menu")}
+            aria-expanded={mobileNavOpen}
+            aria-controls="primary-nav"
+            onClick={() => setMobileNavOpen((v) => !v)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        )}
         <div
           className={styles.associationName}
           onClick={() => {
@@ -97,10 +127,21 @@ const Header: React.FC = () => {
               />
             )}
           </div>
-          <span className={styles.associationText}>{associationName}</span>
         </div>
-        {keycloak?.authenticated && keycloak.hasRealmRole("onboarding-admin") && !adminRoutesDisabled && (
-          <nav className={styles.navbar}>
+        {showAdminNav && (
+          <div
+            className={`${styles.backdrop} ${
+              mobileNavOpen ? styles.backdropOpen : ""
+            }`}
+            aria-hidden="true"
+            onClick={() => setMobileNavOpen(false)}
+          />
+        )}
+        {showAdminNav && (
+          <nav
+            id="primary-nav"
+            className={`${styles.navbar} ${mobileNavOpen ? styles.navbarOpen : ""}`}
+          >
             <ul>
               <li>
                 <Link
@@ -135,6 +176,32 @@ const Header: React.FC = () => {
                 </Link>
               </li>
             </ul>
+            {/* On mobile these live in the drawer; on desktop they're hidden here
+                and shown in the top-bar right section instead. */}
+            <div className={styles.drawerExtras}>
+              <div className={styles.drawerLang}>
+                <LanguageSwitcher />
+              </div>
+              {keycloak?.authenticated && (
+                <div className={styles.drawerUser}>
+                  <div className={styles.drawerUsername}>
+                    {keycloak.tokenParsed?.preferred_username}
+                  </div>
+                  <button type="button" onClick={() => router.push("/profile")}>
+                    {t("common.profile")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/organization-access")}
+                  >
+                    {t("common.organizationAccess")}
+                  </button>
+                  <button type="button" onClick={handleLogout}>
+                    {t("common.logout")}
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
         )}
         <div className={styles.rightSection}>
