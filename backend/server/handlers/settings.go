@@ -50,6 +50,8 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 			"logoPath":    "",
 			"faviconPath": "",
 			"theme":       nil,
+			"themes":      nil,
+			"activeTheme": "",
 		})
 	}
 
@@ -77,6 +79,19 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		DataspaceId *string         `json:"dataspaceId"`
 		Agreements  *[]string       `json:"agreements"`
 		Theme       json.RawMessage `json:"theme"`
+		Themes      json.RawMessage `json:"themes"`
+		ActiveTheme *string         `json:"activeTheme"`
+
+		// Non-secret satellite connection overrides (credentials stay env-only).
+		SatelliteBaseUrl            *string `json:"satelliteBaseUrl"`
+		SatelliteIss                *string `json:"satelliteIss"`
+		SatelliteAud                *string `json:"satelliteAud"`
+		SatelliteVersion            *string `json:"satelliteVersion"`
+		SatelliteEpCreationEndpoint *string `json:"satelliteEpCreationEndpoint"`
+		SatellitePartiesEndpoint    *string `json:"satellitePartiesEndpoint"`
+		SatelliteTokenEndpoint      *string `json:"satelliteTokenEndpoint"`
+		SatelliteTokenScope         *string `json:"satelliteTokenScope"`
+		DataspaceTitle              *string `json:"dataspaceTitle"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -101,6 +116,39 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	if len(input.Theme) > 0 {
 		settings.Theme = datatypes.JSON(input.Theme)
 	}
+	if len(input.Themes) > 0 {
+		settings.Themes = datatypes.JSON(input.Themes)
+	}
+	if input.ActiveTheme != nil {
+		settings.ActiveTheme = *input.ActiveTheme
+	}
+	if input.SatelliteBaseUrl != nil {
+		settings.SatelliteBaseUrl = strings.TrimSpace(*input.SatelliteBaseUrl)
+	}
+	if input.SatelliteIss != nil {
+		settings.SatelliteIss = strings.TrimSpace(*input.SatelliteIss)
+	}
+	if input.SatelliteAud != nil {
+		settings.SatelliteAud = strings.TrimSpace(*input.SatelliteAud)
+	}
+	if input.SatelliteVersion != nil {
+		settings.SatelliteVersion = strings.TrimSpace(*input.SatelliteVersion)
+	}
+	if input.SatelliteEpCreationEndpoint != nil {
+		settings.SatelliteEpCreationEndpoint = strings.TrimSpace(*input.SatelliteEpCreationEndpoint)
+	}
+	if input.SatellitePartiesEndpoint != nil {
+		settings.SatellitePartiesEndpoint = strings.TrimSpace(*input.SatellitePartiesEndpoint)
+	}
+	if input.SatelliteTokenEndpoint != nil {
+		settings.SatelliteTokenEndpoint = strings.TrimSpace(*input.SatelliteTokenEndpoint)
+	}
+	if input.SatelliteTokenScope != nil {
+		settings.SatelliteTokenScope = strings.TrimSpace(*input.SatelliteTokenScope)
+	}
+	if input.DataspaceTitle != nil {
+		settings.DataspaceTitle = strings.TrimSpace(*input.DataspaceTitle)
+	}
 
 	if creating {
 		if err := h.Server.DB.Create(&settings).Error; err != nil {
@@ -111,6 +159,10 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update settings")
 		}
 	}
+
+	// Apply the non-secret satellite overrides onto the shared runtime config so
+	// they take effect immediately for satellite calls (no restart required).
+	h.Config.OverlaySatelliteSettings(&settings)
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Settings updated successfully")
 }

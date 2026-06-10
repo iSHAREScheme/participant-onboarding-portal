@@ -30,6 +30,162 @@ func NewHandlerRegistry(server *s.Server, config *config.Config) *HandlerRegistr
 	}
 }
 
+// GetConnection godoc
+// @Summary      Satellite connection details
+// @Description  Returns the resolved (env + Settings overrides) non-secret satellite connection details. Never includes the private key.
+// @Tags         registry
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /registry/connection [get]
+func (h *HandlerRegistry) GetConnection(c *fiber.Ctx) error {
+	cfg := h.Config
+	version := strings.TrimSpace(cfg.SatelliteVersion)
+	// A connection needs both a certificate chain and a private key (path or
+	// inline). Only report whether they are present — never the key itself.
+	certConfigured := strings.TrimSpace(cfg.SatelliteX5c) != "" &&
+		(strings.TrimSpace(cfg.SatellitePrivateKey) != "" || strings.TrimSpace(cfg.SatellitePrivateKeyPath) != "")
+	return c.JSON(fiber.Map{
+		"baseUrl":               cfg.SatelliteBaseUrl,
+		"iss":                   cfg.SatelliteIss,
+		"aud":                   cfg.SatelliteAud,
+		"version":               version,
+		"claimModel":            strings.HasPrefix(version, "3"),
+		"versionDetect":         cfg.SatelliteVersionDetect,
+		"epCreationEndpoint":    cfg.SatelliteEpCreationEndpoint,
+		"partiesEndpoint":       cfg.SatellitePartiesEndpoint,
+		"tokenEndpoint":         cfg.SatelliteTokenEndpoint,
+		"tokenScope":            cfg.SatelliteTokenScope,
+		"registrarId":           cfg.RegistrarId,
+		"dataspaceId":           cfg.DataspaceId,
+		"dataspaceTitle":        cfg.DataspaceTitle,
+		"certificateConfigured": certConfigured,
+		"oidcDisabled":          cfg.OIDCDisable,
+	})
+}
+
+// TestConnection godoc
+// @Summary      Test the satellite connection
+// @Description  Performs a real owner-token exchange and a version probe against the configured satellite and reports the result. Read-only.
+// @Tags         registry
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /registry/test [post]
+func (h *HandlerRegistry) TestConnection(c *fiber.Ctx) error {
+	client := &http.Client{}
+	// A successful owner-token exchange proves base URL + issuer + credentials all
+	// work end to end (this is the actual "connect").
+	token, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"ok":            false,
+			"tokenObtained": false,
+			"error":         err.Error(),
+		})
+	}
+	version, detected := satellite.DetectFrameworkVersion(h.Config)
+	if strings.TrimSpace(version) == "" {
+		version = strings.TrimSpace(h.Config.SatelliteVersion)
+	}
+	return c.JSON(fiber.Map{
+		"ok":              true,
+		"tokenObtained":   token != "",
+		"version":         version,
+		"claimModel":      strings.HasPrefix(version, "3"),
+		"versionDetected": detected,
+	})
+}
+
+// GetDataspaces godoc
+// @Summary      List dataspaces from the Participant Registry
+// @Description  Fetches the dataspaces registered in the satellite (server-side, owner-token authenticated) and returns a clean [{id, title}] list for selection.
+// @Tags         registry
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /registry/dataspaces [get]
+func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
+	client := &http.Client{}
+	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	}
+
+	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, "/dataspaces"), nil)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to fetch dataspaces")
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: GET /dataspaces status=%d", resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return responses.ErrorResponse(c, resp.StatusCode, "satellite dataspaces request failed")
+	}
+
+	// The response wraps a signed JWT (dataspacesToken / dataspaces_token) whose
+	// payload carries the dataspace list; unwrap and flatten to {id, title}.
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to parse dataspaces response")
+	}
+	token, _ := wrapper["dataspacesToken"].(string)
+	if token == "" {
+		token, _ = wrapper["dataspaces_token"].(string)
+	}
+
+	dataspaces := []fiber.Map{}
+	if parts := strings.Split(token, "."); len(parts) == 3 {
+		if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
+			var claims map[string]interface{}
+			if json.Unmarshal(payload, &claims) == nil {
+				dataspaces = extractDataspaces(claims)
+			}
+		}
+	}
+
+	return c.JSON(fiber.Map{"dataspaces": dataspaces})
+}
+
+// extractDataspaces defensively pulls {id, title} entries out of a decoded
+// dataspacesToken payload, tolerating the different nestings the satellite may
+// use (dataspacesInfo as an array, or wrapping a `dataspaces` array).
+func extractDataspaces(claims map[string]interface{}) []fiber.Map {
+	out := []fiber.Map{}
+	var arr []interface{}
+	switch v := claims["dataspacesInfo"].(type) {
+	case []interface{}:
+		arr = v
+	case map[string]interface{}:
+		if inner, ok := v["dataspaces"].([]interface{}); ok {
+			arr = inner
+		}
+	}
+	if arr == nil {
+		if v, ok := claims["dataspaces"].([]interface{}); ok {
+			arr = v
+		}
+	}
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id, _ := m["id"].(string)
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		title, _ := m["title"].(string)
+		out = append(out, fiber.Map{"id": id, "title": title})
+	}
+	return out
+}
+
 // GetRegistry godoc
 // @Summary      List authorisation registries
 // @Description  Fetches Authorisation Registry parties from the iSHARE Satellite and returns the decoded JWT payload.
@@ -339,12 +495,20 @@ func (h *HandlerRegistry) GetParticipantDetail(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": party})
 }
 
-// fetchPartyByID fetches a single party from the satellite by its id/EORI using
-// the satellite's exact-match `eori` query. Returns (nil, nil) when no party
-// matches.
+// fetchPartyByID fetches a single party from the satellite by its id. The v3
+// /parties endpoint filters by `id` (the DID); v2 satellites use `eori`.
+// IMPORTANT: a v3 satellite IGNORES the `eori` param and returns the full
+// (unfiltered) page, so querying with the wrong param silently yields the first
+// party on the page — a different participant than requested. Returns (nil, nil)
+// when no party matches.
 func (h *HandlerRegistry) fetchPartyByID(id string) (interface{}, error) {
 	q := url.Values{}
-	q.Set("eori", id)
+	claimModel := strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3")
+	if claimModel {
+		q.Set("id", id)
+	} else {
+		q.Set("eori", id)
+	}
 
 	decoded, err := h.fetchSatelliteParties("?" + q.Encode())
 	if err != nil {
@@ -355,10 +519,29 @@ func (h *HandlerRegistry) fetchPartyByID(id string) (interface{}, error) {
 	if h.Config.SatelliteDebug {
 		log.Printf("satellite: participant detail id=%q matched=%d", id, len(data))
 	}
-	if len(data) == 0 {
-		return nil, nil
+	// Return the party whose id matches the request — never blindly data[0]: if a
+	// satellite ignores the filter it returns the whole page in arbitrary order.
+	for _, e := range data {
+		if m, ok := e.(map[string]interface{}); ok && partyHasID(m, id) {
+			return m, nil
+		}
 	}
-	return data[0], nil
+	// Fall back to the sole result only when the satellite genuinely narrowed to one.
+	if len(data) == 1 {
+		return data[0], nil
+	}
+	return nil, nil
+}
+
+// partyHasID reports whether a party object's identifier matches id, checking the
+// v3 `id` (DID) and v2 `party_id` fields.
+func partyHasID(m map[string]interface{}, id string) bool {
+	for _, k := range []string{"id", "party_id"} {
+		if v, ok := m[k].(string); ok && v == id {
+			return true
+		}
+	}
+	return false
 }
 
 // fetchSatelliteParties queries the satellite /parties endpoint (with an

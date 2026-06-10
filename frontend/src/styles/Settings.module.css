@@ -496,6 +496,81 @@
   border-color: var(--button-primary, #eb5e55);
 }
 
+/* Named-theme library toolbar (select / name / save / apply / delete). */
+.themeLibrary {
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #d4d2d4);
+  border-radius: 8px;
+  background: #fafafa;
+}
+.themeLibraryRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.themeNameInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+}
+.themeNameInput:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+.libraryHint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-secondary, #61265e);
+  opacity: 0.85;
+}
+.themeLibraryActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.activeThemeBadge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #61265e);
+}
+.themeLibraryButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.applyButton {
+  flex: 0 0 auto;
+  background-color: var(--button-primary, #eb5e55);
+  color: #fff;
+  border: none;
+  padding: 0.35rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.applyButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #c84152);
+}
+.applyButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .themeLibraryRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Theme: live preview ---- */
 .themePreview {
   margin-top: 1.25rem;

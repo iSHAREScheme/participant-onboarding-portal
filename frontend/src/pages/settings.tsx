@@ -13,8 +13,11 @@ import {
   brandThemeColors,
   applyThemeColors,
   isValidHex,
+  normalizeThemeColors,
+  parseSavedThemes,
   ThemeColorKey,
   ThemeColors,
+  SavedTheme,
 } from "config/themeTokens";
 import {
   FONT_OPTIONS,
@@ -48,6 +51,12 @@ const Settings: NextPage = () => {
     fontHeading: string;
     fontBody: string;
   }>(() => brandFonts());
+  // Named-theme library: saved themes, which one is published (active), and the
+  // theme currently loaded in the editor plus its (editable) name.
+  const [savedThemes, setSavedThemes] = useState<SavedTheme[]>([]);
+  const [activeThemeName, setActiveThemeName] = useState<string>("");
+  const [selectedThemeName, setSelectedThemeName] = useState<string>("");
+  const [themeName, setThemeName] = useState<string>("");
 
   // Branding
   const [description, setDescription] = useState("");
@@ -64,6 +73,27 @@ const Settings: NextPage = () => {
   const [version, setVersion] = useState("");
   const [claimModel, setClaimModel] = useState(false);
   const [connStatus, setConnStatus] = useState<ConnStatus>("checking");
+  // Resolved connection details (for display) + editable non-secret overrides.
+  const [conn, setConn] = useState<Record<string, any>>({});
+  const [sat, setSat] = useState({
+    satelliteBaseUrl: "",
+    satelliteIss: "",
+    satelliteAud: "",
+    satelliteVersion: "",
+    satelliteEpCreationEndpoint: "",
+    satellitePartiesEndpoint: "",
+    satelliteTokenEndpoint: "",
+    satelliteTokenScope: "",
+    dataspaceTitle: "",
+  });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<
+    { ok: boolean; error?: string; version?: string } | null
+  >(null);
+  // Dataspaces fetched from the Participant Registry (for the selector).
+  const [dataspaces, setDataspaces] = useState<
+    Array<{ id: string; title?: string }>
+  >([]);
   // Save / upload feedback
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -110,6 +140,13 @@ const Settings: NextPage = () => {
           ? savedTheme.fontBody
           : fallbackFonts.fontBody,
       });
+      // Load the saved theme library + which theme is currently published live.
+      const library = parseSavedThemes(data.themes);
+      const active = typeof data.activeTheme === "string" ? data.activeTheme : "";
+      setSavedThemes(library);
+      setActiveThemeName(active);
+      setSelectedThemeName(active);
+      setThemeName(active);
       if (data.logoPath) {
         const logoRes = await api.fetchLogo();
         setImagePreview(URL.createObjectURL(logoRes.data));
@@ -127,9 +164,22 @@ const Settings: NextPage = () => {
   const checkStatus = useCallback(async () => {
     setConnStatus("checking");
     try {
-      const res = await api.fetchSatelliteVersion();
-      setVersion((res.data?.version ?? "").toString());
-      setClaimModel(Boolean(res.data?.claimModel));
+      const res = await api.fetchConnection();
+      const d = res.data || {};
+      setConn(d);
+      setVersion((d.version ?? "").toString());
+      setClaimModel(Boolean(d.claimModel));
+      setSat({
+        satelliteBaseUrl: d.baseUrl || "",
+        satelliteIss: d.iss || "",
+        satelliteAud: d.aud || "",
+        satelliteVersion: d.version || "",
+        satelliteEpCreationEndpoint: d.epCreationEndpoint || "",
+        satellitePartiesEndpoint: d.partiesEndpoint || "",
+        satelliteTokenEndpoint: d.tokenEndpoint || "",
+        satelliteTokenScope: d.tokenScope || "",
+        dataspaceTitle: d.dataspaceTitle || "",
+      });
     } catch (e) {
       setVersion("");
     }
@@ -139,7 +189,44 @@ const Settings: NextPage = () => {
     } catch (e) {
       setConnStatus("disconnected");
     }
+    // Load the registry's dataspaces for the selector (tolerant of failure).
+    try {
+      const dsRes = await api.fetchDataspaces();
+      setDataspaces(
+        Array.isArray(dsRes.data?.dataspaces) ? dsRes.data.dataspaces : []
+      );
+    } catch (e) {
+      setDataspaces([]);
+    }
   }, [api]);
+
+  // Real connectivity test: owner-token exchange + version probe on the satellite.
+  const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await api.testConnection();
+      const d = res.data || {};
+      setTestResult({ ok: Boolean(d.ok), error: d.error, version: d.version });
+      if (d.ok) {
+        setConnStatus("connected");
+        if (d.version) {
+          setVersion(String(d.version));
+          setClaimModel(Boolean(d.claimModel));
+        }
+      } else {
+        setConnStatus("disconnected");
+      }
+    } catch (e: any) {
+      setTestResult({
+        ok: false,
+        error: e?.response?.data?.error || e?.message,
+      });
+      setConnStatus("disconnected");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   // AdminRoute calls this once the admin is authorized (token is ready).
   const onAuthorized = useCallback(() => {
@@ -197,8 +284,11 @@ const Settings: NextPage = () => {
         dataspaceId,
         agreements,
         hideCapabilitiesUrl,
+        ...sat,
       });
       flash("success", t("settings.messages.saveSuccess"));
+      // Reflect the now-applied satellite overrides (resolved values + status).
+      void checkStatus();
     } catch (err) {
       flash("error", t("settings.messages.saveFailed"));
     } finally {
@@ -230,11 +320,131 @@ const Settings: NextPage = () => {
     flash("success", t("settings.theme.messages.resetDone"));
   };
 
+  // --- Named themes (library) -------------------------------------------
+  // Insert or overwrite a theme in the library, matched by name.
+  const upsertTheme = (list: SavedTheme[], theme: SavedTheme): SavedTheme[] => {
+    const idx = list.findIndex((x) => x.name === theme.name);
+    if (idx === -1) return [...list, theme];
+    const next = list.slice();
+    next[idx] = theme;
+    return next;
+  };
+
+  // The editor's current values as a SavedTheme (without a name).
+  const editorTheme = (name: string): SavedTheme => ({
+    name,
+    colors: { ...themeColors },
+    fontHeading: themeFonts.fontHeading,
+    fontBody: themeFonts.fontBody,
+  });
+
+  // True when the editor currently holds the untouched brand defaults.
+  const editorIsBrandDefault = (): boolean => {
+    const c = brandThemeColors();
+    const f = brandFonts();
+    const sameColors = (Object.keys(c) as ThemeColorKey[]).every(
+      (k) => (themeColors[k] || "").toLowerCase() === c[k].toLowerCase()
+    );
+    return (
+      sameColors &&
+      themeFonts.fontHeading === f.fontHeading &&
+      themeFonts.fontBody === f.fontBody
+    );
+  };
+
+  // Load a theme ("" = brand default, else a saved name) into the editor + preview.
+  const handleSelectTheme = (name: string) => {
+    setSelectedThemeName(name);
+    setThemeName(name);
+    let colors = brandThemeColors();
+    let fonts = brandFonts();
+    if (name) {
+      const found = savedThemes.find((x) => x.name === name);
+      if (found) {
+        colors = normalizeThemeColors(found.colors);
+        fonts = {
+          fontHeading: isFontKey(found.fontHeading)
+            ? found.fontHeading
+            : fonts.fontHeading,
+          fontBody: isFontKey(found.fontBody) ? found.fontBody : fonts.fontBody,
+        };
+      }
+    }
+    setThemeColors(colors);
+    setThemeFonts(fonts);
+    applyThemeColors(colors);
+    applyThemeFonts(fonts);
+  };
+
+  // Save the current editor values into the library (a draft) — does NOT go live.
   const handleSaveTheme = async () => {
+    const name = themeName.trim();
+    if (!name) {
+      flash("error", t("settings.theme.library.nameRequired"));
+      return;
+    }
     setIsSaving(true);
     try {
-      await api.patchSettings({ theme: { ...themeColors, ...themeFonts } });
-      flash("success", t("settings.messages.saveSuccess"));
+      const next = upsertTheme(savedThemes, editorTheme(name));
+      await api.patchSettings({ themes: next });
+      setSavedThemes(next);
+      setSelectedThemeName(name);
+      flash("success", t("settings.theme.library.savedToast"));
+    } catch (err) {
+      flash("error", t("settings.messages.saveFailed"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Publish the current editor theme to all visitors (and save it, if named).
+  const handleApplyTheme = async () => {
+    const name = themeName.trim();
+    if (!name && !editorIsBrandDefault()) {
+      // A customised theme must be named before it can be published.
+      flash("error", t("settings.theme.library.nameRequired"));
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        theme: { ...themeColors, ...themeFonts },
+        activeTheme: name,
+      };
+      let nextLibrary = savedThemes;
+      if (name) {
+        nextLibrary = upsertTheme(savedThemes, editorTheme(name));
+        payload.themes = nextLibrary;
+      }
+      await api.patchSettings(payload);
+      setSavedThemes(nextLibrary);
+      setActiveThemeName(name);
+      setSelectedThemeName(name);
+      applyThemeColors(themeColors);
+      applyThemeFonts(themeFonts);
+      flash("success", t("settings.theme.library.appliedToast"));
+    } catch (err) {
+      flash("error", t("settings.messages.saveFailed"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Remove a saved theme from the library (the live one cannot be deleted).
+  const handleDeleteTheme = async () => {
+    const name = selectedThemeName;
+    if (!name) return;
+    if (name === activeThemeName) {
+      flash("error", t("settings.theme.library.deleteActiveBlocked"));
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const next = savedThemes.filter((x) => x.name !== name);
+      await api.patchSettings({ themes: next });
+      setSavedThemes(next);
+      handleSelectTheme(activeThemeName);
+      flash("success", t("settings.theme.library.deletedToast"));
     } catch (err) {
       flash("error", t("settings.messages.saveFailed"));
     } finally {
@@ -268,13 +478,17 @@ const Settings: NextPage = () => {
             <h1 className={styles.title}>{t("settings.title")}</h1>
             <p className={styles.subtitle}>{t("settings.subtitle")}</p>
           </div>
-          <button
-            className={styles.saveButton}
-            onClick={activeTab === "theme" ? handleSaveTheme : handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? t("settings.actions.saving") : t("settings.actions.save")}
-          </button>
+          {activeTab !== "theme" && (
+            <button
+              className={styles.saveButton}
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving
+                ? t("settings.actions.saving")
+                : t("settings.actions.save")}
+            </button>
+          )}
         </div>
 
         <div className={styles.tabs} role="tablist">
@@ -323,10 +537,12 @@ const Settings: NextPage = () => {
               <button
                 type="button"
                 className={styles.ghostButton}
-                onClick={checkStatus}
-                disabled={connStatus === "checking"}
+                onClick={handleTest}
+                disabled={testing}
               >
-                {t("settings.actions.recheck")}
+                {testing
+                  ? t("settings.connection.testing")
+                  : t("settings.connection.test")}
               </button>
             </div>
             <p className={styles.cardHint}>{t("settings.system.description")}</p>
@@ -355,48 +571,206 @@ const Settings: NextPage = () => {
                   {t(`settings.system.${connStatus}`)}
                 </span>
               </div>
+              <div className={styles.statusItem}>
+                <span className={styles.statusLabel}>
+                  {t("settings.connection.certificate")}
+                </span>
+                <span className={styles.statusValue}>
+                  {conn.certificateConfigured
+                    ? t("settings.connection.certConfigured")
+                    : t("settings.connection.certMissing")}
+                </span>
+              </div>
             </div>
-          </section>
 
-          {/* Introduction text */}
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>{t("settings.sections.introText")}</h2>
-            <div className={styles.formGroup}>
-              <label htmlFor="description" className={styles.label}>
-                {t("settings.labels.introText")}
-              </label>
-              <RichTextEditor value={description} onChange={setDescription} />
-            </div>
-          </section>
+            {testResult && (
+              <div
+                className={`${styles.notice} ${
+                  testResult.ok ? styles.noticeSuccess : styles.noticeError
+                }`}
+                role="status"
+              >
+                {testResult.ok
+                  ? t("settings.connection.testOk", {
+                      version: testResult.version || version || "",
+                    })
+                  : t("settings.connection.testFailed", {
+                      error: testResult.error || "",
+                    })}
+              </div>
+            )}
 
-          {/* Registry */}
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>{t("settings.sections.registry")}</h2>
             <div className={styles.fieldRow}>
               <div className={styles.formGroup}>
-                <label htmlFor="registrarId" className={styles.label}>
-                  {t("settings.labels.registrarId")}
+                <label htmlFor="satBaseUrl" className={styles.label}>
+                  {t("settings.connection.baseUrl")}
                 </label>
                 <input
                   type="text"
-                  id="registrarId"
-                  value={registrarId}
-                  onChange={(e) => setRegistrarId(e.target.value)}
+                  id="satBaseUrl"
                   className={styles.input}
+                  value={sat.satelliteBaseUrl}
+                  placeholder="https://satellite.example.com"
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteBaseUrl: e.target.value })
+                  }
                 />
               </div>
               <div className={styles.formGroup}>
-                <label htmlFor="dataspaceId" className={styles.label}>
-                  {t("settings.labels.dataspaceId")}
+                <label htmlFor="satIss" className={styles.label}>
+                  {t("settings.connection.iss")}
                 </label>
                 <input
                   type="text"
-                  id="dataspaceId"
-                  value={dataspaceId}
-                  onChange={(e) => setDataspaceId(e.target.value)}
+                  id="satIss"
                   className={styles.input}
+                  value={sat.satelliteIss}
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteIss: e.target.value })
+                  }
                 />
               </div>
+            </div>
+
+            <div className={styles.fieldRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="satAud" className={styles.label}>
+                  {t("settings.connection.aud")}
+                </label>
+                <input
+                  type="text"
+                  id="satAud"
+                  className={styles.input}
+                  value={sat.satelliteAud}
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteAud: e.target.value })
+                  }
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="satVersion" className={styles.label}>
+                  {t("settings.connection.version")}
+                </label>
+                <input
+                  type="text"
+                  id="satVersion"
+                  className={styles.input}
+                  value={sat.satelliteVersion}
+                  placeholder={t("settings.connection.versionPlaceholder")}
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteVersion: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className={styles.fieldRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="satTokenEp" className={styles.label}>
+                  {t("settings.connection.tokenEndpoint")}
+                </label>
+                <input
+                  type="text"
+                  id="satTokenEp"
+                  className={styles.input}
+                  value={sat.satelliteTokenEndpoint}
+                  placeholder="/connect/token"
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteTokenEndpoint: e.target.value })
+                  }
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="satScope" className={styles.label}>
+                  {t("settings.connection.tokenScope")}
+                </label>
+                <input
+                  type="text"
+                  id="satScope"
+                  className={styles.input}
+                  value={sat.satelliteTokenScope}
+                  placeholder="iSHARE"
+                  onChange={(e) =>
+                    setSat({ ...sat, satelliteTokenScope: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className={styles.fieldRow}>
+              <div className={styles.formGroup}>
+                <label htmlFor="satEpCreate" className={styles.label}>
+                  {t("settings.connection.epCreationEndpoint")}
+                </label>
+                <input
+                  type="text"
+                  id="satEpCreate"
+                  className={styles.input}
+                  value={sat.satelliteEpCreationEndpoint}
+                  placeholder="/ep_creation"
+                  onChange={(e) =>
+                    setSat({
+                      ...sat,
+                      satelliteEpCreationEndpoint: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="satParties" className={styles.label}>
+                  {t("settings.connection.partiesEndpoint")}
+                </label>
+                <input
+                  type="text"
+                  id="satParties"
+                  className={styles.input}
+                  value={sat.satellitePartiesEndpoint}
+                  placeholder="/parties"
+                  onChange={(e) =>
+                    setSat({ ...sat, satellitePartiesEndpoint: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="registrarId" className={styles.label}>
+                {t("settings.labels.registrarId")}
+              </label>
+              <input
+                type="text"
+                id="registrarId"
+                value={registrarId}
+                onChange={(e) => setRegistrarId(e.target.value)}
+                className={styles.input}
+              />
+            </div>
+            <div className={styles.formGroup}>
+              <label htmlFor="dataspaceSelect" className={styles.label}>
+                {t("settings.connection.dataspaceSelect")}
+              </label>
+              <select
+                id="dataspaceSelect"
+                className={styles.fontSelect}
+                value={dataspaceId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const ds = dataspaces.find((d) => d.id === id);
+                  setDataspaceId(id);
+                  setSat((s) => ({ ...s, dataspaceTitle: ds?.title || "" }));
+                }}
+              >
+                <option value="">
+                  {dataspaces.length
+                    ? t("settings.connection.dataspacePlaceholder")
+                    : t("settings.connection.dataspacesEmpty")}
+                </option>
+                {dataspaces.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title ? `${d.title} (${d.id})` : d.id}
+                  </option>
+                ))}
+              </select>
             </div>
             <label className={styles.checkboxLabel}>
               <input
@@ -409,6 +783,21 @@ const Settings: NextPage = () => {
             <p className={styles.helperText}>
               {t("settings.labels.hideCapabilitiesUrlHint")}
             </p>
+
+            <p className={styles.helperText}>
+              {t("settings.connection.credentialsNote")}
+            </p>
+          </section>
+
+          {/* Introduction text */}
+          <section className={styles.card}>
+            <h2 className={styles.cardTitle}>{t("settings.sections.introText")}</h2>
+            <div className={styles.formGroup}>
+              <label htmlFor="description" className={styles.label}>
+                {t("settings.labels.introText")}
+              </label>
+              <RichTextEditor value={description} onChange={setDescription} />
+            </div>
           </section>
 
           {/* Agreements */}
@@ -529,6 +918,88 @@ const Settings: NextPage = () => {
                 </button>
               </div>
               <p className={styles.cardHint}>{t("settings.theme.description")}</p>
+
+              {/* Theme library: select / name / save (draft) / apply (publish) / delete */}
+              <div className={styles.themeLibrary}>
+                <div className={styles.themeLibraryRow}>
+                  <div className={styles.colorField}>
+                    <label htmlFor="theme-select" className={styles.colorLabel}>
+                      {t("settings.theme.library.selectLabel")}
+                    </label>
+                    <select
+                      id="theme-select"
+                      className={styles.fontSelect}
+                      value={selectedThemeName}
+                      onChange={(e) => handleSelectTheme(e.target.value)}
+                    >
+                      <option value="">
+                        {t("settings.theme.library.brandDefault")}
+                      </option>
+                      {savedThemes.map((th) => (
+                        <option key={th.name} value={th.name}>
+                          {th.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.colorField}>
+                    <label htmlFor="theme-name" className={styles.colorLabel}>
+                      {t("settings.theme.library.nameLabel")}
+                    </label>
+                    <input
+                      id="theme-name"
+                      type="text"
+                      className={styles.themeNameInput}
+                      value={themeName}
+                      placeholder={t("settings.theme.library.namePlaceholder")}
+                      spellCheck={false}
+                      onChange={(e) => setThemeName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className={styles.libraryHint}>
+                  {t("settings.theme.library.hint")}
+                </p>
+                <div className={styles.themeLibraryActions}>
+                  <span className={styles.activeThemeBadge}>
+                    {t("settings.theme.library.currentlyLive", {
+                      name:
+                        activeThemeName ||
+                        t("settings.theme.library.brandDefault"),
+                    })}
+                  </span>
+                  <div className={styles.themeLibraryButtons}>
+                    <button
+                      type="button"
+                      className={styles.ghostButton}
+                      onClick={handleDeleteTheme}
+                      disabled={
+                        isSaving ||
+                        !selectedThemeName ||
+                        selectedThemeName === activeThemeName
+                      }
+                    >
+                      {t("settings.theme.library.delete")}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.ghostButton}
+                      onClick={handleSaveTheme}
+                      disabled={isSaving}
+                    >
+                      {t("settings.theme.library.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.applyButton}
+                      onClick={handleApplyTheme}
+                      disabled={isSaving}
+                    >
+                      {t("settings.theme.library.apply")}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               {/* Typography */}
               <div className={styles.colorGroup}>

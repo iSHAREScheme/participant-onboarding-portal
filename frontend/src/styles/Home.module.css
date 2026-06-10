@@ -146,3 +146,45 @@
   -webkit-mask-size: contain;
 
 }
+
+/* ---- Responsive ---- */
+/* Below ~900px the two 400px columns no longer fit side by side, so stack them
+   full-width and drop the desktop top padding. */
+@media (max-width: 900px) {
+  .container {
+    padding: 1.5rem;
+    padding-top: 1.5rem;
+  }
+  .main {
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+  .leftSection,
+  .rightSection {
+    width: 100%;
+    max-width: 560px;
+    box-sizing: border-box;
+  }
+  .leftSection {
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 1rem;
+    padding-top: 1rem;
+  }
+  .rightSection {
+    padding: 1.5rem;
+  }
+  .title,
+  .beforeTitle {
+    font-size: 1.3rem;
+  }
+  .proceedButton {
+    width: 100%;
+    justify-content: center;
+  }
+}

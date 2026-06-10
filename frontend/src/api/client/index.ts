@@ -265,6 +265,21 @@ export class API {
     return this.client.get(`/registry/version`)
   }
 
+  // Resolved (env + Settings overrides) non-secret satellite connection details.
+  fetchConnection () {
+    return this.client.get(`/registry/connection`)
+  }
+
+  // Real connectivity test: owner-token exchange + version probe on the satellite.
+  testConnection () {
+    return this.client.post(`/registry/test`)
+  }
+
+  // Dataspaces registered in the Participant Registry: { dataspaces: [{id, title}] }.
+  fetchDataspaces () {
+    return this.client.get(`/registry/dataspaces`)
+  }
+
   // Admin-only: list one page of participants from the satellite registry.
   // Pagination, name search and the active/certified filters are evaluated by
   // the satellite; the backend returns { data, page, pageSize, total, totalPages }.

@@ -19,6 +19,38 @@ type Party = Record<string, any>;
 const asArray = (v: any): any[] => (Array.isArray(v) ? v : []);
 const str = (v: any): string => (v === undefined || v === null ? "" : String(v));
 const val = (s: string): ReactNode => s || "—";
+
+// Turn a camelCase claim type into a readable label, used as a fallback when
+// there's no i18n entry (the satellite can emit claim types beyond our known set,
+// e.g. dataspaceAgreement) so the raw translation key never shows.
+const humanize = (s: string): string =>
+  s
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
+
+// Merge a freshly fetched party over the cached one, taking incoming values only
+// where they actually carry data. The satellite's single-party (?eori=) lookup
+// can return a sparser object than the list page provided — omitting top-level
+// fields like id/name (and even claims, which would flip the view back to v2) —
+// so this stops the background refresh from blanking out details already on screen.
+const mergeParty = (prev: any, next: any): any => {
+  if (!prev) return next;
+  if (!next || typeof next !== "object") return prev;
+  const out: any = { ...prev };
+  for (const key of Object.keys(next)) {
+    const v = (next as any)[key];
+    const empty =
+      v === undefined ||
+      v === null ||
+      v === "" ||
+      (Array.isArray(v) && v.length === 0) ||
+      (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
+    if (!empty) out[key] = v;
+  }
+  return out;
+};
 const truncate = (s: string, n = 64): string =>
   s.length > n ? s.slice(0, n) + "…" : s;
 
@@ -133,8 +165,12 @@ const ParticipantDetail: NextPage = () => {
       const res = await api.fetchParticipantDetail(id);
       const data = res?.data?.data ?? null;
       if (data && typeof data === "object") {
-        setParty(data);
-        cacheParticipants([data]); // keep the cache fresh for next time
+        // Merge over the cached party so a sparse refresh never blanks fields the
+        // list already supplied (id/name/claims/…); prefer fetched values only
+        // where they carry data.
+        const merged = mergeParty(cached, data);
+        setParty(merged);
+        cacheParticipants([merged]); // keep the cache fresh for next time
       } else if (!cached) {
         setParty(null);
         setErrorKey("participants.detail.notFound");
@@ -175,6 +211,13 @@ const ParticipantDetail: NextPage = () => {
 
   const f = (k: string) => t(`participants.detail.fields.${k}`);
   const sec = (k: string) => t(`participants.detail.sections.${k}`);
+  // Translate a claim type, falling back to a humanised label for any type we
+  // don't have an i18n entry for (t returns the key verbatim when it's missing).
+  const claimTypeLabel = (type: string): string => {
+    const key = `submit.claimTypes.${type}`;
+    const label = t(key);
+    return label === key ? humanize(type) : label;
+  };
 
   // --- 3.0 claim cards. A real v3 party carries a `claims` array; older or
   //     party-shaped payloads are reorganised from the flat fields below. ----
@@ -275,6 +318,12 @@ const ParticipantDetail: NextPage = () => {
   const renderClaimView = () => {
     if (!party) return null;
     const claims = deriveClaims(party);
+    // v3 stores registrarId per claim, not at the party root — surface the
+    // party's registrar in the identity section by falling back to the claims.
+    const claimRegistrar = Array.isArray(party.claims)
+      ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
+      : "";
+    const identityRegistrarId = str(party.registrar_id) || claimRegistrar;
     return (
       <>
         <section className={styles.section}>
@@ -282,7 +331,7 @@ const ParticipantDetail: NextPage = () => {
           <div className={styles.grid}>
             <Row label={f("partyId")}>{val(partyId)}</Row>
             <Row label={f("name")}>{val(partyName)}</Row>
-            <Row label={f("registrarId")}>{val(str(party.registrar_id))}</Row>
+            <Row label={f("registrarId")}>{val(identityRegistrarId)}</Row>
             <Row label={f("schemaVersion")}>{version}</Row>
           </div>
         </section>
@@ -294,7 +343,7 @@ const ParticipantDetail: NextPage = () => {
               <div className={styles.claimCard} key={i}>
                 <div className={styles.claimHead}>
                   <span className={styles.claimType}>
-                    {t(`submit.claimTypes.${c.type}`)}
+                    {claimTypeLabel(c.type)}
                   </span>
                   {c.status ? <Pill value={c.status} /> : null}
                 </div>

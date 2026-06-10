@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"onboardingportal/models"
 	"onboardingportal/utils"
 	"os"
 	"strings"
@@ -51,6 +52,21 @@ type Config struct {
 	KeycloakRealm         string
 	KeycloakAdminUsername string
 	KeycloakAdminPassword string
+	// KeycloakIdp is the eHerkenning identity-provider alias (shared with the
+	// frontend via NEXT_PUBLIC_KEYCLOAK_IDP) used to verify eHerkenning signing.
+	KeycloakIdp string
+
+	// v3.0 claim-based party creation (register-new-party). All default to the
+	// iSHARE Framework conventions (no config needed for an iSHARE PR); override
+	// per deployment. The proposal supplies the party-specific data.
+	FrameworkId                 string
+	FrameworkAgreementType      string
+	FrameworkAgreementId        string
+	FrameworkAgreementTitle     string
+	FrameworkRoleId             string
+	FrameworkRoleLoa            string
+	FrameworkRoleLegalAdherence string
+	FrameworkRoleCompliancy     string
 }
 
 func NewConfig() *Config {
@@ -103,6 +119,41 @@ func (config *Config) LoadEnvironment() error {
 	config.RegistrarId = os.Getenv("REGISTRAR_ID")
 	config.DataspaceId = os.Getenv("DATASPACE_ID")
 	config.DataspaceTitle = os.Getenv("DATASPACE_TITLE")
+
+	// v3.0 claim defaults. This portal targets the iSHARE Framework + iSHARE
+	// Participant Registry, so every value defaults to the iSHARE conventions and
+	// works with no configuration; override any of them per deployment.
+	config.FrameworkId = os.Getenv("FRAMEWORK_ID")
+	if config.FrameworkId == "" {
+		config.FrameworkId = "iSHARE"
+	}
+	config.FrameworkAgreementType = os.Getenv("FRAMEWORK_AGREEMENT_TYPE")
+	if config.FrameworkAgreementType == "" {
+		config.FrameworkAgreementType = "TermsOfUse"
+	}
+	config.FrameworkAgreementId = os.Getenv("FRAMEWORK_AGREEMENT_ID")
+	config.FrameworkAgreementTitle = os.Getenv("FRAMEWORK_AGREEMENT_TITLE")
+	if config.FrameworkAgreementTitle == "" {
+		config.FrameworkAgreementTitle = "iSHARE Terms of Use"
+	}
+	config.FrameworkRoleId = os.Getenv("FRAMEWORK_ROLE_ID")
+	if config.FrameworkRoleId == "" {
+		// Non-M2M role: avoids forcing an x509 cert for eHerkenning parties.
+		config.FrameworkRoleId = "EntitledParty"
+	}
+	config.FrameworkRoleLoa = os.Getenv("FRAMEWORK_ROLE_LOA")
+	if config.FrameworkRoleLoa == "" {
+		config.FrameworkRoleLoa = "substantial"
+	}
+	config.FrameworkRoleLegalAdherence = os.Getenv("FRAMEWORK_ROLE_LEGAL_ADHERENCE")
+	if config.FrameworkRoleLegalAdherence == "" {
+		config.FrameworkRoleLegalAdherence = "yes"
+	}
+	config.FrameworkRoleCompliancy = os.Getenv("FRAMEWORK_ROLE_COMPLIANCY_VERIFIED")
+	if config.FrameworkRoleCompliancy == "" {
+		config.FrameworkRoleCompliancy = "no"
+	}
+
 	config.SatelliteX5c = os.Getenv("SATELLITE_X5C")
 	config.SatellitePrivateKeyPath = os.Getenv("SATELLITE_PRIVATE_KEY_PATH")
 
@@ -158,6 +209,7 @@ func (config *Config) LoadEnvironment() error {
 	config.KeycloakRealm = os.Getenv("NEXT_PUBLIC_KEYCLOAK_REALM")
 	config.KeycloakAdminUsername = os.Getenv("KEYCLOAK_ADMIN_USERNAME")
 	config.KeycloakAdminPassword = os.Getenv("KEYCLOAK_ADMIN_PASSWORD")
+	config.KeycloakIdp = os.Getenv("NEXT_PUBLIC_KEYCLOAK_IDP")
 
 	config.SatelliteDebug = os.Getenv("SATELLITE_DEBUG") == "true"
 	config.OIDCDisable = os.Getenv("OIDC_DISABLE") == "true"
@@ -172,4 +224,31 @@ func normalizePEM(raw string) string {
 	normalized := strings.ReplaceAll(raw, "\\r", "")
 	normalized = strings.ReplaceAll(normalized, "\\n", "\n")
 	return normalized
+}
+
+// OverlaySatelliteSettings overrides the non-secret satellite-connection config
+// with any non-empty values persisted in Settings. Empty settings values leave
+// the env-derived config untouched (so a field reverts to its env default on the
+// next restart when cleared). Credentials (cert + private key) are never overlaid
+// — they stay env-only.
+func (config *Config) OverlaySatelliteSettings(s *models.Settings) {
+	if s == nil {
+		return
+	}
+	set := func(dst *string, v string) {
+		if strings.TrimSpace(v) != "" {
+			*dst = v
+		}
+	}
+	set(&config.SatelliteBaseUrl, s.SatelliteBaseUrl)
+	set(&config.SatelliteIss, s.SatelliteIss)
+	set(&config.SatelliteAud, s.SatelliteAud)
+	set(&config.SatelliteVersion, s.SatelliteVersion)
+	set(&config.SatelliteEpCreationEndpoint, s.SatelliteEpCreationEndpoint)
+	set(&config.SatellitePartiesEndpoint, s.SatellitePartiesEndpoint)
+	set(&config.SatelliteTokenEndpoint, s.SatelliteTokenEndpoint)
+	set(&config.SatelliteTokenScope, s.SatelliteTokenScope)
+	set(&config.RegistrarId, s.RegistrarId)
+	set(&config.DataspaceId, s.DataspaceId)
+	set(&config.DataspaceTitle, s.DataspaceTitle)
 }

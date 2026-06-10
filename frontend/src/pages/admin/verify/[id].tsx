@@ -34,6 +34,7 @@ interface BackendData {
   status: string;
   createdAt: string;
   signedAgreementPaths?: string[];
+  signedVia?: string;
   keycloakUsername: string;
 }
 
@@ -298,10 +299,20 @@ const VerifyAgreementStep = ({ api, proposalData }: VerifyAgreementStepProps) =>
     }
   };
 
+  const isEherkenningSigned = proposalData.signedVia === "eherkenning";
+
   return (
     <div className={styles.content}>
-      <h1 className={styles.title}>{t("verify.agreement.title")}</h1>
-      <p className={styles.subtitle}>{t("verify.agreement.subtitle")}</p>
+      <h1 className={styles.title}>
+        {isEherkenningSigned
+          ? t("verify.agreement.eherkenningTitle")
+          : t("verify.agreement.title")}
+      </h1>
+      <p className={styles.subtitle}>
+        {isEherkenningSigned
+          ? t("verify.agreement.eherkenningSubtitle")
+          : t("verify.agreement.subtitle")}
+      </p>
       {submitError && (
         <div className={styles.errorMessage} role="alert">
           <div>{approveFailedMessage}</div>

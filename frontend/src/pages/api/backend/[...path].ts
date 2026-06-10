@@ -75,6 +75,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ct = req.headers['content-type']
     if (ct && !['GET','HEAD'].includes(method))
       headers['Content-Type'] = String(ct)
+
+    // Forward Content-Length so the upstream receives a fixed-length body instead
+    // of a chunked stream — this lets the backend reject oversized uploads cleanly
+    // (413) rather than stalling the connection.
+    const cl = req.headers['content-length']
+    if (cl && !['GET', 'HEAD'].includes(method))
+      headers['Content-Length'] = String(cl)
     
     const accept = req.headers['accept']; if (accept) headers['Accept'] = String(accept)
     

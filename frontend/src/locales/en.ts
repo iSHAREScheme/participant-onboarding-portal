@@ -196,6 +196,7 @@ export default {
   },
   register: {
     title: "Registration",
+    stepCounter: "Step {{current}} of {{total}}",
     steps: {
       role: "Role",
       m2m: "M2M",
@@ -412,6 +413,10 @@ export default {
       receiveMessage: "Thank you for signing the agreement. We will review the agreement and when correct, sign it ourselves. You will receive an email with the signed agreement once this step is finished.",
       closeMessage: "You can now close this screen.",
       minimumFiles: "Please upload at least 2 signed agreements",
+      fileTooLarge: "Each signed agreement must be 20 MB or smaller.",
+      totalTooLarge: "The signed agreements are too large to upload together (max 45 MB).",
+      consentRequired: "Please confirm the statement above to sign with eHerkenning.",
+      signError: "We couldn't submit your signature. Please try again.",
       invalidType: "Only PDF files are accepted for agreements",
       signingMethod: "Choose signing method",
       signingMethodSubtitle: "Your onboarding application has been verified by the Association Admin. \nYou may now sign the agreements and request membership of the Association.",
@@ -544,7 +549,7 @@ export default {
     subtitle: "Manage your portal branding, registry details and onboarding agreements.",
     sections: {
       general: "General Settings",
-      system: "iSHARE connection",
+      system: "Participant Registry",
       branding: "Branding",
       registry: "Registry",
       headerImage: "Header Image",
@@ -575,12 +580,35 @@ export default {
       partyModel: "Party model (v2)",
       unknown: "Unknown"
     },
+    connection: {
+      test: "Test connection",
+      testing: "Testing…",
+      testOk: "Connected successfully (version {{version}}).",
+      testFailed: "Connection failed: {{error}}",
+      certificate: "Client certificate",
+      certConfigured: "Configured",
+      certMissing: "Not configured",
+      baseUrl: "Satellite base URL",
+      iss: "Client ID (iss)",
+      aud: "Audience (aud)",
+      version: "Framework version override",
+      versionPlaceholder: "auto-detected",
+      tokenEndpoint: "Token endpoint",
+      tokenScope: "Token scope",
+      epCreationEndpoint: "ep_creation endpoint (v2)",
+      partiesEndpoint: "Parties endpoint (v3)",
+      dataspaceSelect: "Dataspace",
+      dataspacePlaceholder: "Select a dataspace…",
+      dataspacesEmpty: "No dataspaces found in the registry.",
+      credentialsNote: "The client certificate and private key are configured via deployment environment variables and are never editable here."
+    },
     labels: {
       headerImage: "Header image",
       introText: "Introduction text",
       agreement: "Agreement",
       registrarId: "Registrar ID",
       dataspaceId: "Dataspace ID",
+      dataspaceTitle: "Dataspace title",
       agreements: "Agreements",
       hideCapabilitiesUrl: "Hide capabilities URL field",
       hideCapabilitiesUrlHint: "If enabled, applicants will not see or need to fill the capabilities URL during onboarding."
@@ -591,7 +619,23 @@ export default {
     },
     theme: {
       title: "Colours & fonts",
-      description: "Customise the portal's colours and fonts to match your organisation's brand. Defaults follow the iSHARE brand guidelines. Changes preview live and apply to everyone once you save.",
+      description: "Customise the portal's colours and fonts to match your organisation's brand. Defaults follow the iSHARE brand guidelines. Changes preview live here — Save stores a theme, and Apply publishes it to every visitor.",
+      library: {
+        selectLabel: "Theme",
+        brandDefault: "iSHARE brand default",
+        nameLabel: "Theme name",
+        namePlaceholder: "e.g. Acme Corp",
+        save: "Save theme",
+        apply: "Publish theme",
+        delete: "Delete",
+        currentlyLive: "Live now: {{name}}",
+        hint: "Save stores a theme as a draft without changing the live portal. Apply publishes the selected theme to every visitor.",
+        savedToast: "Theme saved.",
+        appliedToast: "Theme applied — every visitor now sees it.",
+        deletedToast: "Theme deleted.",
+        nameRequired: "Enter a theme name first.",
+        deleteActiveBlocked: "Apply a different theme before deleting the one that's live."
+      },
       logo: "Logo & favicon",
       logoHint: "Upload your organisation's logo (PNG, JPG or SVG). It appears in the portal header; if none is set, the default iSHARE logo is used.",
       favicon: "Browser tab icon",
@@ -629,7 +673,7 @@ export default {
       previewPrimaryBtn: "Primary action",
       previewSecondaryBtn: "Secondary",
       messages: {
-        resetDone: "Colours reset to brand defaults — save to apply."
+        resetDone: "Editor reset to the iSHARE brand defaults."
       }
     }
   },
@@ -666,6 +710,8 @@ export default {
       title: "Verify manually signed agreement",
       subtitle: "Download the agreement to verify if it is sufficient.",
       downloadText: "Download agreements",
+      eherkenningTitle: "Confirm eHerkenning signature",
+      eherkenningSubtitle: "This applicant signed the agreements electronically via eHerkenning. There are no uploaded documents to review — approving will counter-sign and complete their onboarding.",
       buttons: {
         approve: "Approve & sign",
         reject: "Reject agreement",
@@ -766,6 +812,7 @@ export default {
       frameworkRole: "Framework Role",
       x509Certificate: "X.509 Certificate",
       dataspaceMembership: "Dataspace Membership",
+      dataspaceAgreement: "Dataspace Agreement",
       idpAssertion: "IdP Assertion"
     },
     status: {

@@ -29,6 +29,9 @@ type KeycloakClaims struct {
 	jwt.RegisteredClaims
 	PreferredUsername string `json:"preferred_username,omitempty"`
 	Email             string `json:"email,omitempty"`
+	// Idp is the identity-provider alias the session authenticated through
+	// (e.g. eHerkenning). Brokered Keycloak logins expose this as the "idp" claim.
+	Idp               string `json:"idp,omitempty"`
 	RealmAccess       struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access,omitempty"`

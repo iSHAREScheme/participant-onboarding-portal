@@ -87,3 +87,55 @@ export function applyThemeColors(colors: ThemeColors | null | undefined): void {
     }
   }
 }
+
+/** A named, saved theme in the deployment's theme library. */
+export interface SavedTheme {
+  name: string;
+  colors: Record<ThemeColorKey, string>;
+  fontHeading?: string;
+  fontBody?: string;
+}
+
+/**
+ * Merge a raw colour map over the brand defaults, keeping only valid hex values.
+ * Always returns a complete colour set so the editor/preview never has gaps.
+ */
+export function normalizeThemeColors(
+  raw: unknown
+): Record<ThemeColorKey, string> {
+  const out = brandThemeColors();
+  if (raw && typeof raw === "object") {
+    const map = raw as Record<string, unknown>;
+    for (const token of THEME_COLOR_TOKENS) {
+      const value = map[token.key];
+      if (isValidHex(value)) out[token.key] = value.trim();
+    }
+  }
+  return out;
+}
+
+/**
+ * Defensively parse the persisted themes library (which may be malformed, a
+ * non-array, or contain duplicates) into a clean SavedTheme[]. Unnamed and
+ * duplicate-named entries are dropped.
+ */
+export function parseSavedThemes(raw: unknown): SavedTheme[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: SavedTheme[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push({
+      name,
+      colors: normalizeThemeColors(entry.colors),
+      fontHeading:
+        typeof entry.fontHeading === "string" ? entry.fontHeading : undefined,
+      fontBody: typeof entry.fontBody === "string" ? entry.fontBody : undefined,
+    });
+  }
+  return out;
+}

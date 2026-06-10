@@ -195,6 +195,7 @@ export default {
   },
   register: {
     title: "Registratie",
+    stepCounter: "Stap {{current}} van {{total}}",
     steps: {
       role: "Rol",
       m2m: "M2M",
@@ -408,6 +409,10 @@ export default {
       receiveMessage: "Bedankt voor het ondertekenen van de overeenkomst. Wij zullen de overeenkomst beoordelen en wanneer correct, zelf ondertekenen. U ontvangt een e-mail met de ondertekende overeenkomst zodra deze stap is voltooid.",
       closeMessage: "U kunt dit scherm nu sluiten.",
       minimumFiles: "Upload minimaal 2 getekende overeenkomsten",
+      fileTooLarge: "Elke ondertekende overeenkomst mag maximaal 20 MB zijn.",
+      totalTooLarge: "De ondertekende overeenkomsten zijn samen te groot om te uploaden (max. 45 MB).",
+      consentRequired: "Bevestig de verklaring hierboven om met eHerkenning te ondertekenen.",
+      signError: "We konden je ondertekening niet verwerken. Probeer het opnieuw.",
       invalidType: "Alleen PDF-bestanden worden geaccepteerd voor overeenkomsten",
       signingMethod: "Kies ondertekeningsmethode",
       signingMethodSubtitle: "Selecteer de methode die u wilt gebruiken om de overeenkomsten te ondertekenen.",
@@ -540,7 +545,7 @@ export default {
     subtitle: "Beheer de branding, registergegevens en onboarding-overeenkomsten van uw portaal.",
     sections: {
       general: "Algemene Instellingen",
-      system: "iSHARE-verbinding",
+      system: "Deelnemersregister",
       branding: "Branding",
       registry: "Register",
       headerImage: "Header Afbeelding",
@@ -571,12 +576,35 @@ export default {
       partyModel: "Party-model (v2)",
       unknown: "Onbekend"
     },
+    connection: {
+      test: "Verbinding testen",
+      testing: "Testen…",
+      testOk: "Succesvol verbonden (versie {{version}}).",
+      testFailed: "Verbinding mislukt: {{error}}",
+      certificate: "Clientcertificaat",
+      certConfigured: "Geconfigureerd",
+      certMissing: "Niet geconfigureerd",
+      baseUrl: "Satelliet basis-URL",
+      iss: "Client-ID (iss)",
+      aud: "Audience (aud)",
+      version: "Framework-versie (override)",
+      versionPlaceholder: "automatisch gedetecteerd",
+      tokenEndpoint: "Token-endpoint",
+      tokenScope: "Token-scope",
+      epCreationEndpoint: "ep_creation-endpoint (v2)",
+      partiesEndpoint: "Parties-endpoint (v3)",
+      dataspaceSelect: "Dataspace",
+      dataspacePlaceholder: "Kies een dataspace…",
+      dataspacesEmpty: "Geen dataspaces gevonden in het register.",
+      credentialsNote: "Het clientcertificaat en de privésleutel worden via deploy-omgevingsvariabelen geconfigureerd en zijn hier nooit bewerkbaar."
+    },
     labels: {
       headerImage: "Header-afbeelding",
       introText: "Introductietekst",
       agreement: "Overeenkomst",
       registrarId: "Registrar ID",
       dataspaceId: "Dataspace ID",
+      dataspaceTitle: "Dataspace-titel",
       agreements: "Overeenkomsten",
       hideCapabilitiesUrl: "Verberg het capabilities-URL veld",
       hideCapabilitiesUrlHint: "Indien ingeschakeld zien aanmelders dit veld niet en hoeven zij geen capabilities-URL in te vullen."
@@ -587,7 +615,23 @@ export default {
     },
     theme: {
       title: "Kleuren & lettertypen",
-      description: "Pas de kleuren en lettertypen van het portaal aan op de huisstijl van uw organisatie. De standaardwaarden volgen de iSHARE-huisstijl. Wijzigingen worden direct getoond en gelden voor iedereen zodra u opslaat.",
+      description: "Pas de kleuren en lettertypen van het portaal aan op de huisstijl van uw organisatie. De standaardwaarden volgen de iSHARE-huisstijl. Wijzigingen worden hier direct getoond — met Opslaan bewaart u een thema en met Toepassen publiceert u het naar elke bezoeker.",
+      library: {
+        selectLabel: "Thema",
+        brandDefault: "iSHARE-huisstijl (standaard)",
+        nameLabel: "Themanaam",
+        namePlaceholder: "bijv. Acme Corp",
+        save: "Thema opslaan",
+        apply: "Thema publiceren",
+        delete: "Verwijderen",
+        currentlyLive: "Nu live: {{name}}",
+        hint: "Met Opslaan bewaart u een thema als concept zonder het live portaal te wijzigen. Met Toepassen publiceert u het gekozen thema naar elke bezoeker.",
+        savedToast: "Thema opgeslagen.",
+        appliedToast: "Thema toegepast — elke bezoeker ziet het nu.",
+        deletedToast: "Thema verwijderd.",
+        nameRequired: "Voer eerst een themanaam in.",
+        deleteActiveBlocked: "Pas eerst een ander thema toe voordat u het live thema verwijdert."
+      },
       logo: "Logo & favicon",
       logoHint: "Upload het logo van uw organisatie (PNG, JPG of SVG). Het verschijnt in de portaalheader; als er geen is ingesteld, wordt het standaard iSHARE-logo gebruikt.",
       favicon: "Browsertabicoon",
@@ -625,7 +669,7 @@ export default {
       previewPrimaryBtn: "Primaire actie",
       previewSecondaryBtn: "Secundair",
       messages: {
-        resetDone: "Kleuren teruggezet naar de huisstijl — sla op om toe te passen."
+        resetDone: "Editor teruggezet naar de iSHARE-huisstijl."
       }
     }
   },
@@ -662,6 +706,8 @@ export default {
       title: "Verifieer handmatig getekende overeenkomst",
       subtitle: "Download de overeenkomst om te verifiëren of deze voldoende is.",
       downloadText: "Download overeenkomsten",
+      eherkenningTitle: "Bevestig eHerkenning-ondertekening",
+      eherkenningSubtitle: "Deze aanvrager heeft de overeenkomsten elektronisch ondertekend via eHerkenning. Er zijn geen geüploade documenten om te beoordelen — bij goedkeuring onderteken je mede en wordt de onboarding voltooid.",
       buttons: {
         approve: "Goedkeuren & tekenen",
         approving: "Goedkeuren & tekenen...",
@@ -762,6 +808,7 @@ export default {
       frameworkRole: "Framework-rol",
       x509Certificate: "X.509-certificaat",
       dataspaceMembership: "Dataspace-lidmaatschap",
+      dataspaceAgreement: "Dataspace-overeenkomst",
       idpAssertion: "IdP-assertie"
     },
     status: {

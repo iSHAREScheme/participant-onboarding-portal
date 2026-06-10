@@ -13,6 +13,7 @@ import (
 	"onboardingportal/config"
 	_ "onboardingportal/docs"
 	"onboardingportal/integrations/satellite"
+	"onboardingportal/models"
 	"onboardingportal/server"
 	"onboardingportal/server/routes"
 )
@@ -22,6 +23,19 @@ func main() {
 	err := config.LoadEnvironment()
 	if err != nil {
 		log.Fatalf("Error loading environment variables: %v", err)
+	}
+
+	server, err := server.NewServer(config)
+	if err != nil {
+		log.Fatalf("Error creating server: %v", err)
+	}
+
+	// Apply any persisted (non-secret) satellite-connection overrides from the
+	// admin Settings onto the env-derived config, before version detection, so the
+	// portal targets the satellite configured from the UI.
+	var settings models.Settings
+	if server.DB.First(&settings).Error == nil {
+		config.OverlaySatelliteSettings(&settings)
 	}
 
 	// Auto-detect the connected iSHARE framework version and select the latest
@@ -38,11 +52,6 @@ func main() {
 		} else {
 			log.Printf("satellite: no framework version advertised; using configured SATELLITE_VERSION=%q", config.SatelliteVersion)
 		}
-	}
-
-	server, err := server.NewServer(config)
-	if err != nil {
-		log.Fatalf("Error creating server: %v", err)
 	}
 
 	routes.ConfigureRoutes(server, config)

@@ -1,18 +1,41 @@
 .container {
   padding: 2rem;
   max-width: 1200px;
+  /* width:100% is required: as a flex item of the Layout's flex-column <main>,
+     `margin: 0 auto` alone makes the container shrink to its content width — so
+     the column (and the step indicator) would follow each step's content width.
+     A definite 100% keeps it a constant full width (capped at max-width). */
+  width: 100%;
   margin: 0 auto;
-  /* Add space for footer */
+  /* Fixed-height wizard column: the step indicator and the buttons are pinned by
+     flex and only the body between them scrolls, so the chrome never moves or
+     resizes between steps (and a toggling scrollbar can't shift it). The Layout's
+     <main> is a flex column with a definite height, so flex:1 fills it reliably. */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .stepsContainer {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 4rem;
   padding: 1rem 2rem;
   gap: 1rem;
   background-color: #F8F7F4;
+  /* Fixed top row of the wizard column; aligned to the content width. */
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 1.5rem;
+  box-sizing: border-box;
+}
+
+/* Compact "Step X of Y" shown instead of the bars on mobile (hidden on desktop). */
+.mobileSteps {
+  display: none;
 }
 
 .stepWrapper {
@@ -20,10 +43,20 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  /* Share the row width equally so the steps always fit, however many there are. */
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Per-step label under each bar — compact + centred so it fits the shared width. */
+.stepWrapper .content {
+  font-size: 0.85rem;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .step {
-  width: 6rem;
+  width: 100%;
   height: 8px;
   border-radius: 8px;
   background-color: rgba(1, 58, 87, 0.2);
@@ -61,6 +94,18 @@
   max-width: 800px;
   margin: auto;
   border-radius: 0.5rem;
+}
+
+/* The form content — the ONLY scrolling region, filling the space between the
+   pinned indicator and the pinned buttons. Scoped to the direct child so it
+   doesn't also match the step labels (which reuse .content). scrollbar-gutter
+   keeps the width stable whether or not a step needs to scroll. */
+.container > .content {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .description {
@@ -196,10 +241,19 @@
 }
 
 .buttonContainer {
-  padding: 0 2rem 1.25rem;
   display: flex;
   justify-content: flex-start;
   gap: 1rem;
+  /* Fixed bottom row of the wizard column: the Back/Continue buttons stay in a
+     constant spot regardless of the step's content height. */
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem 0;
+  background-color: var(--background-color, #f8f7f4);
+  border-top: 1px solid #e5e5e5;
+  box-sizing: border-box;
 }
 
 .questionContainer {
@@ -621,76 +675,113 @@
   opacity: 0.7;
 }
 
-.successContainer {
-  text-align: left;
-  padding: 2rem;
-  max-width: 600px;
-  margin: 0 auto;
-  background-color: #FBF7F4;
-  border-radius: 8px;
+/* Celebratory end-of-flow screens (agreement received + onboarding completed).
+   Centered, brand-tinted card so they read as a positive, on-brand result. */
+.successContainer,
+.completedContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 2.5rem 2rem;
+  box-sizing: border-box;
+  background-color: #fbf7fb; /* fallback for browsers without color-mix */
+  background-color: color-mix(in srgb, var(--primary-color) 5%, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
 }
 
-.successTitle {
-  color: #013A57;
-  font-size: 1.5rem;
+/* Brand-coloured badge with a check mark, reused on every success step. */
+.successIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  color: var(--primary-color);
+  background-color: #ece1ec; /* fallback for browsers without color-mix */
+  background-color: color-mix(in srgb, var(--primary-color) 12%, #fff);
+}
+
+.successIcon svg {
+  width: 34px;
+  height: 34px;
+}
+
+.successTitle,
+.completedTitle {
+  margin: 0;
+  color: var(--primary-color);
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
 }
 
-.successMessage {
-  color: #333;
+.successMessage,
+.completedMessage {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--text-primary);
   font-size: 1rem;
   line-height: 1.6;
-  margin-bottom: 1rem;
-}
-
-.completedContainer {
-  text-align: center;
-  padding: 2rem;
-}
-
-.completedTitle {
-  font-size: 2rem;
-  color: #2c5282;
-  margin-bottom: 1rem;
-}
-
-.completedMessage {
-  font-size: 1.25rem;
-  color: #4a5568;
+  white-space: pre-line; /* preserve intentional line breaks in messages */
 }
 
 .rejectedContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 2rem;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 2.5rem 2rem;
+  box-sizing: border-box;
+  background-color: #fdf3f4; /* fallback for browsers without color-mix */
+  background-color: color-mix(in srgb, var(--error-color) 6%, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
 }
 
 .rejectedTitle {
-  font-size: 2rem;
-  color: #e53e3e;
-  margin-bottom: 1rem;
+  margin: 0;
+  color: var(--error-color);
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 600;
 }
 
 .rejectedMessage {
-  font-size: 1.25rem;
-  color: #4a5568;
+  margin: 0;
+  max-width: 48ch;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 .editButton {
-  margin-top: 2rem;
-  background-color: #209BD8;
-  color: white;
+  margin-top: 1rem;
+  background-color: var(--button-primary);
+  color: #fff;
   border: none;
-  font-size: 1.1rem;
-  padding: 12px 24px;
-  font-weight: bold;
+  font-family: var(--font-button);
+  font-size: var(--button-font-size);
+  font-weight: var(--button-font-weight);
+  padding: var(--button-padding);
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: var(--button-border-radius);
   transition: background-color 0.2s;
 }
 
 .editButton:hover {
-  background-color: #209BD8BB;
+  background-color: var(--button-primary-hover);
 }
 
 .uploadContainer {
@@ -857,4 +948,62 @@
 .termsSection .inputGroup {
   margin-bottom: 0.5rem;     /* space between each checkbox+label */
   gap: 0.5rem;               /* space between checkbox and label */
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  /* On mobile, drop the bar indicator entirely and show a compact "Step X of Y"
+     plus the current step name — far clearer than ~7 squeezed bars. */
+  .stepsContainer {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    gap: 0;
+  }
+  .stepWrapper {
+    display: none;
+  }
+  .mobileSteps {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    width: 100%;
+  }
+  .mobileStepCount {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--secondary-color, #013a57);
+  }
+  .mobileStepName {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-secondary, #61265e);
+  }
+  /* Stack the form + side info box, and let fixed-width fields fill the screen. */
+  .formAndInfo {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .formSection,
+  .infoBox,
+  .inputGroup {
+    max-width: none;
+    width: 100%;
+  }
+  /* Confirmation summary: label above value instead of a fixed 200px column. */
+  .summaryRow {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .summaryLabel {
+    width: auto;
+  }
+  .buttonContainer {
+    padding: 0.75rem 0;
+  }
 }

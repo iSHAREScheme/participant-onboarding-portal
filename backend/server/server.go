@@ -18,7 +18,12 @@ type Server struct {
 }
 
 func NewServer(config *config.Config) (*Server, error) {
-	app := fiber.New()
+	// Fiber's default request body limit is 4MB, which silently stalls/blocks
+	// larger multipart uploads (e.g. two signed-agreement PDFs, logos, or
+	// certificates). Raise it so those uploads complete.
+	app := fiber.New(fiber.Config{
+		BodyLimit: 50 * 1024 * 1024, // 50 MB
+	})
 
 	// Enable CORS
 	app.Use(cors.New())

@@ -30,6 +30,10 @@ const Header: React.FC = () => {
     !!keycloak?.authenticated &&
     keycloak.hasRealmRole("onboarding-admin") &&
     !adminRoutesDisabled
+  // Every logged-in user gets the same header shell — hamburger + drawer (with
+  // language + account) and the logo on the right on mobile. The admin nav links
+  // inside the drawer are gated separately on showAdminNav.
+  const showDrawer = !!keycloak?.authenticated
   const idpHint =
     idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
       ? keycloakIdp
@@ -85,10 +89,10 @@ const Header: React.FC = () => {
     <header className={styles.header}>
       <div
         className={`${styles.container} ${
-          showAdminNav ? styles.withDrawer : ""
+          showDrawer ? styles.withDrawer : ""
         }`}
       >
-        {showAdminNav && (
+        {showDrawer && (
           <button
             type="button"
             className={`${styles.hamburger} ${
@@ -128,7 +132,7 @@ const Header: React.FC = () => {
             )}
           </div>
         </div>
-        {showAdminNav && (
+        {showDrawer && (
           <div
             className={`${styles.backdrop} ${
               mobileNavOpen ? styles.backdropOpen : ""
@@ -137,11 +141,12 @@ const Header: React.FC = () => {
             onClick={() => setMobileNavOpen(false)}
           />
         )}
-        {showAdminNav && (
+        {showDrawer && (
           <nav
             id="primary-nav"
             className={`${styles.navbar} ${mobileNavOpen ? styles.navbarOpen : ""}`}
           >
+            {showAdminNav && (
             <ul>
               <li>
                 <Link
@@ -176,6 +181,7 @@ const Header: React.FC = () => {
                 </Link>
               </li>
             </ul>
+            )}
             {/* On mobile these live in the drawer; on desktop they're hidden here
                 and shown in the top-bar right section instead. */}
             <div className={styles.drawerExtras}>

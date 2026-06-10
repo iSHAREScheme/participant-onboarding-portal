@@ -8,6 +8,7 @@ import { FormInput, Tooltip } from "../components";
 import Placeholder from "../components/Placeholder";
 import EmailNotification from "util/notify"
 import preValidateEidasCert from "util/validateEidas"
+import { extractCertificateFields } from "util/certificate"
 import API from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
@@ -198,6 +199,11 @@ interface FormData {
     kvkNumber: string
     partyId: string
     partyName: string
+    // eIDAS certificate fields parsed at upload, sent with the proposal so the
+    // backend can build the v3 x509Certificate identity claim at party creation.
+    certSubjectName?: string
+    certX5c?: string
+    certX5tS256?: string
   }
   eidasCert?: File
   location: {
@@ -233,11 +239,27 @@ interface FormData {
 
 
 
+// Brand-aligned success badge (check mark) reused on every celebratory step.
+const SuccessCheckIcon = () => (
+  <div className={styles.successIcon} aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+);
+
 const SuccessScreen = () => {
   const { t } = useLanguage()
 
   return (
     <div className={styles.successContainer}>
+      <SuccessCheckIcon />
       <h1 className={styles.successTitle}>
         {t("register.agreements.receiveTitle")}
       </h1>
@@ -585,6 +607,31 @@ const Register: NextPage = () => {
     companyNameFromUserInfo ||
     kvkFromUserInfo ||
     actingSubjectId
+
+  // eHerkenning signing only works inside a verified eHerkenning session — the
+  // backend rejects it otherwise. When it isn't available we hide the option and
+  // route the user down the manual upload path, avoiding a dead-end 403.
+  const eherkenningSigningAvailable = canUseCurrentEherkenning
+
+  // Keep the chosen signing method valid for the current session: once the
+  // session is known, default to eHerkenning when available, otherwise force
+  // manual. Leaves an explicit user choice untouched.
+  useEffect(() => {
+    if (!isAuthenticated) return // wait until the session (and its idp) is known
+    setFormData((prev) => {
+      const current = prev.signingMethod.method
+      const next = eherkenningSigningAvailable
+        ? current === ""
+          ? "eherkenning"
+          : current
+        : "manual"
+      if (next === current) return prev
+      return {
+        ...prev,
+        signingMethod: { ...prev.signingMethod, method: next },
+      }
+    })
+  }, [isAuthenticated, eherkenningSigningAvailable])
 
   useEffect(() => {
     if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName && !kvkFromUserInfo) return;
@@ -1257,9 +1304,16 @@ const Register: NextPage = () => {
         // prefill formData
         formData.association.authRegistry = registry.party_id
         formData.association.authRegistryName = registry.name
-        formData.association.authRegistryUrl = registry.url
+        // The registry list carries only id + name, so only adopt a URL when one
+        // is actually present; otherwise keep the existing value (an env default or
+        // empty) so the fields below stay user-editable instead of locked + blank.
+        formData.association.authRegistryUrl =
+          (registry as any).url ?? formData.association.authRegistryUrl ?? ""
         if (!hideCapabilitiesUrlField) {
-          formData.association.capabilitiesUrl = registry.capabilities_url
+          formData.association.capabilitiesUrl =
+            (registry as any).capabilities_url ??
+            formData.association.capabilitiesUrl ??
+            ""
         }
       }
     } else {
@@ -1400,9 +1454,31 @@ const Register: NextPage = () => {
   };
 
   const handleSignAndCommit = async () => {
-    if (formData.agreements.files.length < 2) {
-      setUploadError(t("register.agreements.minimumFiles"));
-      return;
+    setUploadError("");
+    const isEherkenning = formData.signingMethod.method === "eherkenning";
+
+    if (isEherkenning) {
+      // eHerkenning signing is consent-based: the authenticated eHerkenning
+      // identity plus explicit consent is the signature — no files are uploaded.
+      if (!formData.agreements.eherkenningConsent) {
+        setUploadError(t("register.agreements.consentRequired"));
+        return;
+      }
+    } else {
+      // Manual signing requires at least two uploaded, signed documents.
+      if (formData.agreements.files.length < 2) {
+        setUploadError(t("register.agreements.minimumFiles"));
+        return;
+      }
+      // Guard the combined upload size against the backend body limit (50MB).
+      const totalBytes = formData.agreements.files.reduce(
+        (sum, f) => sum + f.size,
+        0
+      );
+      if (totalBytes > 45 * 1024 * 1024) {
+        setUploadError(t("register.agreements.totalTooLarge"));
+        return;
+      }
     }
 
     try {
@@ -1411,11 +1487,24 @@ const Register: NextPage = () => {
         throw new Error("Backend URL not configured");
       }
 
-      // Create FormData object for multipart/form-data
+      // Create FormData object for multipart/form-data. The signing method tells
+      // the backend whether to expect uploaded documents (manual) or to record a
+      // consent-based eHerkenning signature.
       const formDataToSend = new FormData();
-      formData.agreements.files.forEach((file, index) => {
-        formDataToSend.append(`signedAgreement${index + 1}`, file);
-      });
+      if (isEherkenning) {
+        formDataToSend.append("signingMethod", "eherkenning");
+        formDataToSend.append("eherkenningConsent", "true");
+        // The current (eHerkenning-brokered) session token serves as the identity
+        // assertion for the v3 idpAssertion claim at party creation.
+        if (keycloak?.token) {
+          formDataToSend.append("idpAssertion", keycloak.token);
+        }
+      } else {
+        formDataToSend.append("signingMethod", "manual");
+        formData.agreements.files.forEach((file, index) => {
+          formDataToSend.append(`signedAgreement${index + 1}`, file);
+        });
+      }
       formDataToSend.append(
         "keycloakUsername",
         keycloak?.tokenParsed?.preferred_username || ""
@@ -1433,10 +1522,14 @@ const Register: NextPage = () => {
       }
 
       setValidationError("");
-      setCurrentStep(10);
+      setCurrentStep(steps.completed);
     } catch (error) {
       console.error("Error signing agreements:", error);
-      setValidationError(error.message || "Failed to sign agreements");
+      // Prefer the backend's specific message (e.g. the eHerkenning session
+      // check) over the generic axios error, falling back to a friendly default.
+      const detail =
+        (error as any)?.response?.data?.error || (error as any)?.message;
+      setUploadError(detail || t("register.agreements.signError"));
     } finally {
       setIsSubmitting(false);
     }
@@ -1465,12 +1558,27 @@ const Register: NextPage = () => {
         return
       }
 
+      // Parse the certificate into the fields the v3 x509Certificate identity
+      // claim needs (x5c, x5t#s256 thumbprint, subject DN). Best-effort: a parse
+      // failure must not block onboarding (irrelevant on a v2 satellite).
+      let certFields:
+        | { x5c: string; thumbprint: string; subjectName: string }
+        | null = null
+      try {
+        certFields = await extractCertificateFields(file)
+      } catch (e) {
+        console.error("[extractCertificateFields Error]", e)
+      }
+
       setFormData((prev) => ({ ...prev, eidasCert: file }))
       setFormData((prev) => ({
         ...prev,
         idCheck: {
           ...prev.idCheck,
           idCheckMethod: "eidas",
+          certSubjectName: certFields?.subjectName,
+          certX5c: certFields?.x5c,
+          certX5tS256: certFields?.thumbprint,
         },
       }))
       setUploadError("")
@@ -1486,9 +1594,10 @@ const Register: NextPage = () => {
         return
       }
 
-      // Validate file size - max 100MB
-      if (file.size > 100 * 1024 * 1024) {
-        setUploadError("File size exceeds 100MB limit")
+      // Validate file size — keep each file well under the backend's 50MB total
+      // upload limit so two signed agreements always fit.
+      if (file.size > 20 * 1024 * 1024) {
+        setUploadError(t("register.agreements.fileTooLarge"))
         return
       }
 
@@ -2191,7 +2300,6 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
-                  disabled={isSingleAssociation}
                   label={t("register.association.authRegistryUrl")}
                   id="authRegistryUrl"
                   name="authRegistryUrl"
@@ -2215,7 +2323,6 @@ const Register: NextPage = () => {
               {!hideCapabilitiesUrlField && (
                 <div className={styles.inputGroup}>
                   <FormInput
-                    disabled={isSingleAssociation}
                     label={t("register.association.capabilitiesUrl")}
                     id="capabilitiesUrl"
                     name="capabilitiesUrl"
@@ -2520,6 +2627,7 @@ const Register: NextPage = () => {
 
             <div className={styles.questionContainer}>
               <div className={styles.radioGroup}>
+                {eherkenningSigningAvailable && (
                 <div className={styles.radioOption}>
                   <input
                     type="radio"
@@ -2537,6 +2645,7 @@ const Register: NextPage = () => {
                     {t("register.agreements.eherkenningSigningDescription")}
                   </div>
                 </div>
+                )}
 
                 <div className={styles.radioOption}>
                   <input
@@ -2569,8 +2678,9 @@ const Register: NextPage = () => {
       case steps.agreement: // Agreements step
         return (
           <>
-            {formData.signingMethod.method === "manual" ? (
-              // Manual signing - updated file upload interface
+            {formData.signingMethod.method !== "eherkenning" ? (
+              // Manual signing - updated file upload interface (also the safe
+              // default when no method is selected / eHerkenning is unavailable)
               <div className={styles.signAgreementsContainer}>
                 <h3>{t("register.agreements.manualTitle")}</h3>
                 <p className={styles.description}>{t("register.agreements.manualDescription")}</p>
@@ -2722,6 +2832,9 @@ const Register: NextPage = () => {
                     {t("register.agreements.confirmText")}
                   </label>
                 </div>
+                {uploadError && (
+                  <div className={styles.errorMessage}>{uploadError}</div>
+                )}
                 <div className={styles.buttonContainer}>
                   <button className={styles.backButton} onClick={handleBack}>
                     {t("register.agreements.back")}
@@ -2748,6 +2861,7 @@ const Register: NextPage = () => {
       case steps.completed: // Completed step
         return (
           <div className={styles.completedContainer}>
+            <SuccessCheckIcon />
             <h1 className={styles.completedTitle}>
               {t("register.completed.title")}
             </h1>
@@ -2792,6 +2906,22 @@ const Register: NextPage = () => {
       <div className={styles.container}>
         {currentStep <= steps.confirm && ( // Only show steps container for steps 0-6
           <div className={styles.stepsContainer}>
+            <div className={styles.mobileSteps}>
+              <span className={styles.mobileStepCount}>
+                {t("register.stepCounter", {
+                  current:
+                    progressStepKeys.findIndex((k) => steps[k] === currentStep) + 1,
+                  total: progressStepKeys.length,
+                })}
+              </span>
+              <span className={styles.mobileStepName}>
+                {t(
+                  `register.steps.${
+                    progressStepKeys.find((k) => steps[k] === currentStep) ?? "role"
+                  }`
+                )}
+              </span>
+            </div>
             {progressStepKeys.map((stepKey) => {
               const stepNumber = steps[stepKey]
               const isActive = stepNumber === currentStep
@@ -2823,44 +2953,43 @@ const Register: NextPage = () => {
               <div className={styles.errorMessage}>{t(validationError)}</div>
             )}
           </div>
-
-          {(currentStep <= steps.confirm || currentStep === steps.signingMethod) && ( // Show navigation buttons for steps 0-6 and 8
-            <div className={styles.buttonContainer}>
-              {canGoBack && (
-                <button
-                  className={`${styles.backButton} ${isSubmitting || submitSuccess ? styles.disabled : ""
-                    }`}
-                  onClick={handleBack}
-                  disabled={isSubmitting || submitSuccess}
-                >
-                  {t("register.confirm.buttons.back")}
-                </button>
-              )}
-              {(currentStep < steps.confirm || currentStep === steps.signingMethod) && (
-                <button
-                  className={styles.continueButton}
-                  onClick={handleContinue}
-                >
-                  {currentStep === steps.signingMethod ? t("register.agreements.title") : t("register.confirm.buttons.continue")}
-                </button>
-              )}
-              {currentStep === steps.confirm && (
-                <button
-                  className={`${styles.submitButton} ${isSubmitDisabled ? styles.disabled : ""}`}
-                  onClick={handleContinue}
-                  disabled={isSubmitDisabled}
-                >
-                  {submitSuccess
-                    ? t("register.confirm.buttons.submitted")
-                    : t("register.confirm.buttons.submit")}
-                </button>
-              )}
-            </div>
-          )}
-          {/* <pre style={{ whiteSpace: "pre-wrap" }}>
-            {JSON.stringify(formData, null, 2)}
-          </pre> */}
         </div>
+
+        {/* Pinned footer: kept OUTSIDE the scrolling content so it stays at the
+            bottom of the wizard column on every step (short or tall). */}
+        {(currentStep <= steps.confirm || currentStep === steps.signingMethod) && ( // Show navigation buttons for steps 0-6 and 8
+          <div className={styles.buttonContainer}>
+            {canGoBack && (
+              <button
+                className={`${styles.backButton} ${isSubmitting || submitSuccess ? styles.disabled : ""
+                  }`}
+                onClick={handleBack}
+                disabled={isSubmitting || submitSuccess}
+              >
+                {t("register.confirm.buttons.back")}
+              </button>
+            )}
+            {(currentStep < steps.confirm || currentStep === steps.signingMethod) && (
+              <button
+                className={styles.continueButton}
+                onClick={handleContinue}
+              >
+                {currentStep === steps.signingMethod ? t("register.agreements.title") : t("register.confirm.buttons.continue")}
+              </button>
+            )}
+            {currentStep === steps.confirm && (
+              <button
+                className={`${styles.submitButton} ${isSubmitDisabled ? styles.disabled : ""}`}
+                onClick={handleContinue}
+                disabled={isSubmitDisabled}
+              >
+                {submitSuccess
+                  ? t("register.confirm.buttons.submitted")
+                  : t("register.confirm.buttons.submit")}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );

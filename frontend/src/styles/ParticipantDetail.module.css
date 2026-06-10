@@ -148,13 +148,16 @@
   border-bottom: 1px solid #f0f0f0;
 }
 
+/* Matches the role badge on the participants overview (.roleBadge): a primary-
+   tinted pill that tracks the theme. */
 .claimType {
-  background: #e3f2fd;
-  color: #1976d2;
-  border-radius: 6px;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  background: #ece5ec;
+  background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+  color: var(--primary-color, #61265e);
+  border-radius: 20px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .pill {
