@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, MouseEvent } from "react"
+import { useState, useMemo, useCallback, MouseEvent } from "react"
 import { NextPage } from "next"
 import styles from "styles/Admin.module.css"
 import { useRouter } from "next/router"
@@ -173,10 +173,13 @@ const Admin: NextPage = () => {
   // Client-side pagination over the loaded proposals, sized to fill the screen.
   const size = pageSize ?? 10
   const totalPages = Math.max(1, Math.ceil(applications.length / size))
-  // Keep the current page in range as the data or page size changes.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages)
-  }, [page, totalPages])
+  // Keep the current page in range as the data or page size changes. Clamping during
+  // render (instead of in an effect) avoids react-hooks/set-state-in-effect and the
+  // extra commit an effect adds: React re-renders synchronously after this setState
+  // and the condition is already satisfied on the next pass.
+  if (page > totalPages) {
+    setPage(totalPages)
+  }
   const pageItems = applications.slice((page - 1) * size, page * size)
   const blankRows =
     applications.length > 0 ? Math.max(0, size - pageItems.length) : 0

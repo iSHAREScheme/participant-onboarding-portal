@@ -103,6 +103,8 @@ export default {
       error: "Kan deelnemer niet laden.",
       notFound: "Deelnemer niet gevonden.",
       schemaLabel: "Schema",
+      viewMore: "Meer bekijken",
+      close: "Sluiten",
       sections: {
         identity: "Identiteit",
         adherence: "Naleving",

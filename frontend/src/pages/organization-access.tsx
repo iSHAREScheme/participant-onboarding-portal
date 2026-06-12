@@ -40,9 +40,24 @@ const OrganizationAccess: NextPage = () => {
     }
   }, [t]);
 
+  // Initial load on mount. Inlined (rather than calling loadOverview) so that no
+  // setState runs synchronously inside the effect; `loading` already starts true.
   useEffect(() => {
-    void loadOverview();
-  }, [loadOverview]);
+    let active = true;
+    (async () => {
+      try {
+        const response = await Api.fetchDelegationOverview();
+        if (active) setOverview(response.data);
+      } catch {
+        if (active) setError(t("organizationAccess.errors.load"));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [t]);
 
   const organization = overview?.verifiedOrganization;
   const kvkNumber = organization?.kvkNumber || "";

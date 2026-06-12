@@ -61,10 +61,14 @@ const Header: React.FC = () => {
     };
   }, []);
 
-  // Close the mobile nav drop-down after navigating to a route.
+  // Close the mobile nav drop-down after navigating to a route. Listening to router
+  // events keeps the setState in a callback (not the effect body), and is equivalent
+  // to resetting on router.pathname change.
   useEffect(() => {
-    setMobileNavOpen(false)
-  }, [router.pathname]);
+    const closeNav = () => setMobileNavOpen(false)
+    router.events.on("routeChangeComplete", closeNav)
+    return () => router.events.off("routeChangeComplete", closeNav)
+  }, [router.events]);
 
   const handleLogin = () => {
     keycloak?.login(

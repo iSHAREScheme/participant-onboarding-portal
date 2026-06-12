@@ -98,7 +98,7 @@ const Row = ({ label, children }: { label: string; children: ReactNode }) => (
 interface ClaimView {
   type: string; // key under submit.claimTypes.*
   status?: string;
-  fields: { label: string; value: ReactNode }[];
+  fields: { label: string; value: ReactNode; raw?: string }[];
 }
 
 // Humanise a claim field key for display ("capabilityUrl" → "Capability Url").
@@ -113,16 +113,21 @@ const claimFieldLabel = (k: string): string =>
 // additionalInfo flattened in. type/id/status are rendered by the card chrome.
 const claimViewFromReal = (c: any): ClaimView => {
   const skip = new Set(["type", "id", "status", "additionalInfo"]);
-  const fields: { label: string; value: ReactNode }[] = [];
+  const fields: { label: string; value: ReactNode; raw?: string }[] = [];
   const push = (k: string, v: any) => {
     if (v === null || v === undefined || typeof v === "object") return;
+    const s = str(v);
+    // Long values (e.g. an x509 x5c chain) are truncated in the card; the full
+    // value is kept in `raw` and shown in the claim modal via "View more".
     const value =
       k === "startDate" || k === "endDate"
         ? fmtDate(v)
         : /url|website/i.test(k)
-        ? renderLink(str(v))
-        : val(str(v));
-    fields.push({ label: claimFieldLabel(k), value });
+        ? renderLink(s)
+        : s.length > 80
+        ? <code className={styles.mono}>{truncate(s, 48)}</code>
+        : val(s);
+    fields.push({ label: claimFieldLabel(k), value, raw: s });
   };
   Object.entries(c || {}).forEach(([k, v]) => {
     if (!skip.has(k)) push(k, v);
@@ -144,6 +149,8 @@ const ParticipantDetail: NextPage = () => {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Claim whose full data is shown in the modal (e.g. a long x509 certificate).
+  const [openClaim, setOpenClaim] = useState<ClaimView | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -194,8 +201,11 @@ const ParticipantDetail: NextPage = () => {
   // the effect below (which also waits for the dynamic route id to hydrate).
   const onAuthorized = useCallback(() => setAuthorized(true), []);
 
+  // load() optimistically sets state synchronously (instant cache render / loading
+  // flag) before it awaits, so scheduling it in a microtask keeps that out of the
+  // effect body (react-hooks/set-state-in-effect) while still running before paint.
   useEffect(() => {
-    if (authorized && id) load();
+    if (authorized && id) queueMicrotask(load);
   }, [authorized, id, load]);
 
   // Adhere to the schema the satellite actually returned for THIS party: a real
@@ -307,8 +317,9 @@ const ParticipantDetail: NextPage = () => {
           ? Object.entries(cert).map(([k, v]) => ({
               label: k,
               value: truncate(str(v)) as ReactNode,
+              raw: str(v),
             }))
-          : [{ label: f("hash"), value: truncate(str(cert)) as ReactNode }];
+          : [{ label: f("hash"), value: truncate(str(cert)) as ReactNode, raw: str(cert) }];
       out.push({ type: "x509Certificate", fields });
     });
 
@@ -339,23 +350,37 @@ const ParticipantDetail: NextPage = () => {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{sec("claims")}</h2>
           <div className={styles.cards}>
-            {claims.map((c, i) => (
-              <div className={styles.claimCard} key={i}>
-                <div className={styles.claimHead}>
-                  <span className={styles.claimType}>
-                    {claimTypeLabel(c.type)}
-                  </span>
-                  {c.status ? <Pill value={c.status} /> : null}
+            {claims.map((c, i) => {
+              const hasLong = c.fields.some(
+                (fld) => (fld.raw || "").length > 80
+              );
+              return (
+                <div className={styles.claimCard} key={i}>
+                  <div className={styles.claimHead}>
+                    <span className={styles.claimType}>
+                      {claimTypeLabel(c.type)}
+                    </span>
+                    {c.status ? <Pill value={c.status} /> : null}
+                  </div>
+                  <div className={styles.grid}>
+                    {c.fields.map((fld, j) => (
+                      <Row key={j} label={fld.label}>
+                        {fld.value}
+                      </Row>
+                    ))}
+                  </div>
+                  {hasLong && (
+                    <button
+                      type="button"
+                      className={styles.viewMore}
+                      onClick={() => setOpenClaim(c)}
+                    >
+                      {t("participants.detail.viewMore")}
+                    </button>
+                  )}
                 </div>
-                <div className={styles.grid}>
-                  {c.fields.map((fld, j) => (
-                    <Row key={j} label={fld.label}>
-                      {fld.value}
-                    </Row>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </>
@@ -585,6 +610,48 @@ const ParticipantDetail: NextPage = () => {
           </>
         )}
       </div>
+
+      {openClaim && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setOpenClaim(null)}
+        >
+          <div
+            className={styles.modalPanel}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHead}>
+              <span className={styles.claimType}>
+                {claimTypeLabel(openClaim.type)}
+              </span>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setOpenClaim(null)}
+                aria-label={t("participants.detail.close")}
+              >
+                &times;
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              {openClaim.fields.map((fld, j) => (
+                <div className={styles.modalField} key={j}>
+                  <span className={styles.modalFieldLabel}>{fld.label}</span>
+                  {(fld.raw || "").length > 80 ? (
+                    <pre className={styles.modalFieldValueBlock}>{fld.raw}</pre>
+                  ) : (
+                    <span className={styles.modalFieldValue}>
+                      {fld.raw || "—"}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </AdminRoute>
   );
 };

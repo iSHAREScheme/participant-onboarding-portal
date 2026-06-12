@@ -1,5 +1,5 @@
 import { NextPage } from "next";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import AdminRoute from "components/AdminRoute";
 import Pagination from "components/Pagination";
@@ -284,10 +284,13 @@ const Users: NextPage = () => {
   // Client-side pagination over the loaded users, sized to fill the screen.
   const size = pageSize ?? 10;
   const totalPages = Math.max(1, Math.ceil(users.length / size));
-  // Keep the current page in range as the data or page size changes.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  // Keep the current page in range as the data or page size changes. Clamping during
+  // render (instead of in an effect) avoids react-hooks/set-state-in-effect and the
+  // extra commit an effect adds: React re-renders synchronously after this setState
+  // and the condition is already satisfied on the next pass.
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
   const pageItems = users.slice((page - 1) * size, page * size);
   const blankRows = users.length > 0 ? Math.max(0, size - pageItems.length) : 0;
 
