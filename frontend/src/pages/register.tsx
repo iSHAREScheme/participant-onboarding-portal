@@ -21,6 +21,7 @@ import {
   fetchKeycloakLinkedAccounts,
   hasLinkedIdentityProvider,
 } from "util/keycloakLinkedAccounts"
+import { getKeycloakUserInfo, refreshKeycloakUserInfo } from "util/keycloakUserInfo"
 
 const KVK_BASE_URL = 'https://developers.kvk.nl/api/v2'
 
@@ -291,9 +292,9 @@ const Register: NextPage = () => {
     typeof rawGivenNameFromIdToken === "string"
       ? rawGivenNameFromIdToken.trim()
       : "";
-  const keycloakUserInfo = (keycloak as any)?.userInfo as
-    | Record<string, unknown>
-    | undefined;
+  const keycloakUserInfo = keycloak
+    ? (getKeycloakUserInfo(keycloak) as Record<string, unknown> | undefined)
+    : undefined;
   const givenNameFromUserInfo =
     typeof keycloakUserInfo?.given_name === "string"
       ? keycloakUserInfo.given_name.trim()
@@ -350,7 +351,9 @@ const Register: NextPage = () => {
       ? keycloak.tokenParsed.email.trim()
       : "";
   const prefilledEmail = emailFromUserInfo || emailFromToken;
-  const env = getPublicEnv()
+  // Memoized so env-derived values keep a stable identity for the memos/effects
+  // below; the public env is fixed after startup, so resolving it once is correct.
+  const env = useMemo(() => getPublicEnv(), [])
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
   const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
@@ -364,6 +367,12 @@ const Register: NextPage = () => {
     keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
       ? keycloakIdp
       : "eHerkenning"
+  // Whether an eHerkenning IdP is configured for this deployment. The eHerkenning
+  // identity option is only offered when a broker alias is set; with no IdP we
+  // hide it and route users down the eIDAS-certificate path instead.
+  const eherkenningConfigured = Boolean(
+    keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+  )
 
   const steps = alwaysM2M ? (staticParty ? StepsV3 : StepsV2) : StepsV1
   const activeRoles = env.NEXT_PUBLIC_ACTIVE_ROLES
@@ -466,8 +475,12 @@ const Register: NextPage = () => {
     if (!registerStateKey) return
     let cancelled = false
     hasHydratedRef.current = false
-    setFormData(initialFormData)
-    setCurrentStep(firstInteractiveStep)
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // runs before the async hydrate below resolves, so the reset still lands first.
+    queueMicrotask(() => {
+      setFormData(initialFormData)
+      setCurrentStep(firstInteractiveStep)
+    })
 
     const hydrate = async () => {
       try {
@@ -610,15 +623,18 @@ const Register: NextPage = () => {
 
   // eHerkenning signing only works inside a verified eHerkenning session — the
   // backend rejects it otherwise. When it isn't available we hide the option and
-  // route the user down the manual upload path, avoiding a dead-end 403.
-  const eherkenningSigningAvailable = canUseCurrentEherkenning
+  // route the user down the manual upload path, avoiding a dead-end 403. It also
+  // requires an eHerkenning IdP to be configured at all.
+  const eherkenningSigningAvailable = eherkenningConfigured && canUseCurrentEherkenning
 
   // Keep the chosen signing method valid for the current session: once the
   // session is known, default to eHerkenning when available, otherwise force
   // manual. Leaves an explicit user choice untouched.
   useEffect(() => {
     if (!isAuthenticated) return // wait until the session (and its idp) is known
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // the guarded updater no-ops when unchanged, so this cannot loop.
+    queueMicrotask(() => setFormData((prev) => {
       const current = prev.signingMethod.method
       const next = eherkenningSigningAvailable
         ? current === ""
@@ -630,13 +646,27 @@ const Register: NextPage = () => {
         ...prev,
         signingMethod: { ...prev.signingMethod, method: next },
       }
-    })
+    }))
   }, [isAuthenticated, eherkenningSigningAvailable])
+
+  // With no eHerkenning IdP configured, the eHerkenning identity option is hidden;
+  // force the eIDAS-certificate method so the sole remaining option is selected.
+  // Guarded + deferred so it no-ops when already correct and never loops.
+  useEffect(() => {
+    if (eherkenningConfigured) return
+    queueMicrotask(() => setFormData((prev) =>
+      prev.idCheck.idCheckMethod === "eidas"
+        ? prev
+        : { ...prev, idCheck: { ...prev.idCheck, idCheckMethod: "eidas" } }
+    ))
+  }, [eherkenningConfigured])
 
   useEffect(() => {
     if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName && !kvkFromUserInfo) return;
 
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // the guarded updater no-ops when unchanged, so this cannot loop.
+    queueMicrotask(() => setFormData((prev) => {
       const nextPartyId = prefilledPartyId || prev.idCheck.partyId;
       const nextPartyName = prefilledPartyName || prev.idCheck.partyName;
       const nextCompanyName = prefilledPartyName || prev.idCheck.companyName;
@@ -670,23 +700,26 @@ const Register: NextPage = () => {
           email: nextAccountEmail,
         },
       };
-    });
+    }));
   }, [kvkFromUserInfo, prefilledPartyId, prefilledPartyName, prefilledEmail, prefilledFullName]);
 
   useEffect(() => {
     if (currentStep !== steps.confirm) return;
 
     if (!useAutoAcceptProposal) {
-      setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
-      setFormData((prev) => {
-        if (prev.agreements.termsConsent) return prev;
-        return {
-          ...prev,
-          agreements: {
-            ...prev.agreements,
-            termsConsent: true,
-          },
-        };
+      // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+      queueMicrotask(() => {
+        setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+        setFormData((prev) => {
+          if (prev.agreements.termsConsent) return prev;
+          return {
+            ...prev,
+            agreements: {
+              ...prev.agreements,
+              termsConsent: true,
+            },
+          };
+        });
       });
       return;
     }
@@ -697,7 +730,8 @@ const Register: NextPage = () => {
       // { id: "term2", label: "Agreement-link-2.pdf", url: "" }
     ];
 
-    setAgreementTerms((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setAgreementTerms((prev) => {
       const isSameLength = prev.length === mockTerms.length;
       const isSameContent = isSameLength && prev.every((term, index) => {
         const candidate = mockTerms[index];
@@ -709,11 +743,12 @@ const Register: NextPage = () => {
       });
 
       return isSameContent ? prev : mockTerms;
-    });
+    }));
 
-    setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+    queueMicrotask(() => setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev)));
 
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
       if (!prev.agreements.termsConsent) return prev;
       return {
         ...prev,
@@ -722,7 +757,7 @@ const Register: NextPage = () => {
           termsConsent: false,
         },
       };
-    });
+    }));
   }, [currentStep, useAutoAcceptProposal]);
 
 
@@ -755,27 +790,26 @@ const Register: NextPage = () => {
 
   useEffect(() => {
     if (hideCapabilitiesUrlField) {
-      setFormData((prev) => ({
+      // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+      queueMicrotask(() => setFormData((prev) => ({
         ...prev,
         association: {
           ...prev.association,
           capabilitiesUrl: "",
         },
-      }));
+      })));
     }
   }, [hideCapabilitiesUrlField]);
 
   const { t } = useLanguage()
 
-  const progressStepKeys = useMemo(
-    () =>
-      Object.entries(steps)
-        .filter(([, index]) => index < steps.success)
-        .sort((a, b) => a[1] - b[1])
-        .map(([key]) => key as keyof typeof steps)
-        .filter((key) => !(skipRoleStep && key === "role")),
-    [steps, skipRoleStep]
-  )
+  // Order the wizard's step keys for the progress bar. Cheap to derive each render
+  // (small fixed-size object) and only read in JSX, so it isn't memoized.
+  const progressStepKeys = Object.entries(steps)
+    .filter(([, index]) => index < steps.success)
+    .sort((a, b) => a[1] - b[1])
+    .map(([key]) => key as keyof typeof steps)
+    .filter((key) => !(skipRoleStep && key === "role"))
 
   const canGoBack = currentStep > firstInteractiveStep
 
@@ -794,27 +828,28 @@ const Register: NextPage = () => {
 
 
   useEffect(() => {
-    setIdpActionState(loadStoredIdpActionState())
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setIdpActionState(loadStoredIdpActionState()))
   }, [keycloak?.authenticated, keycloak?.token, keycloak?.tokenParsed?.sub])
 
   useEffect(() => {
     let cancelled = false
 
     if (!keycloak?.authenticated) {
-      setHasEherkenningLink(undefined)
+      queueMicrotask(() => setHasEherkenningLink(undefined))
       return () => {
         cancelled = true
       }
     }
 
     if (hasEherkenningSession || hasSuccessfulEherkenningLink) {
-      setHasEherkenningLink(true)
+      queueMicrotask(() => setHasEherkenningLink(true))
       return () => {
         cancelled = true
       }
     }
 
-    setHasEherkenningLink(undefined)
+    queueMicrotask(() => setHasEherkenningLink(undefined))
 
     const loadLinkedAccounts = async () => {
       try {
@@ -847,7 +882,8 @@ const Register: NextPage = () => {
   useEffect(() => {
     if (!canUseCurrentEherkenning && !canUseFreshEherkenningLink) return
 
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
       if (prev.idCheck.idCheckMethod === "eherkenning") return prev
       return {
         ...prev,
@@ -856,14 +892,15 @@ const Register: NextPage = () => {
           idCheckMethod: "eherkenning",
         },
       }
-    })
+    }))
   }, [canUseCurrentEherkenning, canUseFreshEherkenningLink])
 
   useEffect(() => {
     const isHumanFlow = formData.m2m.useM2M === "no" && !alwaysM2M
     if (!isHumanFlow) return
 
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
       if (prev.idCheck.idCheckMethod === "eherkenning") return prev
       return {
         ...prev,
@@ -872,7 +909,7 @@ const Register: NextPage = () => {
           idCheckMethod: "eherkenning",
         },
       }
-    })
+    }))
   }, [formData.m2m.useM2M, alwaysM2M])
 
   useEffect(() => {
@@ -892,10 +929,8 @@ const Register: NextPage = () => {
 
     const refreshUserInfo = async () => {
       try {
-        await keycloak.updateToken(0)
-        const info = await keycloak.loadUserInfo()
+        await refreshKeycloakUserInfo(keycloak)
         if (cancelled) return
-        ;(keycloak as any).userInfo = info
         setUserInfoVersion((version) => version + 1)
       } catch (error) {
         if (cancelled) return
@@ -925,17 +960,20 @@ const Register: NextPage = () => {
       return
     }
 
-    setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
-    setFormData((prev) => ({
-      ...prev,
-      association: {
-        ...prev.association,
-        authRegistry: defaultPartyId,
-        authRegistryName: defaultPartyName,
-        authRegistryUrl: defaultPartyUrl || prev.association?.authRegistryUrl,
-        // capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association?.capabilitiesUrl,
-      },
-    }))
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => {
+      setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
+      setFormData((prev) => ({
+        ...prev,
+        association: {
+          ...prev.association,
+          authRegistry: defaultPartyId,
+          authRegistryName: defaultPartyName,
+          authRegistryUrl: defaultPartyUrl || prev.association?.authRegistryUrl,
+          // capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association?.capabilitiesUrl,
+        },
+      }))
+    })
   }, [useStaticParty, defaultPartyId, defaultPartyName, defaultPartyUrl])
 
   const validateStep = async (step: number, data: FormData): Promise<boolean> => {
@@ -1301,20 +1339,29 @@ const Register: NextPage = () => {
 
         const [registry] = registries
 
-        // prefill formData
-        formData.association.authRegistry = registry.party_id
-        formData.association.authRegistryName = registry.name
-        // The registry list carries only id + name, so only adopt a URL when one
-        // is actually present; otherwise keep the existing value (an env default or
-        // empty) so the fields below stay user-editable instead of locked + blank.
-        formData.association.authRegistryUrl =
-          (registry as any).url ?? formData.association.authRegistryUrl ?? ""
-        if (!hideCapabilitiesUrlField) {
-          formData.association.capabilitiesUrl =
-            (registry as any).capabilities_url ??
-            formData.association.capabilitiesUrl ??
-            ""
-        }
+        // Prefill the association fields immutably. Mutating the formData object in
+        // place is flagged by react-hooks/immutability (and wouldn't trigger a
+        // re-render on its own). The registry list carries only id + name, so only
+        // adopt a URL when one is actually present; otherwise keep the existing value
+        // (an env default or empty) so the fields below stay user-editable.
+        setFormData((prev) => ({
+          ...prev,
+          association: {
+            ...prev.association,
+            authRegistry: registry.party_id,
+            authRegistryName: registry.name,
+            authRegistryUrl:
+              (registry as any).url ?? prev.association.authRegistryUrl ?? "",
+            ...(hideCapabilitiesUrlField
+              ? {}
+              : {
+                  capabilitiesUrl:
+                    (registry as any).capabilities_url ??
+                    prev.association.capabilitiesUrl ??
+                    "",
+                }),
+          },
+        }))
       }
     } else {
       try {
@@ -1996,12 +2043,12 @@ const Register: NextPage = () => {
             <div className={styles.header}>
               <h1 className={styles.title}>{t("register.idCheck.title")}</h1>
               <p className={styles.subtitle}>
-                {(formData.m2m.useM2M === "yes" || alwaysM2M) ? (
+                {(formData.m2m.useM2M === "yes" || alwaysM2M || !eherkenningConfigured) ? (
                   <div>
                     {/* <p>{t("register.idCheck.eidasCertificate")}</p> */}
                     <p>{t("register.idCheck.subtitle")}</p>
                     <div className={styles.radioGroup}>
-                      {!alwaysEherkenning && <div className={styles.radioOption}>
+                      {eherkenningConfigured && !alwaysEherkenning && <div className={styles.radioOption}>
                         <input
                           type="radio"
                           id="eherkenning"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ThemeConfig, getCurrentTheme, getTenantFromSubdomain } from '../config/themes';
+import { ThemeConfig, getCurrentTheme } from '../config/themes';
 import { LogoConfig, getCurrentLogo } from '../config/logos';
 
 interface UseThemeReturn {
@@ -14,9 +14,9 @@ interface UseThemeReturn {
  * Provides current theme, logo configuration, and theme switching functionality
  */
 export const useTheme = (): UseThemeReturn => {
-  const [tenantId, setTenantId] = useState<string>('demo');
+  const [tenantId] = useState<string>('demo');
   const [theme, setTheme] = useState<ThemeConfig>(getCurrentTheme());
-  const [logo, setLogo] = useState<LogoConfig>(getCurrentLogo());
+  const [logo] = useState<LogoConfig>(getCurrentLogo());
 
   // Apply CSS custom properties to document root
   const applyCSSVariables = (themeConfig: ThemeConfig) => {
@@ -83,17 +83,11 @@ export const useTheme = (): UseThemeReturn => {
     }
   };
 
-  // Apply theme on component mount and tenant change
+  // Apply the resolved theme's CSS custom properties to <html> on mount. The
+  // tenant/theme/logo resolvers are deterministic and SSR-safe, so those values are
+  // derived once in the initial state above rather than re-synced here via setState.
   useEffect(() => {
-    const currentTenantId = getTenantFromSubdomain();
-    const currentTheme = getCurrentTheme();
-    const currentLogo = getCurrentLogo();
-    
-    setTenantId(currentTenantId);
-    setTheme(currentTheme);
-    setLogo(currentLogo);
-    
-    applyCSSVariables(currentTheme);
+    applyCSSVariables(getCurrentTheme());
   }, []);
 
   // Function to manually apply a different theme (useful for testing)

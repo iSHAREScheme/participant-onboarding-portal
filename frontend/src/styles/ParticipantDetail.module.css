@@ -189,6 +189,100 @@
   word-break: break-all;
 }
 
+/* "View more" affordance on claim cards that have long/truncated values. */
+.viewMore {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--button-primary, #0066ee);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewMore:hover {
+  text-decoration: underline;
+}
+
+/* Claim-details modal (full values, e.g. an x509 certificate). */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+.modalPanel {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid #eee;
+}
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+}
+.modalClose:hover {
+  color: #000;
+}
+.modalBody {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.modalFieldLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #61265e);
+}
+.modalFieldValue {
+  font-size: 0.9rem;
+  color: var(--text-primary, #291d28);
+  word-break: break-word;
+}
+.modalFieldValueBlock {
+  margin: 0;
+  background: #f6f6f7;
+  border: 1px solid #ececec;
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 40vh;
+  overflow: auto;
+}
+
 .loading,
 .empty {
   color: #666;

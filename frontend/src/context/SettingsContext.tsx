@@ -26,6 +26,26 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
   undefined
 );
 
+// Fetch the deployment settings and apply the saved colour/font overrides + favicon
+// for every visitor, returning the logo URL to display (or null). Kept free of React
+// state so it can be shared by both the mount effect and updateLogo.
+async function fetchAndApplySettings(): Promise<string | null> {
+  const response = await fetch("/api/backend/settings");
+  const data = await response.json();
+  // Apply the deployment's saved colour + font overrides for every visitor.
+  // Until this resolves, the brand defaults from variables.css :root are shown.
+  applyThemeColors(data?.theme);
+  applyThemeFonts(data?.theme);
+  // Swap the browser-tab icon to the deployment's favicon, or the iSHARE default.
+  setFaviconLink(
+    data?.faviconPath
+      ? `/api/backend/settings/favicon?t=${Date.now()}`
+      : DEFAULT_FAVICON
+  );
+  // Add a timestamp to bust the cache and force the image to reload.
+  return data.logoPath ? `/api/backend/settings/logo?t=${Date.now()}` : null;
+}
+
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -33,32 +53,29 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateLogo = async () => {
     try {
-      const response = await fetch("/api/backend/settings");
-      const data = await response.json();
-      // Apply the deployment's saved colour + font overrides for every visitor.
-      // Until this resolves, the brand defaults from variables.css :root are shown.
-      applyThemeColors(data?.theme);
-      applyThemeFonts(data?.theme);
-      // Swap the browser-tab icon to the deployment's favicon, or the iSHARE default.
-      setFaviconLink(
-        data?.faviconPath
-          ? `/api/backend/settings/favicon?t=${Date.now()}`
-          : DEFAULT_FAVICON
-      );
-      if (data.logoPath) {
-        // Add timestamp to bust cache and force image reload
-        setLogoUrl(`/api/backend/settings/logo?t=${Date.now()}`);
-      } else {
-        setLogoUrl(null);
-      }
+      setLogoUrl(await fetchAndApplySettings());
     } catch (error) {
       console.error("Failed to fetch settings:", error);
       setLogoUrl(null);
     }
   };
 
+  // Load settings on mount. Inlined (rather than calling updateLogo) so the only
+  // setState runs after the await, satisfying react-hooks/set-state-in-effect.
   useEffect(() => {
-    updateLogo();
+    let active = true;
+    (async () => {
+      try {
+        const url = await fetchAndApplySettings();
+        if (active) setLogoUrl(url);
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
+        if (active) setLogoUrl(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (

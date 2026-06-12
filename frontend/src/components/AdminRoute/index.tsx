@@ -56,7 +56,7 @@ const AdminRoute = ({
     keycloak.hasRealmRole("onboarding-admin") ? (
       <>{children}</>
     ) : (
-      <h1 className={styles.container}>You don't have access to this page.</h1>
+      <h1 className={styles.container}>You don&apos;t have access to this page.</h1>
     )
   ) : (
     <div className={styles.container}>

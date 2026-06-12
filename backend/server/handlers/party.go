@@ -556,6 +556,25 @@ type ProposalData struct {
 	Status           string `json:"status"`
 }
 
+// kvkFromPartyID extracts the KVK number embedded in a party id of the form
+// "EU.EORI.NL.KVK<digits>". Returns "" when the id is not KVK-based (e.g. an
+// EORI or DID for a non-Dutch party).
+func kvkFromPartyID(partyID string) string {
+	idx := strings.Index(strings.ToUpper(partyID), "KVK")
+	if idx < 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range partyID[idx+3:] {
+		if r >= '0' && r <= '9' {
+			b.WriteByte(byte(r))
+		} else if b.Len() > 0 {
+			break
+		}
+	}
+	return b.String()
+}
+
 // HandlePropose godoc
 // @Summary      Submit onboarding proposal
 // @Description  Accepts a multipart form with JSON data and optional CTT proof file to create a proposal.
@@ -583,9 +602,19 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}
 	}
 
+	// The party identifier is the generic party id — KVK-based for NL eHerkenning
+	// parties, but also EORI/DID/other registration numbers for non-Dutch parties.
+	// Require that, not a KVK specifically.
+	partyID := strings.TrimSpace(proposalData.IDCheck.PartyId)
+	if partyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Proposal is missing a party identifier")
+	}
+	// KVK is optional: derive it from the party id when KVK-based (for the
+	// eHerkenning authorization match below and downstream display). May stay "".
 	proposalKvk := strings.TrimSpace(proposalData.IDCheck.KvkNumber)
 	if proposalKvk == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Proposal is missing kvkNumber")
+		proposalKvk = kvkFromPartyID(partyID)
+		proposalData.IDCheck.KvkNumber = proposalKvk
 	}
 
 	if !h.Config.OIDCDisable {
@@ -602,11 +631,19 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		} else if h.Config.SatelliteDebug {
 			log.Printf("auth: request context missing claims")
 		}
-		if tokenIdentifier == "" && !h.userCanActForKvk(c, proposalKvk) {
-			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user is missing organization identifier claim and has no delegation for this kvkNumber")
-		}
-		if tokenIdentifier != proposalKvk && !h.userCanActForKvk(c, proposalKvk) {
-			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user cannot submit proposals for this kvkNumber")
+		// When the session asserts an organization identity (e.g. eHerkenning's
+		// legalSubjectId), it must match the party being onboarded — its KVK or as
+		// embedded in the party id — or the user must be delegated. When the session
+		// carries NO organization identity (e.g. an eIDAS-certificate login),
+		// submission is allowed: authorization is then established by the uploaded
+		// certificate, admin verification and the satellite's claim validation at
+		// completion, so a non-KVK / non-eHerkenning party is not blocked here.
+		if tokenIdentifier != "" {
+			matchesParty := tokenIdentifier == proposalKvk ||
+				strings.Contains(partyID, tokenIdentifier)
+			if !matchesParty && !h.userCanActForKvk(c, proposalKvk) {
+				return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user cannot submit proposals for this party")
+			}
 		}
 	}
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "../styles/Profile.module.css";
@@ -36,11 +36,8 @@ const Profile: React.FC = () => {
     }
   }, [keycloak, t]);
 
-  useEffect(() => {
-    if (keycloak.authenticated) {
-      loadUserProfile();
-    }
-  }, [keycloak.authenticated, loadUserProfile]);
+  // Data is loaded by ProtectedRoute, which calls fetchData={loadUserProfile} once
+  // the user is authenticated — so no separate mount effect is needed here.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

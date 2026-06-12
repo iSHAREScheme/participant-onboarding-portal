@@ -8,11 +8,12 @@ import Keycloak from "keycloak-js"
 import useKeycloakInitConfig from "../hooks/useKeycloakInitConfig"
 import { useTheme } from "../hooks/useTheme"
 import { Poppins } from 'next/font/google'
-import { useMemo, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import { getPublicEnv } from 'config/publicEnv'
 import { storeKeycloakTokens } from 'util/keycloakTokens'
 import { clearStoredIdpActionState, setCompletedIdpAction } from 'util/idpActionState'
+import { setKeycloakUserInfo } from 'util/keycloakUserInfo'
 
 const poppins = Poppins({
   weight: ['300', '400', '500', '600', '700'],
@@ -69,7 +70,7 @@ function MyApp({ Component, pageProps }: AppProps) {
           try {
             await instance.updateToken(0)
             const info = await instance.loadUserInfo()
-            ;(instance as any).userInfo = info
+            setKeycloakUserInfo(instance, info)
           } catch (error) {
             console.error('Failed to refresh user info after idp link', error)
           }
@@ -79,21 +80,24 @@ function MyApp({ Component, pageProps }: AppProps) {
     return instance
   }, [isBrowser, keycloakUrl, keycloakRealm, keycloakClientId])
   
-  const keycloakProviderInitConfig = useRef(useKeycloakInitConfig())
+  // Freeze the init config at first render (changing it would re-initialise Keycloak).
+  // useState captures the first value and ignores it thereafter — without reading a
+  // ref during render (react-hooks/refs).
+  const [keycloakProviderInitConfig] = useState(useKeycloakInitConfig())
 
   
   return (
     <div>
       <KeycloakProvider
         keycloak={keycloak}
-        initConfig={keycloakProviderInitConfig.current}
+        initConfig={keycloakProviderInitConfig}
         onEvent={async (event) => {
           if (event === 'onAuthLogout') {
             clearStoredIdpActionState()
           }
           if (event === 'onAuthSuccess') {
             const info = await keycloak.loadUserInfo()
-            ;(keycloak as any).userInfo = info
+            setKeycloakUserInfo(keycloak, info)
 
             const roles: string[] = (keycloak.tokenParsed?.realm_access?.roles as string[]) || []
             const isAdmin = roles.includes('onboarding-admin')

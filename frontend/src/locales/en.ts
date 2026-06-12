@@ -104,6 +104,8 @@ export default {
       error: "Failed to load participant.",
       notFound: "Participant not found.",
       schemaLabel: "Schema",
+      viewMore: "View more",
+      close: "Close",
       sections: {
         identity: "Identity",
         adherence: "Adherence",

@@ -5,6 +5,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useUserProposal } from "../hooks/useUserProposal";
 import OnboardingStatus from "../components/OnboardingStatus";
 import { useKeycloak } from "@react-keycloak/web";
+import { useHydrated } from "../hooks/useHydrated";
 
 import API from 'api/client'
 import { getPublicEnv } from "config/publicEnv"
@@ -24,7 +25,9 @@ const Home: NextPage = () => {
   const [agreements, setAgreements] = useState<string[]>([]);
   const { proposalData, loading: proposalLoading } = useUserProposal();
   const [keycloak] = useKeycloak();
-  const [mounted, setMounted] = useState(false);
+  // false on the server + first client render, true after hydration — gates the
+  // admin-authored HTML below (DOMPurify needs a DOM) so server/client markup matches.
+  const mounted = useHydrated();
 
   const Api = new API()
 
@@ -50,12 +53,6 @@ const Home: NextPage = () => {
 
     fetchDescription();
   }, [t]);
-
-  // The intro text is admin-authored HTML; sanitise + render it on the client only
-  // (DOMPurify needs a DOM), deferring past mount so server/client markup matches.
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleProceed = () => {
     const env = getPublicEnv()

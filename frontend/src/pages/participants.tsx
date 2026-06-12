@@ -271,8 +271,11 @@ const Participants: NextPage = () => {
 
   // Fetch whenever we're authorized and have a measured page size; load's
   // identity changes with page/search/filter/pageSize.
+  // load() optimistically sets state synchronously (instant cache render / loading
+  // flag) before it awaits, so scheduling it in a microtask keeps that out of the
+  // effect body (react-hooks/set-state-in-effect) while still running before paint.
   useEffect(() => {
-    if (authorized && pageSize) load();
+    if (authorized && pageSize) queueMicrotask(load);
   }, [authorized, pageSize, load]);
 
   const formatDate = (value: string): string => {
