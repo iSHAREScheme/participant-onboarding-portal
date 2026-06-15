@@ -603,6 +603,22 @@
   text-decoration: underline;
 }
 
+/* Persistent warning shown whenever fewer than two agreements are configured
+   (onboarding can't be completed below that threshold). */
+.agreementWarning {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #f5d9a8;
+  border-left: 3px solid #d97706;
+  border-radius: 8px;
+  background: #fef6e7;
+  color: #92400e;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
 /* ---- Tabs ---- */
 .tabs {
   flex: 0 0 auto;

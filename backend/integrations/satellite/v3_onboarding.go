@@ -1,6 +1,9 @@
 package satellite
 
 import (
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"strings"
 
@@ -125,13 +128,20 @@ func BuildV3OnboardingClaims(proposal *models.Proposal, cfg V3OnboardingClaimCon
 	// 4) Mandatory identity claim: eIDAS certificate or eHerkenning assertion.
 	switch {
 	case strings.TrimSpace(proposal.CertX5c) != "":
+		subjectName, err := subjectNameFromX5C(proposal.CertX5c)
+		if err != nil {
+			return nil, fmt.Errorf("invalid eIDAS certificate payload: %w", err)
+		}
 		claims = append(claims, map[string]interface{}{
 			"type":        "x509Certificate",
 			"registrarId": cfg.RegistrarID,
 			"status":      "active",
 			"startDate":   cfg.StartDate,
 			"endDate":     cfg.EndDate,
-			"subjectName": proposal.CertSubjectName,
+			// The participant registry validates subjectName against the x5c
+			// bytes. Derive it here from the same certificate instead of trusting
+			// the frontend/display copy, whose DN formatting may differ.
+			"subjectName": subjectName,
 			// Per the iSHARE v3.0 spec, certificateType is a free string (example
 			// "eSEAL") and x5c is a single base64 string (not an array).
 			"certificateType": "eSEAL",
@@ -150,4 +160,44 @@ func BuildV3OnboardingClaims(proposal *models.Proposal, cfg V3OnboardingClaimCon
 	}
 
 	return claims, nil
+}
+
+func subjectNameFromX5C(x5c string) (string, error) {
+	cert, err := parseFirstX5CCertificate(x5c)
+	if err != nil {
+		return "", err
+	}
+	return cert.Subject.String(), nil
+}
+
+func parseFirstX5CCertificate(x5c string) (*x509.Certificate, error) {
+	certificateValue := strings.TrimSpace(x5c)
+	if certificateValue == "" {
+		return nil, fmt.Errorf("x5c is empty")
+	}
+
+	if block, _ := pem.Decode([]byte(certificateValue)); block != nil {
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		return cert, nil
+	}
+
+	// x5c is normally a single base64 DER certificate, but accept a comma-
+	// separated chain and validate the leaf certificate at index 0.
+	certificateValue = strings.TrimSpace(strings.Split(certificateValue, ",")[0])
+	der, err := base64.StdEncoding.DecodeString(certificateValue)
+	if err != nil {
+		der, err = base64.RawStdEncoding.DecodeString(certificateValue)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
 }

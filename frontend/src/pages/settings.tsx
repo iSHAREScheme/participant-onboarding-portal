@@ -608,14 +608,7 @@ const Settings: NextPage = () => {
   };
 
   const handleRemoveAgreement = async (id: string) => {
-    // Built-in agreements are required for onboarding completion — warn loudly
-    // that removing one will block applicants from finishing.
-    const target = agreements.find((a) => a.id === id);
-    const message =
-      target?.source === "builtin"
-        ? t("settings.agreements.removeBuiltinWarning")
-        : t("settings.agreements.removeConfirm");
-    if (!window.confirm(message)) return;
+    if (!window.confirm(t("settings.agreements.removeConfirm"))) return;
     try {
       await api.deleteAgreement(id);
       flash("success", t("settings.agreements.messages.removed"));
@@ -1280,6 +1273,12 @@ const Settings: NextPage = () => {
             ) : (
               <p className={styles.helperText}>
                 {t("settings.agreements.empty")}
+              </p>
+            )}
+
+            {agreements.length < 2 && (
+              <p className={styles.agreementWarning} role="alert">
+                {t("settings.agreements.minimumWarning")}
               </p>
             )}
 

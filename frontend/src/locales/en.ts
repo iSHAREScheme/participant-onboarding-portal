@@ -242,7 +242,23 @@ export default {
       eidasCertificate: "An eSeal (electronic seal) is a digital certificate that guarantees the origin and integrity of data on behalf of an organization. Issued by a trusted service provider, it confirms that the sender is a verified organization, ensuring the information is authentic and unchanged.",
       eidasProvide: "Provide your certificate here:",
       eidasInfo: "For more information about procuring such certificates, please refer to the eSEAL procurement guide.",
-
+      certPreview: {
+        title: "Certificate preview",
+        identity: "Derived identity",
+        subject: "Subject",
+        issuer: "Issuer",
+        validity: "Validity",
+        fingerprints: "Fingerprints",
+        organizationName: "Organization",
+        organizationIdentifier: "Organization ID",
+        kvkNumber: "KVK number",
+        partyId: "Party ID",
+        distinguishedName: "Distinguished name",
+        serialNumber: "Serial number",
+        validFrom: "Valid from",
+        validTo: "Valid until",
+        empty: "Not present"
+      }
     },
     form: {
       companyName: "Company Name",
@@ -632,8 +648,8 @@ export default {
       protected: "Protected · {{method}}",
       open: "Open",
       remove: "Remove",
-      removeConfirm: "Remove this agreement?",
-      removeBuiltinWarning: "This is a default onboarding agreement. Removing it means applicants will no longer be asked to sign it — and if you remove the agreements required to register a party, onboarding cannot be completed. Remove it anyway?",
+      removeConfirm: "Are you sure you want to delete this agreement?",
+      minimumWarning: "Users are unable to finish onboarding with less than 2 agreements configured.",
       typeLabel: "Type",
       types: {
         frameworkAgreement: "Framework Agreement",

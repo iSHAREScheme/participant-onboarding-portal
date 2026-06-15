@@ -9,7 +9,7 @@ import { FormInput, Tooltip, Loading } from "../components";
 import Placeholder from "../components/Placeholder";
 import EmailNotification from "util/notify"
 import preValidateEidasCert from "util/validateEidas"
-import { extractCertificateFields } from "util/certificate"
+import { extractCertificateFields, type CertificateFields } from "util/certificate"
 import API, { AgreementView } from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
@@ -829,6 +829,7 @@ const Register: NextPage = () => {
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [certificatePreview, setCertificatePreview] = useState<CertificateFields | null>(null)
   const [uploadError, setUploadError] = useState<string>("")
   const [isDragging, setIsDragging] = useState(false)
   const [registryParties, setRegistryParties] = useState<RegistryParty[]>([])
@@ -1337,6 +1338,7 @@ const Register: NextPage = () => {
     // so it won't appear on the later CTT proof upload step.
     if (currentStep === steps.idCheck) {
       setUploadedFile(null)
+      setCertificatePreview(null)
     }
 
     // TODO: better check on required data for e-herkenning id-check step
@@ -1630,9 +1632,7 @@ const Register: NextPage = () => {
       // Parse the certificate into the fields the v3 x509Certificate identity
       // claim needs (x5c, x5t#s256 thumbprint, subject DN). Best-effort: a parse
       // failure must not block onboarding (irrelevant on a v2 satellite).
-      let certFields:
-        | { x5c: string; thumbprint: string; subjectName: string }
-        | null = null
+      let certFields: CertificateFields | null = null
       try {
         certFields = await extractCertificateFields(file)
       } catch (e) {
@@ -1645,6 +1645,14 @@ const Register: NextPage = () => {
         idCheck: {
           ...prev.idCheck,
           idCheckMethod: "eidas",
+          companyName:
+            prev.idCheck.companyName || certFields?.organizationName || "",
+          kvkNumber:
+            prev.idCheck.kvkNumber || certFields?.kvkNumber || "",
+          partyId:
+            prev.idCheck.partyId || certFields?.partyId || "",
+          partyName:
+            prev.idCheck.partyName || certFields?.organizationName || "",
           certSubjectName: certFields?.subjectName,
           certX5c: certFields?.x5c,
           certX5tS256: certFields?.thumbprint,
@@ -1652,6 +1660,7 @@ const Register: NextPage = () => {
       }))
       setUploadError("")
       setUploadedFile(file)
+      setCertificatePreview(certFields)
 
       return
     }
@@ -1793,6 +1802,120 @@ const Register: NextPage = () => {
       scope: "openid profile email",
       prompt: "login"
     })
+  }
+
+  const formatCertificateDate = (value?: string) => {
+    if (!value) return t("register.idCheck.certPreview.empty")
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date)
+  }
+
+  const renderCertificateRows = (
+    rows: Array<{ label: string; value?: string }>
+  ) => (
+    <dl className={styles.certPreviewRows}>
+      {rows.map(({ label, value }) => (
+        <div className={styles.certPreviewRow} key={label}>
+          <dt>{label}</dt>
+          <dd>{value || t("register.idCheck.certPreview.empty")}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+
+  const renderAttributeRows = (attributes: CertificateFields["subjectAttributes"]) =>
+    attributes.length > 0
+      ? renderCertificateRows(
+          attributes.map((attribute) => ({
+            label: attribute.shortName,
+            value: attribute.value,
+          }))
+        )
+      : (
+        <p className={styles.certPreviewEmpty}>
+          {t("register.idCheck.certPreview.empty")}
+        </p>
+      )
+
+  const renderCertificatePreview = () => {
+    if (!certificatePreview) return null
+
+    return (
+      <div className={styles.certPreview}>
+        <h3>{t("register.idCheck.certPreview.title")}</h3>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.identity")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.organizationName"),
+              value: certificatePreview.organizationName,
+            },
+            {
+              label: t("register.idCheck.certPreview.organizationIdentifier"),
+              value: certificatePreview.organizationIdentifier,
+            },
+            {
+              label: t("register.idCheck.certPreview.kvkNumber"),
+              value: certificatePreview.kvkNumber,
+            },
+            {
+              label: t("register.idCheck.certPreview.partyId"),
+              value: certificatePreview.partyId,
+            },
+          ])}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.subject")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.distinguishedName"),
+              value: certificatePreview.subjectName,
+            },
+          ])}
+          {renderAttributeRows(certificatePreview.subjectAttributes)}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.issuer")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.distinguishedName"),
+              value: certificatePreview.issuerName,
+            },
+          ])}
+          {renderAttributeRows(certificatePreview.issuerAttributes)}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.validity")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.serialNumber"),
+              value: certificatePreview.serialNumber,
+            },
+            {
+              label: t("register.idCheck.certPreview.validFrom"),
+              value: formatCertificateDate(certificatePreview.validFrom),
+            },
+            {
+              label: t("register.idCheck.certPreview.validTo"),
+              value: formatCertificateDate(certificatePreview.validTo),
+            },
+          ])}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.fingerprints")}</h4>
+          {renderCertificateRows([
+            {
+              label: "x5t#S256",
+              value: certificatePreview.thumbprint,
+            },
+          ])}
+        </section>
+      </div>
+    )
   }
 
   // Renders the configured onboarding agreements with per-document download
@@ -2141,27 +2264,31 @@ const Register: NextPage = () => {
                           <div className={styles.provideCertificate}>{t("register.idCheck.eidasProvide")}</div>
                           {uploadedFile ? (
                             <div className={styles.fileInfo}>
-                              <span className={styles.fileName}>{uploadedFile.name}</span>
-                              <button
-                                className={styles.removeButton}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setUploadedFile(null);
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    eidasCert: undefined,
-                                    idCheck: {
-                                      ...prev.idCheck,
-                                      idCheckMethod:
-                                        prev.idCheck.idCheckMethod === "eidas"
-                                          ? undefined
-                                          : prev.idCheck.idCheckMethod,
-                                    },
-                                  }));
-                                }}
-                              >
-                                ✕
-                              </button>
+                              <div className={styles.fileInfoHeader}>
+                                <span className={styles.fileName}>{uploadedFile.name}</span>
+                                <button
+                                  className={styles.removeButton}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setUploadedFile(null);
+                                    setCertificatePreview(null);
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      eidasCert: undefined,
+                                      idCheck: {
+                                        ...prev.idCheck,
+                                        idCheckMethod:
+                                          prev.idCheck.idCheckMethod === "eidas"
+                                            ? undefined
+                                            : prev.idCheck.idCheckMethod,
+                                      },
+                                    }));
+                                  }}
+                                >
+                                  x
+                                </button>
+                              </div>
+                              {renderCertificatePreview()}
                             </div>
                           ) : (
                             <div

@@ -31,8 +31,8 @@ type KeycloakClaims struct {
 	Email             string `json:"email,omitempty"`
 	// Idp is the identity-provider alias the session authenticated through
 	// (e.g. eHerkenning). Brokered Keycloak logins expose this as the "idp" claim.
-	Idp               string `json:"idp,omitempty"`
-	RealmAccess       struct {
+	Idp         string `json:"idp,omitempty"`
+	RealmAccess struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access,omitempty"`
 	ResourceAccess map[string]struct {
@@ -64,7 +64,9 @@ func (k *KeycloakClaims) OrganizationName() string {
 	}
 }
 
-// LegalEntityIdentifier returns the identifier a user is allowed to act on (kvk/legalSubject).
+// LegalEntityIdentifier returns the organization identifier asserted by the
+// authenticated session. A plain username is intentionally not an organization
+// claim; non-IdP/eIDAS-certificate flows prove organization identity elsewhere.
 func (k *KeycloakClaims) LegalEntityIdentifier() string {
 	if k == nil {
 		return ""
@@ -80,8 +82,6 @@ func (k *KeycloakClaims) LegalEntityIdentifier() string {
 		return k.LegalSubjectIDUpper
 	case k.LegalSubjectIDPascal != "":
 		return k.LegalSubjectIDPascal
-	case k.PreferredUsername != "":
-		return k.PreferredUsername
 	default:
 		return ""
 	}

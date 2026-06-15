@@ -12,6 +12,16 @@ export interface CertificateFields {
   x5c: string;
   thumbprint: string;
   subjectName: string;
+  issuerName: string;
+  serialNumber?: string;
+  validFrom?: string;
+  validTo?: string;
+  organizationIdentifier?: string;
+  organizationName?: string;
+  kvkNumber?: string;
+  partyId?: string;
+  subjectAttributes: SubjectAttribute[];
+  issuerAttributes: SubjectAttribute[];
 }
 
 // Subset of attribute-type OIDs commonly seen in a subject DN.
@@ -24,8 +34,15 @@ const OID_TO_SHORT: Record<string, string> = {
   "2.5.4.10": "O",
   "2.5.4.11": "OU",
   "2.5.4.5": "SERIALNUMBER",
+  "2.5.4.97": "ORGANIZATIONIDENTIFIER",
   "1.2.840.113549.1.9.1": "E",
   "0.9.2342.19200300.100.1.25": "DC",
+};
+
+export type SubjectAttribute = {
+  oid: string;
+  shortName: string;
+  value: string;
 };
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -40,6 +57,69 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 function base64ToBase64Url(b64: string): string {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function firstSubjectValue(attributes: SubjectAttribute[], ...names: string[]) {
+  const normalizedNames = names.map((name) => name.toUpperCase());
+  return (
+    attributes.find((attribute) =>
+      normalizedNames.includes(attribute.shortName.toUpperCase()) ||
+      normalizedNames.includes(attribute.oid)
+    )?.value.trim() || ""
+  );
+}
+
+function derivePartyIdentity(organizationIdentifier: string) {
+  const identifier = organizationIdentifier.trim();
+  if (!identifier) {
+    return {};
+  }
+
+  if (
+    identifier.toLowerCase().startsWith("did:ishare:") ||
+    identifier.toUpperCase().startsWith("EU.EORI.")
+  ) {
+    return { partyId: identifier };
+  }
+
+  // eIDAS legal-person certificates commonly expose the ETSI
+  // organizationIdentifier value as NTR<country>-<registration-number>.
+  // For Dutch trade-register identifiers, the portal already represents parties
+  // as EU.EORI.NL.KVK<digits>, so keep that canonical form across identity paths.
+  const ntrNl = identifier.match(/^NTRNL-?(\d{8,})$/i);
+  const kvk = identifier.match(/(?:^|[^A-Z0-9])KVK[\s.-]*(\d{8,})(?:$|[^0-9])/i);
+  const kvkNumber = ntrNl?.[1] || kvk?.[1] || "";
+  if (kvkNumber) {
+    return {
+      kvkNumber,
+      partyId: `EU.EORI.NL.KVK${kvkNumber}`,
+    };
+  }
+
+  return { partyId: identifier };
+}
+
+function extractAttributes(typesAndValues: Certificate["subject"]["typesAndValues"]) {
+  return typesAndValues.map((tv) => {
+    const short = OID_TO_SHORT[tv.type] || tv.type;
+    const value = (tv.value as any)?.valueBlock?.value ?? "";
+    return {
+      oid: tv.type,
+      shortName: short,
+      value: String(value),
+    };
+  });
+}
+
+function formatDistinguishedName(attributes: SubjectAttribute[]) {
+  return attributes
+    .map((attribute) => `${attribute.shortName}=${attribute.value}`)
+    .join(", ");
+}
+
+function formatSerialNumber(serialNumber: Certificate["serialNumber"]) {
+  const value = (serialNumber as any)?.valueBlock?.toString?.();
+  return value ? String(value) : String(serialNumber);
 }
 
 // Decode a PEM-wrapped certificate to its DER bytes, or null if not PEM.
@@ -97,13 +177,32 @@ export async function extractCertificateFields(
   const digest = await crypto.subtle.digest("SHA-256", der);
   const thumbprint = base64ToBase64Url(bytesToBase64(new Uint8Array(digest)));
 
-  const parts: string[] = [];
-  for (const tv of cert.subject.typesAndValues) {
-    const short = OID_TO_SHORT[tv.type] || tv.type;
-    const value = (tv.value as any)?.valueBlock?.value ?? "";
-    parts.push(`${short}=${value}`);
-  }
-  const subjectName = parts.join(", ");
+  const subjectAttributes = extractAttributes(cert.subject.typesAndValues);
+  const issuerAttributes = extractAttributes(cert.issuer.typesAndValues);
+  const subjectName = formatDistinguishedName(subjectAttributes);
+  const issuerName = formatDistinguishedName(issuerAttributes);
+  const organizationIdentifier = firstSubjectValue(
+    subjectAttributes,
+    "ORGANIZATIONIDENTIFIER",
+    "2.5.4.97",
+    "SERIALNUMBER",
+    "2.5.4.5"
+  );
+  const organizationName = firstSubjectValue(subjectAttributes, "O", "2.5.4.10");
+  const derivedIdentity = derivePartyIdentity(organizationIdentifier);
 
-  return { x5c, thumbprint, subjectName };
+  return {
+    x5c,
+    thumbprint,
+    subjectName,
+    issuerName,
+    serialNumber: formatSerialNumber(cert.serialNumber),
+    validFrom: cert.notBefore.value?.toISOString(),
+    validTo: cert.notAfter.value?.toISOString(),
+    organizationIdentifier: organizationIdentifier || undefined,
+    organizationName: organizationName || undefined,
+    subjectAttributes,
+    issuerAttributes,
+    ...derivedIdentity,
+  };
 }

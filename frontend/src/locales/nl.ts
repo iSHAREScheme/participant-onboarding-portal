@@ -239,7 +239,24 @@ export default {
       partyName: "Partij Naam",
       eidasCertificate: "Een eSeal (elektronisch zegel) is een digitaal certificaat dat de herkomst en integriteit van gegevens namens een organisatie waarborgt. Het certificaat wordt uitgegeven door een erkende vertrouwensdienstverlener en bevestigt dat de verzender een geverifieerde organisatie is. Zo weet u zeker dat de informatie authentiek en ongewijzigd is.",
       eidasProvide: "Verstrek uw certificaat hier:",
-      eidasInfo: "Voor meer informatie over het verkrijgen van dergelijke certificaten, raadpleeg de eSEAL-aanschafgids."
+      eidasInfo: "Voor meer informatie over het verkrijgen van dergelijke certificaten, raadpleeg de eSEAL-aanschafgids.",
+      certPreview: {
+        title: "Certificaatvoorbeeld",
+        identity: "Afgeleide identiteit",
+        subject: "Onderwerp",
+        issuer: "Uitgever",
+        validity: "Geldigheid",
+        fingerprints: "Vingerafdrukken",
+        organizationName: "Organisatie",
+        organizationIdentifier: "Organisatie-ID",
+        kvkNumber: "KVK-nummer",
+        partyId: "Partij-ID",
+        distinguishedName: "Distinguished name",
+        serialNumber: "Serienummer",
+        validFrom: "Geldig vanaf",
+        validTo: "Geldig tot",
+        empty: "Niet aanwezig"
+      }
     },
     form: {
       companyName: "Bedrijfsnaam",
@@ -628,8 +645,8 @@ export default {
       protected: "Beveiligd · {{method}}",
       open: "Openen",
       remove: "Verwijderen",
-      removeConfirm: "Deze overeenkomst verwijderen?",
-      removeBuiltinWarning: "Dit is een standaard onboarding-overeenkomst. Als u deze verwijdert, wordt aanmelders niet langer gevraagd deze te ondertekenen — en als u de overeenkomsten verwijdert die nodig zijn om een partij te registreren, kan de onboarding niet worden voltooid. Toch verwijderen?",
+      removeConfirm: "Weet u zeker dat u deze overeenkomst wilt verwijderen?",
+      minimumWarning: "Gebruikers kunnen de onboarding niet voltooien met minder dan 2 overeenkomsten geconfigureerd.",
       typeLabel: "Type",
       types: {
         frameworkAgreement: "Framework Agreement",
