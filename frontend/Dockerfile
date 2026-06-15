@@ -1,4 +1,4 @@
-FROM node:22.18-alpine AS build
+FROM node:22.22-alpine AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare yarn@4.7.0 --activate
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -10,7 +10,7 @@ RUN YARN_ENABLE_SCRIPTS=0 yarn install --immutable
 COPY . .
 RUN yarn build
 
-FROM node:22.18-alpine AS runtime
+FROM node:22.22-alpine AS runtime
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app

@@ -1,0 +1,150 @@
+.container {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 2rem;
+  box-sizing: border-box;
+}
+
+.headerSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-secondary, #013A57);
+}
+
+.panel,
+.emptyState {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.panel h2,
+.emptyState h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  color: #111827;
+}
+
+.emptyState p {
+  margin: 0;
+  color: #4b5563;
+}
+
+.metaGrid,
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.metaGrid span,
+.formGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.metaGrid strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.formGrid input,
+.formGrid select {
+  min-height: 2.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.primaryButton,
+.secondaryButton {
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.primaryButton {
+  margin-bottom: 1rem;
+  padding: 0.7rem 1rem;
+  background: var(--button-primary, #0066EE);
+  color: #fff;
+}
+
+.secondaryButton {
+  padding: 0.6rem 0.9rem;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.table th {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.loading,
+.emptyText {
+  padding: 1rem;
+  color: #4b5563;
+}
+
+.error,
+.success {
+  padding: 0.8rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .headerSection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

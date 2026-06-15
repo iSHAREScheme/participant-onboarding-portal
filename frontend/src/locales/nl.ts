@@ -21,7 +21,148 @@ export default {
     confirm: "Bevestigen",
     next: "Volgende",
     previous: "Vorige",
-    profile: "Profiel"
+    profile: "Profiel",
+    participants: "Deelnemers",
+    organizationAccess: "Organisatietoegang",
+    menu: "Menu"
+  },
+  organizationAccess: {
+    title: "Organisatietoegang",
+    refresh: "Vernieuwen",
+    organization: {
+      title: "Geverifieerde organisatie",
+      kvk: "KvK-nummer",
+      company: "Organisatie"
+    },
+    noOrganization: {
+      title: "Geen eHerkenning-organisatie gevonden",
+      description: "Log eerst in of koppel eHerkenning. Zodra de sessie een organisatie-identificatie bevat, kunt u IdP's configureren en toegang delegeren voor die organisatie."
+    },
+    idp: {
+      title: "Organisatie-IdP-koppelingen",
+      providerType: "Provider-type",
+      alias: "Keycloak-alias",
+      displayName: "Weergavenaam",
+      issuerUrl: "Issuer / metadata-URL",
+      clientId: "Client-ID",
+      clientSecret: "Client secret",
+      status: "Status",
+      create: "IdP-koppeling provisionen",
+      empty: "Nog geen organisatie-IdP-koppelingen."
+    },
+    members: {
+      title: "Gedelegeerde personen",
+      email: "E-mail",
+      providerAlias: "Provider-alias",
+      role: "Rol",
+      status: "Status",
+      create: "Toegang delegeren",
+      empty: "Nog geen gedelegeerde personen."
+    },
+    messages: {
+      idpCreated: "IdP-koppeling geprovisioned.",
+      memberCreated: "Gedelegeerde toegang opgeslagen."
+    },
+    errors: {
+      load: "Kon organisatietoegang niet laden.",
+      idpCreate: "Kon IdP-koppeling niet provisionen.",
+      memberCreate: "Kon toegang niet delegeren."
+    }
+  },
+  participants: {
+    title: "Deelnemers",
+    refresh: "Vernieuwen",
+    loading: "Deelnemers laden...",
+    error: "Kan deelnemers niet laden.",
+    empty: "Geen deelnemers gevonden.",
+    search: "Zoek op naam…",
+    filters: {
+      all: "Alle deelnemers",
+      mine: "Mijn deelnemers",
+      active: "Alleen actief",
+      certified: "Alleen gecertificeerd"
+    },
+    noResults: "Geen deelnemers komen overeen met de zoekopdracht.",
+    table: {
+      partyId: "Party ID",
+      name: "Naam",
+      roles: "Rollen",
+      status: "Status",
+      startDate: "Startdatum",
+      endDate: "Einddatum"
+    },
+    pagination: {
+      previous: "Vorige",
+      next: "Volgende",
+      last: "Laatste",
+      page: "Pagina {{current}} van {{total}}"
+    },
+    detail: {
+      back: "Terug naar deelnemers",
+      loading: "Deelnemer laden…",
+      error: "Kan deelnemer niet laden.",
+      notFound: "Deelnemer niet gevonden.",
+      schemaLabel: "Schema",
+      viewMore: "Meer bekijken",
+      close: "Sluiten",
+      sections: {
+        identity: "Identiteit",
+        adherence: "Naleving",
+        roles: "Rollen",
+        agreements: "Overeenkomsten",
+        authRegistries: "Autorisatieregisters",
+        certificates: "Certificaten",
+        additionalInfo: "Aanvullende informatie",
+        claims: "Claims"
+      },
+      fields: {
+        partyId: "Party ID",
+        name: "Naam",
+        registrarId: "Registrar ID",
+        capabilityUrl: "Capability URL",
+        schemaVersion: "Schemaversie",
+        status: "Status",
+        startDate: "Startdatum",
+        endDate: "Einddatum",
+        role: "Rol",
+        loa: "Mate van zekerheid",
+        legalAdherence: "Juridische naleving",
+        compliancyVerified: "Compliance geverifieerd",
+        framework: "Framework",
+        agreementType: "Type",
+        title: "Titel",
+        signDate: "Ondertekeningsdatum",
+        expiryDate: "Vervaldatum",
+        hash: "Hash",
+        authRegistryName: "Naam",
+        authRegistryId: "Register ID",
+        authRegistryUrl: "URL",
+        dataspaceId: "Dataspace ID",
+        description: "Omschrijving",
+        website: "Website",
+        companyEmail: "E-mail bedrijf",
+        companyPhone: "Telefoon bedrijf",
+        publiclyPublishable: "Openbaar publiceerbaar",
+        tags: "Labels"
+      },
+      empty: {
+        roles: "Geen rollen.",
+        agreements: "Geen overeenkomsten.",
+        authRegistries: "Geen autorisatieregisters.",
+        certificates: "Geen certificaten."
+      },
+      edit: {
+        button: "Bewerken",
+        title: "Deelnemer bewerken",
+        save: "Opslaan",
+        saving: "Opslaan…",
+        saveClaim: "Claim opslaan",
+        cancel: "Annuleren",
+        saved: "Opgeslagen.",
+        saveError: "Kan wijzigingen niet opslaan.",
+        claimsTitle: "Claims"
+      }
+    }
   },
   home: {
     title: "Titel",
@@ -56,6 +197,7 @@ export default {
   },
   register: {
     title: "Registratie",
+    stepCounter: "Stap {{current}} van {{total}}",
     steps: {
       role: "Rol",
       m2m: "M2M",
@@ -77,13 +219,44 @@ export default {
       eHerkenningInfo: "Wij gebruiken eHerkenning voor meer zekerheid over de online identiteit van uw organisatie. Met eHerkenning identificeert u uw organisatie veilig en eenvoudig online. Het grote gemak is dat u met eHerkenning bij meerdere organisaties kunt inloggen, waardoor u minder wachtwoorden hoeft te onthouden. Veilig, makkelijk en betrouwbaar. Ga voor meer informatie naar www.eherkenning.nl.",
       eidas: "eIDAS Advance eSeal-certificaat",
       login: "Inloggen",
+      useCurrentSession: "Gebruik huidige eHerkenning-sessie",
+      linkAccount: "Koppel eHerkenning",
+      continueWithEherkenning: "Verder met eHerkenning",
+      useLinkedIdentity: "Verder met gekoppelde eHerkenning",
+      currentSessionDescription: "Uw huidige eHerkenning-identiteit is klaar om voor deze identiteitscontrole te gebruiken.",
+      linkedReadyDescription: "Uw eHerkenning-login is succesvol gekoppeld. Ga verder met deze identiteitscontrole.",
+      checkingLinkDescription: "We controleren of dit portaalaccount al aan eHerkenning is gekoppeld.",
+      linkedAccountDescription: "Dit portaalaccount is al aan eHerkenning gekoppeld. Log in met eHerkenning om met deze identiteitscontrole verder te gaan.",
+      linkDescription: "U bent ingelogd met een portaalaccount. Koppel uw eHerkenning-login om met deze identiteitscontrole door te gaan.",
+      loginDescription: "Log in met eHerkenning om dit voor deze identiteitscontrole te gebruiken.",
+      currentIdentity: "Beschikbare identiteit: {{identity}}",
+      currentAccount: "Huidig portaalaccount: {{account}}",
+      linkCancelled: "De eHerkenning-koppeling is geannuleerd.",
+      linkError: "De eHerkenning-koppeling is mislukt. Probeer het opnieuw.",
       info: "Meer zekerheid over uw online identiteit, daarom gebruiken wij eHerkenning. Met eHerkenning identificeert u zich veilig en eenvoudig online. Het grote gemak is dat u met eHerkenning bij meerdere organisaties kunt inloggen. U hoeft dus minder wachtwoorden te onthouden. Veilig, makkelijk en betrouwbaar.",
       forMoreInfo: "voor meer informatie",
       partyId: "Partij ID",
       partyName: "Partij Naam",
       eidasCertificate: "Een eSeal (elektronisch zegel) is een digitaal certificaat dat de herkomst en integriteit van gegevens namens een organisatie waarborgt. Het certificaat wordt uitgegeven door een erkende vertrouwensdienstverlener en bevestigt dat de verzender een geverifieerde organisatie is. Zo weet u zeker dat de informatie authentiek en ongewijzigd is.",
       eidasProvide: "Verstrek uw certificaat hier:",
-      eidasInfo: "Voor meer informatie over het verkrijgen van dergelijke certificaten, raadpleeg de eSEAL-aanschafgids."
+      eidasInfo: "Voor meer informatie over het verkrijgen van dergelijke certificaten, raadpleeg de eSEAL-aanschafgids.",
+      certPreview: {
+        title: "Certificaatvoorbeeld",
+        identity: "Afgeleide identiteit",
+        subject: "Onderwerp",
+        issuer: "Uitgever",
+        validity: "Geldigheid",
+        fingerprints: "Vingerafdrukken",
+        organizationName: "Organisatie",
+        organizationIdentifier: "Organisatie-ID",
+        kvkNumber: "KVK-nummer",
+        partyId: "Partij-ID",
+        distinguishedName: "Distinguished name",
+        serialNumber: "Serienummer",
+        validFrom: "Geldig vanaf",
+        validTo: "Geldig tot",
+        empty: "Niet aanwezig"
+      }
     },
     form: {
       companyName: "Bedrijfsnaam",
@@ -201,7 +374,7 @@ export default {
     validation: {
       roleRequired: "Selecteer ten minste één rol",
       m2mRequired: "Geef aan of u gebruik wilt maken van M2M-diensten",
-      idcheckRequired: "Vul Partij ID en Partij Naam in",
+      identityRequired: "Ga verder met eHerkenning of upload een geldig eIDAS-certificaat",
       selectOption: "Kies een van de aangeboden identificatiemethoden.",
       locationRequired: "Vul alle vereiste gegevens in",
       associationRequired: "Vul alle vereiste gegevens in",
@@ -254,7 +427,12 @@ export default {
       receiveTitle: "We hebben uw overeenkomst ontvangen!",
       receiveMessage: "Bedankt voor het ondertekenen van de overeenkomst. Wij zullen de overeenkomst beoordelen en wanneer correct, zelf ondertekenen. U ontvangt een e-mail met de ondertekende overeenkomst zodra deze stap is voltooid.",
       closeMessage: "U kunt dit scherm nu sluiten.",
-      minimumFiles: "Upload minimaal 2 getekende overeenkomsten",
+      minimumFiles: "Upload een ondertekende kopie van elke overeenkomst",
+      uploadLimits: "Max. 20 MB per bestand (45 MB totaal) • PDF",
+      fileTooLarge: "Elke ondertekende overeenkomst mag maximaal 20 MB zijn.",
+      totalTooLarge: "De ondertekende overeenkomsten zijn samen te groot om te uploaden (max. 45 MB).",
+      consentRequired: "Bevestig de verklaring hierboven om met eHerkenning te ondertekenen.",
+      signError: "We konden je ondertekening niet verwerken. Probeer het opnieuw.",
       invalidType: "Alleen PDF-bestanden worden geaccepteerd voor overeenkomsten",
       signingMethod: "Kies ondertekeningsmethode",
       signingMethodSubtitle: "Selecteer de methode die u wilt gebruiken om de overeenkomsten te ondertekenen.",
@@ -285,7 +463,8 @@ export default {
         company: "Bedrijf",
         role: "Rol",
         status: "Status",
-        nextStepBy: "Volgende stap door"
+        nextStepBy: "Volgende stap door",
+        actions: "Acties"
       }
     },
     status: {
@@ -299,7 +478,8 @@ export default {
     actions: {
       verify: "Verifiëren",
       view: "Bekijken",
-      add: "Toevoegen"
+      add: "Toevoegen",
+      createParty: "Deelnemer aanmaken"
     },
     common: {
       na: "N/B"
@@ -382,15 +562,24 @@ export default {
   },
   settings: {
     title: "Instellingen",
+    subtitle: "Beheer de branding, registergegevens en onboarding-overeenkomsten van uw portaal.",
     sections: {
       general: "Algemene Instellingen",
+      system: "Deelnemersregister",
+      branding: "Branding",
+      registry: "Register",
       headerImage: "Header Afbeelding",
       introText: "Introductietekst"
     },
     actions: {
-      save: "Instellingen Opslaan",
-      upload: "Afbeelding Uploaden",
-      add: "Toevoegen"
+      save: "Instellingen opslaan",
+      saving: "Opslaan…",
+      upload: "Afbeelding uploaden",
+      uploadIcon: "Pictogram uploaden",
+      modifyImage: "Afbeelding wijzigen",
+      modifyIcon: "Pictogram wijzigen",
+      add: "Toevoegen",
+      recheck: "Opnieuw controleren"
     },
     messages: {
       saveSuccess: "Instellingen succesvol opgeslagen",
@@ -399,15 +588,197 @@ export default {
       uploadFailed: "Kon logo niet uploaden",
       backendNotConfigured: "Backend URL niet geconfigureerd"
     },
+    system: {
+      description: "De iSHARE-frameworkversie waarmee dit portaal werkt en de live verbinding met het Satellite-register.",
+      version: "Frameworkversie",
+      connection: "Verbinding",
+      connected: "Verbonden",
+      disconnected: "Niet verbonden",
+      checking: "Controleren…",
+      claimModel: "Claim-model (v3)",
+      partyModel: "Party-model (v2)",
+      unknown: "Onbekend"
+    },
+    connection: {
+      test: "Verbinding testen",
+      testing: "Testen…",
+      testOk: "Succesvol verbonden (versie {{version}}).",
+      testFailed: "Verbinding mislukt: {{error}}",
+      certificate: "Clientcertificaat",
+      certConfigured: "Geconfigureerd",
+      certMissing: "Niet geconfigureerd",
+      baseUrl: "Satelliet basis-URL",
+      iss: "Client-ID (iss)",
+      aud: "Audience (aud)",
+      version: "Framework-versie (override)",
+      versionPlaceholder: "automatisch gedetecteerd",
+      tokenEndpoint: "Token-endpoint",
+      tokenScope: "Token-scope",
+      epCreationEndpoint: "ep_creation-endpoint (v2)",
+      partiesEndpoint: "Parties-endpoint (v3)",
+      dataspaceSelect: "Dataspace",
+      dataspacePlaceholder: "Kies een dataspace…",
+      dataspacesEmpty: "Geen dataspaces gevonden in het register.",
+      prefillAuthRegistry: "Autorisatieregister vooraf invullen",
+      prefillAuthRegistryHint: "Maakt het gekozen autorisatieregister statisch tijdens onboarding, zodat aanvragers er geen hoeven te kiezen.",
+      authRegistrySelect: "Autorisatieregister",
+      authRegistryPlaceholder: "Kies een autorisatieregister…",
+      authRegistriesEmpty: "Geen autorisatieregisters gevonden in het register.",
+      authRegistryUrl: "URL autorisatieregister",
+      credentialsNote: "Het clientcertificaat en de privésleutel worden via deploy-omgevingsvariabelen geconfigureerd en zijn hier nooit bewerkbaar."
+    },
     labels: {
-      headerImage: "Header Afbeelding:",
-      introText: "Introductietekst:",
-      registrarId: "Registrar ID:",
-      agreement: "Overeenkomst:",
-      dataspaceId: "Dataspace ID:",
+      headerImage: "Header-afbeelding",
+      introText: "Introductietekst",
+      agreement: "Overeenkomst",
+      registrarId: "Registrar ID",
+      dataspaceId: "Dataspace ID",
+      dataspaceTitle: "Dataspace-titel",
       agreements: "Overeenkomsten",
       hideCapabilitiesUrl: "Verberg het capabilities-URL veld",
       hideCapabilitiesUrlHint: "Indien ingeschakeld zien aanmelders dit veld niet en hoeven zij geen capabilities-URL in te vullen."
+    },
+    agreements: {
+      title: "Onboarding-overeenkomsten",
+      description: "Documenten die aanmelders tijdens de onboarding moeten lezen en ondertekenen. De iSHARE Terms of Use en Accession Agreement zijn standaard opgenomen; voeg uw eigen toe via een PDF-upload of een URL.",
+      empty: "Geen overeenkomsten ingesteld.",
+      version: "Versie",
+      versionPlaceholder: "bijv. 05-03-2025",
+      sourceBuiltin: "Standaard",
+      sourceFile: "Geüpload",
+      sourceUrl: "URL",
+      sourceLabel: "Label",
+      protected: "Beveiligd · {{method}}",
+      open: "Openen",
+      remove: "Verwijderen",
+      removeTitle: "Overeenkomst verwijderen",
+      removeConfirm: "Weet u zeker dat u deze overeenkomst wilt verwijderen?",
+      minimumWarning: "Gebruikers kunnen de onboarding niet voltooien met minder dan 2 overeenkomsten geconfigureerd.",
+      typeLabel: "Type",
+      types: {
+        frameworkAgreement: "Framework Agreement",
+        dataspaceAgreement: "Dataspace Agreement",
+        termsOfUse: "Terms of Use",
+        accessionAgreement: "Accession Agreement"
+      },
+      addTitle: "Overeenkomst toevoegen",
+      modeFile: "PDF uploaden",
+      modeUrl: "Via URL",
+      titleLabel: "Titel",
+      titlePlaceholder: "bijv. Verwerkersovereenkomst",
+      fileLabel: "PDF-bestand",
+      choosePdf: "Kies PDF-bestand",
+      urlLabel: "Document-URL",
+      urlPlaceholder: "https://voorbeeld.nl/overeenkomst.pdf",
+      add: "Overeenkomst toevoegen",
+      adding: "Bezig met toevoegen…",
+      auth: {
+        label: "URL-authenticatie",
+        method: "Auth-methode",
+        none: "Geen (openbaar)",
+        basic: "Basic auth",
+        bearer: "Bearer / API-sleutel",
+        oauth2: "OAuth2 client credentials",
+        custom: "Aangepaste header(s)",
+        username: "Gebruikersnaam",
+        password: "Wachtwoord",
+        headerName: "Headernaam",
+        headerNamePlaceholder: "Authorization",
+        scheme: "Schema",
+        schemePlaceholder: "Bearer",
+        token: "Token / API-sleutel",
+        tokenUrl: "Token-URL",
+        clientId: "Client-ID",
+        clientSecret: "Client secret",
+        scope: "Scope",
+        scopePlaceholder: "optioneel",
+        headerValue: "Waarde",
+        secret: "Geheim",
+        addHeader: "Header toevoegen",
+        keptHint: "Laat een geheim leeg om de opgeslagen waarde te behouden.",
+        keyMissing: "Stel AGREEMENT_AUTH_MASTER_KEY in op de backend om inloggegevens van beveiligde URL's op te slaan."
+      },
+      messages: {
+        added: "Overeenkomst toegevoegd.",
+        removed: "Overeenkomst verwijderd.",
+        addFailed: "Toevoegen van de overeenkomst is mislukt.",
+        removeFailed: "Verwijderen van de overeenkomst is mislukt.",
+        fileRequired: "Kies een PDF-bestand.",
+        titleRequired: "Voer een titel in.",
+        urlRequired: "Voer een document-URL in."
+      }
+    },
+    tabs: {
+      general: "Algemeen",
+      theme: "Thema"
+    },
+    theme: {
+      title: "Kleuren & lettertypen",
+      description: "Pas de kleuren en lettertypen van het portaal aan op de huisstijl van uw organisatie. De standaardwaarden volgen de iSHARE-huisstijl. Wijzigingen worden hier direct getoond — met Opslaan bewaart u een thema en met Toepassen publiceert u het naar elke bezoeker.",
+      library: {
+        selectLabel: "Thema",
+        brandDefault: "iSHARE-huisstijl (standaard)",
+        nameLabel: "Themanaam",
+        namePlaceholder: "bijv. Acme Corp",
+        save: "Thema opslaan",
+        apply: "Thema publiceren",
+        delete: "Verwijderen",
+        currentlyLive: "Nu live: {{name}}",
+        hint: "Met Opslaan bewaart u een thema als concept zonder het live portaal te wijzigen. Met Toepassen publiceert u het gekozen thema naar elke bezoeker.",
+        savedToast: "Thema opgeslagen.",
+        appliedToast: "Thema toegepast — elke bezoeker ziet het nu.",
+        deletedToast: "Thema verwijderd.",
+        nameRequired: "Voer eerst een themanaam in.",
+        deleteActiveBlocked: "Pas eerst een ander thema toe voordat u het live thema verwijdert.",
+        import: "Importeren",
+        export: "Exporteren",
+        importedToast: "Thema geïmporteerd — controleer het en sla op om te bewaren.",
+        exportedToast: "Thema geëxporteerd.",
+        importError: "Dat bestand is geen geldig thema."
+      },
+      logo: "Logo & favicon",
+      logoHint: "Upload het logo van uw organisatie (PNG, JPG of SVG). Het verschijnt in de portaalheader; als er geen is ingesteld, wordt het standaard iSHARE-logo gebruikt.",
+      favicon: "Browsertabicoon",
+      faviconHint: "Wordt getoond in de browsertab. Een vierkante PNG, SVG of ICO werkt het best; gebruikt het iSHARE-icoon als er geen is ingesteld.",
+      logoConstraints: "PNG, JPG of SVG · max. 5 MB",
+      faviconConstraints: "ICO, PNG of SVG · vierkant aanbevolen · max. 1 MB",
+      fileTooLarge: "Dat bestand is te groot — maximaal {{max}}.",
+      badDimensions: "Afbeeldingsafmetingen moeten tussen {{min}} en {{max}} pixels zijn.",
+      fonts: {
+        heading: "Koplettertype",
+        body: "Bodylettertype"
+      },
+      groups: {
+        brand: "Huisstijl",
+        buttons: "Knoppen",
+        text: "Tekst",
+        surface: "Oppervlakken",
+        typography: "Typografie"
+      },
+      tokens: {
+        primary: "Primair",
+        secondary: "Secundair",
+        accent: "Accent",
+        buttonPrimary: "Primaire knop",
+        buttonPrimaryHover: "Primaire knop (hover)",
+        buttonSecondary: "Secundaire knop",
+        textPrimary: "Bodytekst",
+        textSecondary: "Koppen",
+        background: "Achtergrond",
+        borderColor: "Randen",
+        errorColor: "Fout"
+      },
+      actions: {
+        reset: "Terug naar huisstijl"
+      },
+      preview: "Voorbeeld",
+      previewHeading: "De snelle bruine vos",
+      previewBody: "Zo zien koppen, bodytekst en knoppen eruit met de gekozen kleuren.",
+      previewPrimaryBtn: "Primaire actie",
+      previewSecondaryBtn: "Secundair",
+      messages: {
+        resetDone: "Editor teruggezet naar de iSHARE-huisstijl."
+      }
     }
   },
   verify: {
@@ -443,6 +814,8 @@ export default {
       title: "Verifieer handmatig getekende overeenkomst",
       subtitle: "Download de overeenkomst om te verifiëren of deze voldoende is.",
       downloadText: "Download overeenkomsten",
+      eherkenningTitle: "Bevestig eHerkenning-ondertekening",
+      eherkenningSubtitle: "Deze aanvrager heeft de overeenkomsten elektronisch ondertekend via eHerkenning. Er zijn geen geüploade documenten om te beoordelen — bij goedkeuring onderteken je mede en wordt de onboarding voltooid.",
       buttons: {
         approve: "Goedkeuren & tekenen",
         approving: "Goedkeuren & tekenen...",
@@ -463,11 +836,140 @@ export default {
       newPassword: "Nieuw Wachtwoord (optioneel)",
       confirmPassword: "Bevestig Wachtwoord"
     },
+    linkedAccounts: {
+      title: "Inlogmethoden",
+      description: "Koppel standaard inlogproviders aan dit portaalaccount. De provider-alias moet als Identity Provider in Keycloak bestaan.",
+      alias: "Keycloak-alias",
+      refresh: "Vernieuwen",
+      status: {
+        linked: "Gekoppeld",
+        notLinked: "Niet gekoppeld"
+      },
+      actions: {
+        link: "Koppelen",
+        relink: "Opnieuw koppelen"
+      },
+      messages: {
+        linked: "De inlogmethode is succesvol gekoppeld.",
+        cancelled: "De koppelflow is geannuleerd.",
+        error: "De koppelflow is mislukt. Probeer het opnieuw."
+      },
+      errors: {
+        loadFailed: "Kon gekoppelde inlogmethoden niet laden"
+      }
+    },
     errors: {
       loadFailed: "Kon profiel niet laden",
       updateFailed: "Kon profiel niet bijwerken",
       passwordMismatch: "Wachtwoorden komen niet overeen",
       passwordUpdateFailed: "Kon wachtwoord niet bijwerken"
+    }
+  },
+  submit: {
+    title: "Partijgegevens verzenden",
+    identity: {
+      heading: "Identiteit deelnemer",
+      partyId: "Partij-ID",
+      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyName: "Naam partij",
+      partyNamePlaceholder: "Naam rechtspersoon",
+      alsoKnownAs: "Ook bekend als",
+      alsoKnownAsPlaceholder: "Handelsnaam, merk, …",
+      schemaVersion: "Schemaversie"
+    },
+    claim: {
+      heading: "Claim {{index}} — {{type}}",
+      type: "Type claim",
+      status: "Status",
+      registrarId: "Registrar-ID",
+      startDate: "Startdatum",
+      endDate: "Einddatum",
+      frameworkId: "Framework-ID",
+      capabilityUrl: "Capability-URL",
+      description: "Omschrijving",
+      website: "Website",
+      companyEmail: "Bedrijfs-e-mail",
+      publiclyPublishable: "Openbaar publiceerbaar",
+      authRegistryName: "Naam autorisatieregister",
+      authRegistryId: "ID autorisatieregister",
+      authRegistryUrl: "URL autorisatieregister",
+      dataspaceId: "Dataspace-ID",
+      serviceProviderPartyId: "Partij-ID dienstverlener",
+      agreementType: "Type overeenkomst",
+      agreementId: "Overeenkomst-ID",
+      title: "Titel",
+      verificationHash: "Verificatiehash",
+      roleId: "Rol-ID",
+      loa: "Mate van zekerheid",
+      compliancyVerified: "Compliance geverifieerd",
+      legalAdherence: "Juridische naleving",
+      subjectName: "Naam onderwerp",
+      certificateType: "Type certificaat",
+      x5c: "Certificaat (x5c, base64 DER)",
+      x5t: "Vingerafdruk (x5t#S256)",
+      assertion: "Assertie"
+    },
+    claimTypes: {
+      frameworkCompliance: "Framework-naleving",
+      authRegistry: "Autorisatieregister",
+      frameworkAgreement: "Framework-overeenkomst",
+      frameworkRole: "Framework-rol",
+      x509Certificate: "X.509-certificaat",
+      dataspaceMembership: "Dataspace-lidmaatschap",
+      dataspaceAgreement: "Dataspace-overeenkomst",
+      idpAssertion: "IdP-assertie"
+    },
+    status: {
+      active: "Actief",
+      inactive: "Inactief",
+      revoked: "Ingetrokken",
+      suspended: "Opgeschort"
+    },
+    loa: {
+      low: "Laag",
+      substantial: "Substantieel",
+      high: "Hoog",
+      notApplicable: "Niet van toepassing"
+    },
+    yesNoNa: {
+      yes: "Ja",
+      no: "Nee",
+      notApplicable: "Niet van toepassing"
+    },
+    booleanOptions: {
+      yes: "Ja",
+      no: "Nee"
+    },
+    placeholders: {
+      framework: "bijv. iSHARE",
+      url: "https://…",
+      date: "JJJJ-MM-DD",
+      agreementType: "bijv. AccessionAgreement",
+      roleId: "bijv. dataConsumer",
+      certificateType: "bijv. signing"
+    },
+    actions: {
+      addClaim: "Claim toevoegen",
+      addAlsoKnownAs: "Ook bekend als toevoegen",
+      remove: "Verwijderen",
+      create: "Aanmaken",
+      submitting: "Bezig met verzenden…"
+    },
+    messages: {
+      submitError: "Verzenden van partij mislukt. {{message}}",
+      submitSuccess: "Partij succesvol verzonden."
+    },
+    upload: {
+      or: "of",
+      browse: "Bestanden bladeren",
+      certText: "Sleep uw certificaat hierheen",
+      agreementText: "Sleep de getekende overeenkomst (PDF) hierheen",
+      certInvalidType: "Ongeldig bestandstype. Toegestaan: .pem, .crt, .cer, .der",
+      agreementInvalidType: "Ongeldig bestandstype. Upload een PDF.",
+      certTooLarge: "Certificaat overschrijdt de limiet van 1 MB.",
+      agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
+      certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
+      agreementReadError: "Kon het PDF-bestand niet lezen."
     }
   }
 };

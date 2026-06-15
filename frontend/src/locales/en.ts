@@ -22,7 +22,148 @@ export default {
     confirm: "Confirm",
     next: "Next",
     previous: "Previous",
-    profile: "Profile"
+    profile: "Profile",
+    participants: "Participants",
+    organizationAccess: "Organization access",
+    menu: "Menu"
+  },
+  organizationAccess: {
+    title: "Organization access",
+    refresh: "Refresh",
+    organization: {
+      title: "Verified organization",
+      kvk: "KvK number",
+      company: "Company"
+    },
+    noOrganization: {
+      title: "No eHerkenning organization found",
+      description: "Log in or link eHerkenning first. Once the session contains an organization identifier, you can configure IdPs and delegate access for that organization."
+    },
+    idp: {
+      title: "Organization IdP connections",
+      providerType: "Provider type",
+      alias: "Keycloak alias",
+      displayName: "Display name",
+      issuerUrl: "Issuer / metadata URL",
+      clientId: "Client ID",
+      clientSecret: "Client secret",
+      status: "Status",
+      create: "Provision IdP connection",
+      empty: "No organization IdP connections yet."
+    },
+    members: {
+      title: "Delegated people",
+      email: "Email",
+      providerAlias: "Provider alias",
+      role: "Role",
+      status: "Status",
+      create: "Delegate access",
+      empty: "No delegated people yet."
+    },
+    messages: {
+      idpCreated: "IdP connection provisioned.",
+      memberCreated: "Delegated access recorded."
+    },
+    errors: {
+      load: "Could not load organization access.",
+      idpCreate: "Could not provision IdP connection.",
+      memberCreate: "Could not delegate access."
+    }
+  },
+  participants: {
+    title: "Participants",
+    refresh: "Refresh",
+    loading: "Loading participants...",
+    error: "Failed to load participants.",
+    empty: "No participants found.",
+    search: "Search by name…",
+    filters: {
+      all: "All participants",
+      mine: "My participants",
+      active: "Active only",
+      certified: "Certified only"
+    },
+    noResults: "No participants match your search.",
+    table: {
+      partyId: "Party ID",
+      name: "Name",
+      roles: "Roles",
+      status: "Status",
+      startDate: "Start date",
+      endDate: "End date"
+    },
+    pagination: {
+      previous: "Previous",
+      next: "Next",
+      last: "Last",
+      page: "Page {{current}} of {{total}}"
+    },
+    detail: {
+      back: "Back to participants",
+      loading: "Loading participant…",
+      error: "Failed to load participant.",
+      notFound: "Participant not found.",
+      schemaLabel: "Schema",
+      viewMore: "View more",
+      close: "Close",
+      sections: {
+        identity: "Identity",
+        adherence: "Adherence",
+        roles: "Roles",
+        agreements: "Agreements",
+        authRegistries: "Authorisation registries",
+        certificates: "Certificates",
+        additionalInfo: "Additional information",
+        claims: "Claims"
+      },
+      fields: {
+        partyId: "Party ID",
+        name: "Name",
+        registrarId: "Registrar ID",
+        capabilityUrl: "Capability URL",
+        schemaVersion: "Schema version",
+        status: "Status",
+        startDate: "Start date",
+        endDate: "End date",
+        role: "Role",
+        loa: "Level of assurance",
+        legalAdherence: "Legal adherence",
+        compliancyVerified: "Compliancy verified",
+        framework: "Framework",
+        agreementType: "Type",
+        title: "Title",
+        signDate: "Sign date",
+        expiryDate: "Expiry date",
+        hash: "Hash",
+        authRegistryName: "Name",
+        authRegistryId: "Registry ID",
+        authRegistryUrl: "URL",
+        dataspaceId: "Dataspace ID",
+        description: "Description",
+        website: "Website",
+        companyEmail: "Company email",
+        companyPhone: "Company phone",
+        publiclyPublishable: "Publicly publishable",
+        tags: "Tags"
+      },
+      empty: {
+        roles: "No roles.",
+        agreements: "No agreements.",
+        authRegistries: "No authorisation registries.",
+        certificates: "No certificates."
+      },
+      edit: {
+        button: "Edit",
+        title: "Edit participant",
+        save: "Save",
+        saving: "Saving…",
+        saveClaim: "Save claim",
+        cancel: "Cancel",
+        saved: "Saved.",
+        saveError: "Failed to save changes.",
+        claimsTitle: "Claims"
+      }
+    }
   },
   home: {
     title: "Onboarding",
@@ -57,6 +198,7 @@ export default {
   },
   register: {
     title: "Registration",
+    stepCounter: "Step {{current}} of {{total}}",
     steps: {
       role: "Role",
       m2m: "M2M",
@@ -79,6 +221,20 @@ export default {
       eHerkenningInfo: "We use eHerkenning to have more certainty about your online organisation identity. With eHerkenning you identify your organisation safely and easily online. The great convenience is that you can log in to multiple organisations with eHerkenning, so you have to remember fewer passwords. Safe, easy and reliable. For more information, go to www.eherkenning.nl.",
       eidas: "eIDAS Advance eSeal-certificate",
       login: "Login",
+      useCurrentSession: "Use current eHerkenning session",
+      linkAccount: "Link eHerkenning",
+      continueWithEherkenning: "Continue with eHerkenning",
+      useLinkedIdentity: "Continue with linked eHerkenning",
+      currentSessionDescription: "Your current eHerkenning identity is ready to use for this identity check.",
+      linkedReadyDescription: "Your eHerkenning login was linked successfully. Continue with this identity check.",
+      checkingLinkDescription: "Checking whether this portal account is already linked to eHerkenning.",
+      linkedAccountDescription: "This portal account is already linked to eHerkenning. Log in with eHerkenning to continue with this identity check.",
+      linkDescription: "You are signed in with a portal account. Link your eHerkenning login to continue with this identity check.",
+      loginDescription: "Login with eHerkenning to use it for this identity check.",
+      currentIdentity: "Available identity: {{identity}}",
+      currentAccount: "Current portal account: {{account}}",
+      linkCancelled: "The eHerkenning linking flow was cancelled.",
+      linkError: "The eHerkenning linking flow failed. Please try again.",
       info: "More security about your online identity, that's why we use eHerkenning. With eHerkenning you can identify yourself safely and easily online. The great convenience is that you can log in to multiple organizations with eHerkenning. So you need to remember fewer passwords. Safe, easy and reliable.",
       forMoreInfo: "for more information",
       partyId: "Party ID",
@@ -86,7 +242,23 @@ export default {
       eidasCertificate: "An eSeal (electronic seal) is a digital certificate that guarantees the origin and integrity of data on behalf of an organization. Issued by a trusted service provider, it confirms that the sender is a verified organization, ensuring the information is authentic and unchanged.",
       eidasProvide: "Provide your certificate here:",
       eidasInfo: "For more information about procuring such certificates, please refer to the eSEAL procurement guide.",
-
+      certPreview: {
+        title: "Certificate preview",
+        identity: "Derived identity",
+        subject: "Subject",
+        issuer: "Issuer",
+        validity: "Validity",
+        fingerprints: "Fingerprints",
+        organizationName: "Organization",
+        organizationIdentifier: "Organization ID",
+        kvkNumber: "KVK number",
+        partyId: "Party ID",
+        distinguishedName: "Distinguished name",
+        serialNumber: "Serial number",
+        validFrom: "Valid from",
+        validTo: "Valid until",
+        empty: "Not present"
+      }
     },
     form: {
       companyName: "Company Name",
@@ -186,7 +358,7 @@ export default {
     validation: {
       roleRequired: "Please select at least one role",
       m2mRequired: "Please select whether you want to use M2M services",
-      idcheckRequired: "Please provide the required Identification",
+      identityRequired: "Continue with eHerkenning or upload a valid eIDAS certificate",
       selectOption: "Please select an option",
       locationRequired: "Please fill in all required details",
       associationRequired: "Please fill in all required fields",
@@ -258,7 +430,12 @@ export default {
       receiveTitle: "We have received your agreement!",
       receiveMessage: "Thank you for signing the agreement. We will review the agreement and when correct, sign it ourselves. You will receive an email with the signed agreement once this step is finished.",
       closeMessage: "You can now close this screen.",
-      minimumFiles: "Please upload at least 2 signed agreements",
+      minimumFiles: "Please upload a signed copy of each agreement",
+      uploadLimits: "Max. 20 MB per file (45 MB total) • PDF",
+      fileTooLarge: "Each signed agreement must be 20 MB or smaller.",
+      totalTooLarge: "The signed agreements are too large to upload together (max 45 MB).",
+      consentRequired: "Please confirm the statement above to sign with eHerkenning.",
+      signError: "We couldn't submit your signature. Please try again.",
       invalidType: "Only PDF files are accepted for agreements",
       signingMethod: "Choose signing method",
       signingMethodSubtitle: "Your onboarding application has been verified by the Association Admin. \nYou may now sign the agreements and request membership of the Association.",
@@ -289,7 +466,8 @@ export default {
         company: "Company",
         role: "Role",
         status: "Status",
-        nextStepBy: "Next step by"
+        nextStepBy: "Next step by",
+        actions: "Actions"
       }
     },
     status: {
@@ -303,7 +481,8 @@ export default {
     actions: {
       verify: "Verify",
       view: "View",
-      add: "Add"
+      add: "Add",
+      createParty: "Create party"
     },
     common: {
       na: "N/A"
@@ -386,15 +565,24 @@ export default {
   },
   settings: {
     title: "Settings",
+    subtitle: "Manage your portal branding, registry details and onboarding agreements.",
     sections: {
       general: "General Settings",
+      system: "Participant Registry",
+      branding: "Branding",
+      registry: "Registry",
       headerImage: "Header Image",
       introText: "Introduction Text"
     },
     actions: {
-      save: "Save Settings",
-      upload: "Upload Image",
-      add: "Add"
+      save: "Save settings",
+      saving: "Saving…",
+      upload: "Upload image",
+      uploadIcon: "Upload icon",
+      modifyImage: "Modify image",
+      modifyIcon: "Modify icon",
+      add: "Add",
+      recheck: "Re-check"
     },
     messages: {
       saveSuccess: "Settings saved successfully",
@@ -403,15 +591,197 @@ export default {
       uploadFailed: "Failed to upload logo image",
       backendNotConfigured: "Backend URL not configured"
     },
+    system: {
+      description: "The iSHARE framework version this portal operates against, and its live connection to the Satellite registry.",
+      version: "Framework version",
+      connection: "Connection",
+      connected: "Connected",
+      disconnected: "Disconnected",
+      checking: "Checking…",
+      claimModel: "Claim model (v3)",
+      partyModel: "Party model (v2)",
+      unknown: "Unknown"
+    },
+    connection: {
+      test: "Test connection",
+      testing: "Testing…",
+      testOk: "Connected successfully (version {{version}}).",
+      testFailed: "Connection failed: {{error}}",
+      certificate: "Client certificate",
+      certConfigured: "Configured",
+      certMissing: "Not configured",
+      baseUrl: "Satellite base URL",
+      iss: "Client ID (iss)",
+      aud: "Audience (aud)",
+      version: "Framework version override",
+      versionPlaceholder: "auto-detected",
+      tokenEndpoint: "Token endpoint",
+      tokenScope: "Token scope",
+      epCreationEndpoint: "ep_creation endpoint (v2)",
+      partiesEndpoint: "Parties endpoint (v3)",
+      dataspaceSelect: "Dataspace",
+      dataspacePlaceholder: "Select a dataspace…",
+      dataspacesEmpty: "No dataspaces found in the registry.",
+      prefillAuthRegistry: "Prefill authorisation registry",
+      prefillAuthRegistryHint: "Makes the selected authorisation registry static during onboarding so applicants do not need to pick one.",
+      authRegistrySelect: "Authorisation registry",
+      authRegistryPlaceholder: "Select an authorisation registry…",
+      authRegistriesEmpty: "No authorisation registries found in the registry.",
+      authRegistryUrl: "Authorisation registry URL",
+      credentialsNote: "The client certificate and private key are configured via deployment environment variables and are never editable here."
+    },
     labels: {
-      headerImage: "Header Image:",
-      introText: "Introduction Text:",
-      agreement: "Agreement:",
-      registrarId: "Registrar ID:",
-      dataspaceId: "Dataspace ID:",
+      headerImage: "Header image",
+      introText: "Introduction text",
+      agreement: "Agreement",
+      registrarId: "Registrar ID",
+      dataspaceId: "Dataspace ID",
+      dataspaceTitle: "Dataspace title",
       agreements: "Agreements",
       hideCapabilitiesUrl: "Hide capabilities URL field",
       hideCapabilitiesUrlHint: "If enabled, applicants will not see or need to fill the capabilities URL during onboarding."
+    },
+    agreements: {
+      title: "Onboarding agreements",
+      description: "Documents applicants must read and sign during onboarding. The iSHARE Terms of Use and Accession Agreement are included by default; add your own by uploading a PDF or linking a URL.",
+      empty: "No agreements configured.",
+      version: "Version",
+      versionPlaceholder: "e.g. 05-03-2025",
+      sourceBuiltin: "Built-in",
+      sourceFile: "Uploaded",
+      sourceUrl: "URL",
+      sourceLabel: "Label",
+      protected: "Protected · {{method}}",
+      open: "Open",
+      remove: "Remove",
+      removeTitle: "Delete agreement",
+      removeConfirm: "Are you sure you want to delete this agreement?",
+      minimumWarning: "Users are unable to finish onboarding with less than 2 agreements configured.",
+      typeLabel: "Type",
+      types: {
+        frameworkAgreement: "Framework Agreement",
+        dataspaceAgreement: "Dataspace Agreement",
+        termsOfUse: "Terms of Use",
+        accessionAgreement: "Accession Agreement"
+      },
+      addTitle: "Add an agreement",
+      modeFile: "Upload PDF",
+      modeUrl: "From URL",
+      titleLabel: "Title",
+      titlePlaceholder: "e.g. Data Processing Agreement",
+      fileLabel: "PDF file",
+      choosePdf: "Choose PDF file",
+      urlLabel: "Document URL",
+      urlPlaceholder: "https://example.org/agreement.pdf",
+      add: "Add agreement",
+      adding: "Adding…",
+      auth: {
+        label: "URL authentication",
+        method: "Auth method",
+        none: "None (public)",
+        basic: "Basic auth",
+        bearer: "Bearer / API key",
+        oauth2: "OAuth2 client credentials",
+        custom: "Custom header(s)",
+        username: "Username",
+        password: "Password",
+        headerName: "Header name",
+        headerNamePlaceholder: "Authorization",
+        scheme: "Scheme",
+        schemePlaceholder: "Bearer",
+        token: "Token / API key",
+        tokenUrl: "Token URL",
+        clientId: "Client ID",
+        clientSecret: "Client secret",
+        scope: "Scope",
+        scopePlaceholder: "optional",
+        headerValue: "Value",
+        secret: "Secret",
+        addHeader: "Add header",
+        keptHint: "Leave a secret blank to keep the stored value.",
+        keyMissing: "Set AGREEMENT_AUTH_MASTER_KEY on the backend to store protected-URL credentials."
+      },
+      messages: {
+        added: "Agreement added.",
+        removed: "Agreement removed.",
+        addFailed: "Failed to add the agreement.",
+        removeFailed: "Failed to remove the agreement.",
+        fileRequired: "Choose a PDF file.",
+        titleRequired: "Enter a title.",
+        urlRequired: "Enter a document URL."
+      }
+    },
+    tabs: {
+      general: "General",
+      theme: "Theme"
+    },
+    theme: {
+      title: "Colours & fonts",
+      description: "Customise the portal's colours and fonts to match your organisation's brand. Defaults follow the iSHARE brand guidelines. Changes preview live here — Save stores a theme, and Apply publishes it to every visitor.",
+      library: {
+        selectLabel: "Theme",
+        brandDefault: "iSHARE brand default",
+        nameLabel: "Theme name",
+        namePlaceholder: "e.g. Acme Corp",
+        save: "Save theme",
+        apply: "Publish theme",
+        delete: "Delete",
+        currentlyLive: "Live now: {{name}}",
+        hint: "Save stores a theme as a draft without changing the live portal. Apply publishes the selected theme to every visitor.",
+        savedToast: "Theme saved.",
+        appliedToast: "Theme applied — every visitor now sees it.",
+        deletedToast: "Theme deleted.",
+        nameRequired: "Enter a theme name first.",
+        deleteActiveBlocked: "Apply a different theme before deleting the one that's live.",
+        import: "Import",
+        export: "Export",
+        importedToast: "Theme imported — review it, then Save to keep it.",
+        exportedToast: "Theme exported.",
+        importError: "That file isn't a valid theme."
+      },
+      logo: "Logo & favicon",
+      logoHint: "Upload your organisation's logo (PNG, JPG or SVG). It appears in the portal header; if none is set, the default iSHARE logo is used.",
+      favicon: "Browser tab icon",
+      faviconHint: "Shown in the browser tab. A square PNG, SVG or ICO works best; uses the iSHARE icon if not set.",
+      logoConstraints: "PNG, JPG or SVG · up to 5 MB",
+      faviconConstraints: "ICO, PNG or SVG · square works best · up to 1 MB",
+      fileTooLarge: "That file is too large — maximum {{max}}.",
+      badDimensions: "Image dimensions must be between {{min}} and {{max}} pixels.",
+      fonts: {
+        heading: "Heading font",
+        body: "Body font"
+      },
+      groups: {
+        brand: "Brand",
+        buttons: "Buttons",
+        text: "Text",
+        surface: "Surfaces",
+        typography: "Typography"
+      },
+      tokens: {
+        primary: "Primary",
+        secondary: "Secondary",
+        accent: "Accent",
+        buttonPrimary: "Primary button",
+        buttonPrimaryHover: "Primary button (hover)",
+        buttonSecondary: "Secondary button",
+        textPrimary: "Body text",
+        textSecondary: "Headings",
+        background: "Background",
+        borderColor: "Borders",
+        errorColor: "Error"
+      },
+      actions: {
+        reset: "Reset to brand defaults"
+      },
+      preview: "Preview",
+      previewHeading: "The quick brown fox",
+      previewBody: "This is how headings, body text and buttons look with the selected colours.",
+      previewPrimaryBtn: "Primary action",
+      previewSecondaryBtn: "Secondary",
+      messages: {
+        resetDone: "Editor reset to the iSHARE brand defaults."
+      }
     }
   },
   verify: {
@@ -447,6 +817,8 @@ export default {
       title: "Verify manually signed agreement",
       subtitle: "Download the agreement to verify if it is sufficient.",
       downloadText: "Download agreements",
+      eherkenningTitle: "Confirm eHerkenning signature",
+      eherkenningSubtitle: "This applicant signed the agreements electronically via eHerkenning. There are no uploaded documents to review — approving will counter-sign and complete their onboarding.",
       buttons: {
         approve: "Approve & sign",
         reject: "Reject agreement",
@@ -467,11 +839,140 @@ export default {
       newPassword: "New Password (optional)",
       confirmPassword: "Confirm Password"
     },
+    linkedAccounts: {
+      title: "Login methods",
+      description: "Link standard login providers to this portal account. The provider alias must exist as an Identity Provider in Keycloak.",
+      alias: "Keycloak alias",
+      refresh: "Refresh",
+      status: {
+        linked: "Linked",
+        notLinked: "Not linked"
+      },
+      actions: {
+        link: "Link",
+        relink: "Relink"
+      },
+      messages: {
+        linked: "The login method was linked successfully.",
+        cancelled: "The linking flow was cancelled.",
+        error: "The linking flow failed. Please try again."
+      },
+      errors: {
+        loadFailed: "Could not load linked login methods"
+      }
+    },
     errors: {
       loadFailed: "Failed to load profile",
       updateFailed: "Failed to update profile",
       passwordMismatch: "Passwords do not match",
       passwordUpdateFailed: "Failed to update password"
+    }
+  },
+  submit: {
+    title: "Submit Party Information",
+    identity: {
+      heading: "Participant Identity",
+      partyId: "Party ID",
+      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyName: "Party Name",
+      partyNamePlaceholder: "Legal entity name",
+      alsoKnownAs: "Also Known As",
+      alsoKnownAsPlaceholder: "Trade name, brand, …",
+      schemaVersion: "Schema Version"
+    },
+    claim: {
+      heading: "Claim {{index}} — {{type}}",
+      type: "Claim Type",
+      status: "Status",
+      registrarId: "Registrar ID",
+      startDate: "Start Date",
+      endDate: "End Date",
+      frameworkId: "Framework ID",
+      capabilityUrl: "Capability URL",
+      description: "Description",
+      website: "Website",
+      companyEmail: "Company Email",
+      publiclyPublishable: "Publicly Publishable",
+      authRegistryName: "Authorisation Registry Name",
+      authRegistryId: "Authorisation Registry ID",
+      authRegistryUrl: "Authorisation Registry URL",
+      dataspaceId: "Dataspace ID",
+      serviceProviderPartyId: "Service Provider Party ID",
+      agreementType: "Agreement Type",
+      agreementId: "Agreement ID",
+      title: "Title",
+      verificationHash: "Verification Hash",
+      roleId: "Role ID",
+      loa: "Level of Assurance",
+      compliancyVerified: "Compliancy Verified",
+      legalAdherence: "Legal Adherence",
+      subjectName: "Subject Name",
+      certificateType: "Certificate Type",
+      x5c: "Certificate (x5c, base64 DER)",
+      x5t: "Thumbprint (x5t#S256)",
+      assertion: "Assertion"
+    },
+    claimTypes: {
+      frameworkCompliance: "Framework Compliance",
+      authRegistry: "Authorisation Registry",
+      frameworkAgreement: "Framework Agreement",
+      frameworkRole: "Framework Role",
+      x509Certificate: "X.509 Certificate",
+      dataspaceMembership: "Dataspace Membership",
+      dataspaceAgreement: "Dataspace Agreement",
+      idpAssertion: "IdP Assertion"
+    },
+    status: {
+      active: "Active",
+      inactive: "Inactive",
+      revoked: "Revoked",
+      suspended: "Suspended"
+    },
+    loa: {
+      low: "Low",
+      substantial: "Substantial",
+      high: "High",
+      notApplicable: "Not applicable"
+    },
+    yesNoNa: {
+      yes: "Yes",
+      no: "No",
+      notApplicable: "Not applicable"
+    },
+    booleanOptions: {
+      yes: "Yes",
+      no: "No"
+    },
+    placeholders: {
+      framework: "e.g. iSHARE",
+      url: "https://…",
+      date: "YYYY-MM-DD",
+      agreementType: "e.g. AccessionAgreement",
+      roleId: "e.g. dataConsumer",
+      certificateType: "e.g. signing"
+    },
+    actions: {
+      addClaim: "Add Claim",
+      addAlsoKnownAs: "Add Also Known As",
+      remove: "Remove",
+      create: "Create",
+      submitting: "Submitting…"
+    },
+    messages: {
+      submitError: "Failed to submit party. {{message}}",
+      submitSuccess: "Party submitted successfully."
+    },
+    upload: {
+      or: "or",
+      browse: "Browse files",
+      certText: "Drag and drop your certificate here",
+      agreementText: "Drag and drop the signed agreement (PDF) here",
+      certInvalidType: "Invalid file type. Allowed: .pem, .crt, .cer, .der",
+      agreementInvalidType: "Invalid file type. Please upload a PDF.",
+      certTooLarge: "Certificate exceeds the 1 MB limit.",
+      agreementTooLarge: "PDF exceeds the 10 MB limit.",
+      certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
+      agreementReadError: "Could not read the PDF file."
     }
   }
 };

@@ -3,7 +3,9 @@ package handlers
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,13 +35,6 @@ type HandlerParty struct {
 	Config *config.Config
 }
 
-// AccessToken represents the OAuth 2.0 access token response.
-type AccessToken struct {
-	AccessToken *string `json:"access_token,omitempty"`
-	TokenType   *string `json:"token_type,omitempty"`
-	ExpiresIn   *int64  `json:"expires_in,omitempty"`
-}
-
 // CreateSatelliteOwnerAccessToken
 func createSatelliteOwnerAccessToken(config *config.Config) (string, error) {
 	iss := config.SatelliteIss
@@ -64,72 +59,29 @@ func joinSatelliteURL(base, endpoint string) string {
 	return trimmedBase + "/" + endpoint
 }
 
-func (h *HandlerParty) getSatelliteAccessToken(client *http.Client, assertionToken string) (string, error) {
-	if assertionToken == "" {
-		return "", fmt.Errorf("client assertion is empty")
+func (h *HandlerParty) userCanActForKvk(c *fiber.Ctx, kvk string) bool {
+	claims := currentClaims(c)
+	if claims == nil || strings.TrimSpace(kvk) == "" {
+		return false
 	}
 
-	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("scope", h.Config.SatelliteTokenScope)
-	form.Set("client_id", h.Config.SatelliteIss)
-	form.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
-	form.Set("client_assertion", assertionToken)
-
-	tokenURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteTokenEndpoint)
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: requesting access token url=%s scope=%s client_id=%s", tokenURL, h.Config.SatelliteTokenScope, h.Config.SatelliteIss)
-		parts := strings.Split(assertionToken, ".")
-		if len(parts) >= 2 {
-			if header, err := base64.RawURLEncoding.DecodeString(parts[0]); err == nil {
-				log.Printf("satellite: client assertion header=%s", header)
-			} else {
-				log.Printf("satellite: failed to decode assertion header: %v", err)
-			}
-			if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-				log.Printf("satellite: client assertion payload=%s", payload)
-			} else {
-				log.Printf("satellite: failed to decode assertion payload: %v", err)
-			}
-		}
+	var org models.Organization
+	if err := h.Server.DB.Where("kvk_number = ?", strings.TrimSpace(kvk)).First(&org).Error; err != nil {
+		return false
 	}
 
-	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var count int64
+	h.Server.DB.Model(&models.OrganizationMember{}).
+		Where("organization_id = ? AND status = ? AND (keycloak_subject = ? OR email = ? OR username = ?)",
+			org.ID,
+			"active",
+			strings.TrimSpace(claims.Subject),
+			strings.TrimSpace(claims.Email),
+			strings.TrimSpace(claims.PreferredUsername),
+		).
+		Count(&count)
 
-	res, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if res.StatusCode != http.StatusOK {
-		if h.Config.SatelliteDebug {
-			log.Printf("satellite: token request failed status=%d body=%s", res.StatusCode, string(body))
-		}
-		return "", fmt.Errorf("satellite token request failed: status %d", res.StatusCode)
-	}
-
-	var tokenResponse AccessToken
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", fmt.Errorf("failed to parse token response: %w", err)
-	}
-	if tokenResponse.AccessToken == nil || *tokenResponse.AccessToken == "" {
-		return "", fmt.Errorf("token response did not contain an access token")
-	}
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: received access token (len=%d)", len(*tokenResponse.AccessToken))
-	}
-
-	return *tokenResponse.AccessToken, nil
+	return count > 0
 }
 
 func NewHandlerParty(server *s.Server, config *config.Config) *HandlerParty {
@@ -178,6 +130,15 @@ func (h *HandlerParty) buildSporSignedRequest(subject string, organizationIdenti
 // @Failure      500      {object}  map[string]string
 // @Router       /parties [post]
 func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
+	// The 2.x ep_creation dialect must not be used against a 3.x (claim-model)
+	// satellite. On a v3 registry, party creation goes through the claim-based
+	// register-new-party flow (POST /parties → CreateParties); reject here so no
+	// path silently creates a v2 party against a v3 participant registry.
+	if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest,
+			"A 3.x participant registry is connected; use POST /parties (claim-based register-new-party) instead of this 2.x endpoint.")
+	}
+
 	// Parse the request body
 	request := requests.PartyCreateRequest{}
 
@@ -251,7 +212,7 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 	// Create a new HTTP client
 	client := &http.Client{}
 
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}
@@ -312,6 +273,262 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 	return responses.MessageResponse(c, fiber.StatusOK, "Your request is successfully accepted. Verification process started.")
 }
 
+// CreateParties godoc
+// @Summary      Create a v3.0 claim-based party in the Satellite
+// @Description  Forwards the iSHARE v3.0 claim-based `party` payload to the Satellite's `POST /parties` (register-new-party) endpoint.
+// @Tags         parties
+// @Accept       json
+// @Produce      json
+// @Param        payload  body      requests.PartyV3CreateRequest  true  "v3.0 party payload"
+// @Success      200      {object}  map[string]string
+// @Failure      400      {object}  map[string]string
+// @Failure      500      {object}  map[string]string
+// @Router       /parties [post]
+func (h *HandlerParty) CreateParties(c *fiber.Ctx) error {
+	// The claim model is a 3.x concept; guard against accidentally posting it to
+	// a 2.x satellite that speaks the ep_creation dialect.
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest,
+			"The /parties endpoint requires a 3.x satellite (set SATELLITE_VERSION).")
+	}
+
+	// Parse the claim-based party. Unknown top-level fields are tolerated and
+	// unknown *claim* fields are required (the claim model is extensible), so we
+	// deliberately do not use DisallowUnknownFields here.
+	request := requests.PartyV3CreateRequest{}
+	if err := json.Unmarshal(c.Body(), &request); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid create party request data: "+err.Error())
+	}
+
+	if strings.TrimSpace(request.Name) == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "name is required")
+	}
+	if len(request.Claims) == 0 {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "at least one claim is required")
+	}
+
+	// Normalize identity to a did:ishare id (+ EORI alias) the way the 2.1.1
+	// flavor does, while leaving non-ishare DIDs (did:web, did:ebsi, …) intact.
+	partyDID, eori := deriveV3Identity(request.ID)
+	if partyDID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "id is required")
+	}
+	aliases := cleanAliases(request.AlsoKnownAs)
+	if len(aliases) == 0 && eori != "" {
+		aliases = []string{satellite.BuildEoriAlias(eori)}
+	}
+
+	// Enforce the framework's minimum-claims rule (spec: register-new-party).
+	if err := validateMinimumClaims(&request); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+
+	status, body, err := h.postV3Party(&request, partyDID, aliases)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, err.Error())
+	}
+
+	// The satellite returns 200 (spec) or 201 on success; the body is a signed
+	// partyResponse JWT we don't need to surface to the portal user.
+	if status != http.StatusOK && status != http.StatusCreated {
+		msg := extractSatelliteError(body)
+		if msg == "" {
+			msg = fmt.Sprintf("remote error, status %d", status)
+		}
+		return responses.ErrorResponse(c, status, msg)
+	}
+
+	return responses.MessageResponse(c, fiber.StatusOK, "Your request is successfully accepted. Verification process started.")
+}
+
+// postPartyPayload obtains a satellite owner access token and POSTs a party
+// payload to the satellite's parties endpoint.
+// It returns the HTTP status and raw response body so callers can surface the
+// satellite's own error message. Reused by both the admin create-party endpoint
+// and the onboarding completion flow.
+func (h *HandlerParty) postPartyPayload(payload interface{}) (int, []byte, error) {
+	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create satellite owner access token: %w", err)
+	}
+
+	client := &http.Client{}
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get satellite access token: %w", err)
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to prepare request payload: %w", err)
+	}
+
+	partiesURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.partiesEndpointForVersion())
+	req, err := http.NewRequest("POST", partiesURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create request to satellite: %w", err)
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := client.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to send request to satellite: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: parties status=%d body=%s", res.StatusCode, string(body))
+	}
+	return res.StatusCode, body, nil
+}
+
+func (h *HandlerParty) postV3Party(request *requests.PartyV3CreateRequest, partyDID string, aliases []string) (int, []byte, error) {
+	payload := satellite.BuildEpCreation30RequestFromRequest(request, partyDID, aliases, h.Config.RegistrarId)
+	return h.postPartyPayload(payload)
+}
+
+func (h *HandlerParty) partiesEndpointForVersion() string {
+	endpoint := strings.TrimSpace(h.Config.SatellitePartiesEndpoint)
+	if isSatelliteVersion22(h.Config.SatelliteVersion) && (endpoint == "" || endpoint == "/parties") {
+		return "/v2.2/parties"
+	}
+	if endpoint == "" {
+		return "/parties"
+	}
+	return endpoint
+}
+
+func truncateForLog(b []byte) string {
+	const max = 600
+	if len(b) > max {
+		return string(b[:max]) + "…"
+	}
+	return string(b)
+}
+
+// forwardPartyWrite proxies a write (PUT/PATCH) to the satellite's party/claim
+// update endpoints. The request body is forwarded verbatim — the front-end
+// builds the payload that matches the satellite's schema version — and the
+// owner access token is attached. The satellite's response is passed back.
+func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath string) error {
+	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create access token")
+	}
+
+	client := &http.Client{}
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	}
+
+	reqURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, satellitePath)
+	body := c.Body()
+
+	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: %s %s body=%s", method, reqURL, truncateForLog(body))
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to reach satellite")
+	}
+	defer res.Body.Close()
+
+	respBody, _ := io.ReadAll(res.Body)
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: %s %s -> %d body=%s", method, reqURL, res.StatusCode, truncateForLog(respBody))
+	}
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		msg := extractSatelliteError(respBody)
+		if msg == "" {
+			msg = fmt.Sprintf("satellite update failed: status %d", res.StatusCode)
+		}
+		return responses.ErrorResponse(c, res.StatusCode, msg)
+	}
+
+	c.Set("Content-Type", "application/json")
+	return c.Status(res.StatusCode).Send(respBody)
+}
+
+// UpdateParty godoc
+// @Summary      Update a party (v2.2, full replace)
+// @Description  Proxies to the Satellite's PUT /parties/{id} (iSHARE 2.2 party-update). The body must be a complete party_creation_request — the existing party is replaced.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id} [put]
+func (h *HandlerParty) UpdateParty(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "2") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PUT update requires a 2.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPut, "/parties/"+url.PathEscape(id))
+}
+
+// PatchParty godoc
+// @Summary      Update party information (v3.0, partial)
+// @Description  Proxies to the Satellite's PATCH /parties/{id} (iSHARE 3.0 update-party-information). Only the supplied fields are changed.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      200   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id} [patch]
+func (h *HandlerParty) PatchParty(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PATCH update requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id))
+}
+
+// PatchClaim godoc
+// @Summary      Update claim information (v3.0, partial)
+// @Description  Proxies to the Satellite's PATCH /parties/{partyId}/claims/{claimId} (iSHARE 3.0 update-claim-information).
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id       path  string  true  "Party id / EORI"
+// @Param        claimId  path  string  true  "Claim id"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]string
+// @Router       /parties/{id}/claims/{claimId} [patch]
+func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim PATCH update requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	claimId := strings.TrimSpace(c.Params("claimId"))
+	if id == "" || claimId == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
+}
+
 type ProposalData struct {
 	Roles struct {
 		DataOwner    bool `json:"dataOwner"`
@@ -326,6 +543,11 @@ type ProposalData struct {
 		KvkNumber   string `json:"kvkNumber"`
 		PartyId     string `json:"partyId"`
 		PartyName   string `json:"partyName"`
+		// eIDAS certificate fields captured at the identity-check step, used to
+		// build the v3 x509Certificate identity claim at party creation.
+		CertSubjectName string `json:"certSubjectName"`
+		CertX5c         string `json:"certX5c"`
+		CertX5tS256     string `json:"certX5tS256"`
 	} `json:"idCheck"`
 	Location struct {
 		Address string `json:"address"`
@@ -347,6 +569,25 @@ type ProposalData struct {
 	} `json:"account"`
 	KeycloakUsername string `json:"keycloakUsername"`
 	Status           string `json:"status"`
+}
+
+// kvkFromPartyID extracts the KVK number embedded in a party id of the form
+// "EU.EORI.NL.KVK<digits>". Returns "" when the id is not KVK-based (e.g. an
+// EORI or DID for a non-Dutch party).
+func kvkFromPartyID(partyID string) string {
+	idx := strings.Index(strings.ToUpper(partyID), "KVK")
+	if idx < 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range partyID[idx+3:] {
+		if r >= '0' && r <= '9' {
+			b.WriteByte(byte(r))
+		} else if b.Len() > 0 {
+			break
+		}
+	}
+	return b.String()
 }
 
 // HandlePropose godoc
@@ -376,9 +617,19 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}
 	}
 
+	// The party identifier is the generic party id — KVK-based for NL eHerkenning
+	// parties, but also EORI/DID/other registration numbers for non-Dutch parties.
+	// Require that, not a KVK specifically.
+	partyID := strings.TrimSpace(proposalData.IDCheck.PartyId)
+	if partyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Proposal is missing a party identifier")
+	}
+	// KVK is optional: derive it from the party id when KVK-based (for the
+	// eHerkenning authorization match below and downstream display). May stay "".
 	proposalKvk := strings.TrimSpace(proposalData.IDCheck.KvkNumber)
 	if proposalKvk == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Proposal is missing kvkNumber")
+		proposalKvk = kvkFromPartyID(partyID)
+		proposalData.IDCheck.KvkNumber = proposalKvk
 	}
 
 	if !h.Config.OIDCDisable {
@@ -395,11 +646,19 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		} else if h.Config.SatelliteDebug {
 			log.Printf("auth: request context missing claims")
 		}
-		if tokenIdentifier == "" {
-			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user is missing organization identifier claim")
-		}
-		if tokenIdentifier != proposalKvk {
-			return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user cannot submit proposals for this kvkNumber")
+		// When the session asserts an organization identity (e.g. eHerkenning's
+		// legalSubjectId), it must match the party being onboarded — its KVK or as
+		// embedded in the party id — or the user must be delegated. When the session
+		// carries NO organization identity (e.g. an eIDAS-certificate login),
+		// submission is allowed: authorization is then established by the uploaded
+		// certificate, admin verification and the satellite's claim validation at
+		// completion, so a non-KVK / non-eHerkenning party is not blocked here.
+		if tokenIdentifier != "" {
+			matchesParty := tokenIdentifier == proposalKvk ||
+				strings.Contains(partyID, tokenIdentifier)
+			if !matchesParty && !h.userCanActForKvk(c, proposalKvk) {
+				return responses.ErrorResponse(c, fiber.StatusForbidden, "Authenticated user cannot submit proposals for this party")
+			}
 		}
 	}
 
@@ -451,6 +710,9 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}(),
 		CreatedAt:        time.Now(),
 		KeycloakUsername: proposalData.KeycloakUsername,
+		CertSubjectName:  proposalData.IDCheck.CertSubjectName,
+		CertX5c:          proposalData.IDCheck.CertX5c,
+		CertX5tS256:      proposalData.IDCheck.CertX5tS256,
 	}
 
 	result := h.Server.DB.Create(&proposal)
@@ -614,6 +876,18 @@ func (h *HandlerParty) RejectProposal(c *fiber.Ctx) error {
 // @Failure      404               {object}  map[string]string
 // @Failure      500               {object}  map[string]string
 // @Router       /proposals/sign/{keycloakUsername} [post]
+// firstFormValue returns the first value submitted for a multipart form field,
+// or an empty string when the field is absent.
+func firstFormValue(form *multipart.Form, key string) string {
+	if form == nil {
+		return ""
+	}
+	if vals, ok := form.Value[key]; ok && len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
+
 func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 	keycloakUsernameParam := c.Params("keycloakUsername")
 	keycloakUsername, err := url.PathUnescape(keycloakUsernameParam)
@@ -628,10 +902,65 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "Proposal not found")
 	}
 
-	// Handle multiple file uploads
+	// Parse the multipart form (fields and optional file uploads).
 	form, err := c.MultipartForm()
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Error processing files")
+	}
+
+	// Determine the chosen signing method. eHerkenning is consent-based and
+	// uploads no documents; manual signing uploads the signed PDFs.
+	signingMethod := strings.ToLower(strings.TrimSpace(firstFormValue(form, "signingMethod")))
+
+	if signingMethod == "eherkenning" {
+		// The authenticated eHerkenning identity combined with explicit consent
+		// constitutes the signature, so no files are expected here.
+		consent := strings.ToLower(strings.TrimSpace(firstFormValue(form, "eherkenningConsent")))
+		if consent != "true" {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "eHerkenning signing requires explicit consent")
+		}
+
+		// Verify server-side that the caller genuinely authenticated through the
+		// eHerkenning identity provider, so a forged request cannot sign on their
+		// behalf. Skipped only when OIDC is disabled (local/dev) and no claims exist.
+		if !h.Config.OIDCDisable {
+			claims := currentClaims(c)
+			if claims == nil {
+				return responses.ErrorResponse(c, fiber.StatusUnauthorized, "Missing authentication claims")
+			}
+			expectedIdp := strings.TrimSpace(h.Config.KeycloakIdp)
+			if expectedIdp == "" {
+				// Mirror the frontend's default alias when none is configured.
+				expectedIdp = "eHerkenning"
+			}
+			if !strings.EqualFold(strings.TrimSpace(claims.Idp), expectedIdp) {
+				return responses.ErrorResponse(c, fiber.StatusForbidden, "Session was not authenticated via eHerkenning")
+			}
+		}
+
+		// Capture the eHerkenning identity assertion for the v3 idpAssertion claim.
+		// Prefer an explicit form value, but fall back to the request's bearer token
+		// (the eHerkenning-brokered session this endpoint authenticated), so capture
+		// does not depend on the client sending it explicitly.
+		assertion := firstFormValue(form, "idpAssertion")
+		if assertion == "" {
+			authz := c.Get("Authorization")
+			if len(authz) > 7 && strings.EqualFold(authz[:7], "Bearer ") {
+				assertion = strings.TrimSpace(authz[7:])
+			}
+		}
+		if assertion != "" {
+			proposal.IdpAssertion = assertion
+		}
+		proposal.SignedAgreementPaths = nil
+		proposal.SignedVia = "eherkenning"
+		proposal.Status = "signed"
+
+		if err := h.Server.DB.Save(&proposal).Error; err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update proposal")
+		}
+
+		return responses.MessageResponse(c, fiber.StatusOK, "Agreements signed successfully")
 	}
 
 	// Count the number of signedAgreement files
@@ -673,6 +1002,7 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 
 	// Update proposal with file paths
 	proposal.SignedAgreementPaths = filePaths
+	proposal.SignedVia = "manual"
 	proposal.Status = "signed"
 
 	if err := h.Server.DB.Save(&proposal).Error; err != nil {
@@ -684,6 +1014,29 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 	}
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Agreements signed successfully")
+}
+
+// buildEherkenningConsentRecord renders a human-readable record of a consent-based
+// eHerkenning signature. It is used as the agreement artifact (hashed and attached
+// to each agreement template) when a proposal was signed via eHerkenning rather
+// than by uploading signed PDFs.
+func buildEherkenningConsentRecord(p *models.Proposal) []byte {
+	var b strings.Builder
+	b.WriteString("iSHARE onboarding — electronic signature via eHerkenning\n")
+	b.WriteString("=========================================================\n\n")
+	b.WriteString("The iSHARE agreements listed below were read, accepted and signed\n")
+	b.WriteString("electronically using a verified eHerkenning identity. The signer confirmed\n")
+	b.WriteString("that this action qualifies as a signature.\n\n")
+	fmt.Fprintf(&b, "Party ID:     %s\n", p.PartyId)
+	fmt.Fprintf(&b, "Party name:   %s\n", p.PartyName)
+	fmt.Fprintf(&b, "Company name: %s\n", p.CompanyName)
+	fmt.Fprintf(&b, "KVK number:   %s\n", p.KvkNumber)
+	fmt.Fprintf(&b, "Contact:      %s <%s>\n", p.ContactName, p.ContactEmail)
+	b.WriteString("Signed via:   eHerkenning\n")
+	b.WriteString("\nAgreements accepted:\n")
+	b.WriteString("  - Terms of Use (ToU-iSHARE)\n")
+	b.WriteString("  - Accession Agreement (iSHARE-AA)\n")
+	return []byte(b.String())
 }
 
 // CompleteProposal godoc
@@ -737,29 +1090,62 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		dataspaceId = settings.DataspaceId
 	}
 
-	if len(proposal.SignedAgreementPaths) == 0 {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Signed agreements are required to complete proposal")
+	// Preflight: the satellite rejects ep_creation when registrar_id does not equal
+	// the owner-token issuer. An empty registrar_id is a configuration gap, so fail
+	// fast here with a clear, actionable message rather than letting the satellite
+	// reject it opaquely. The satellite's own message is surfaced for anything else
+	// (see the response handling below).
+	if strings.TrimSpace(registrarId) == "" {
+		return responses.ErrorResponse(c, fiber.StatusUnprocessableEntity,
+			"Cannot complete onboarding: Registrar ID is not configured. Set it in Settings → General, or via the REGISTRAR_ID environment variable (it must match SATELLITE_ISS).")
+	}
+
+	// v3.0 (claim-model) satellites use the claim-based register-new-party
+	// (/parties) endpoint instead of the 2.x ep_creation dialect.
+	if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return h.completeProposalV3(c, &proposal, registrarId)
+	}
+	if isSatelliteVersion22(h.Config.SatelliteVersion) {
+		return h.completeProposalV22(c, &proposal, registrarId)
 	}
 
 	flavor := epCreationFlavorFromVersion(h.Config.SatelliteVersion)
 
-	// Read and hash agreement files
-	var agreementFiles []satellite.AgreementFile
-	for _, path := range proposal.SignedAgreementPaths {
-		fileContent, err := os.ReadFile(path)
-		if err != nil {
-			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read agreement file")
-		}
-		hash := md5.Sum(fileContent)
-		agreementFiles = append(agreementFiles, satellite.AgreementFile{
-			Hash:       fmt.Sprintf("%x", hash),
-			FileBase64: base64.StdEncoding.EncodeToString(fileContent),
-		})
-	}
-
 	agreementTemplates := []satellite.AgreementTemplate{
 		{Type: "TermsOfUse", Title: "ToU-iSHARE"},
 		{Type: "AccessionAgreement", Title: "iSHARE-AA"},
+	}
+
+	// Build the agreement payload for the satellite. Manual signing hashes the
+	// uploaded PDFs; eHerkenning signing is consent-based (no documents), so we
+	// synthesise a consent record and attach it to every agreement template.
+	var agreementFiles []satellite.AgreementFile
+	if proposal.SignedVia == "eherkenning" {
+		record := buildEherkenningConsentRecord(&proposal)
+		hash := md5.Sum(record)
+		consent := satellite.AgreementFile{
+			Hash:       fmt.Sprintf("%x", hash),
+			FileBase64: base64.StdEncoding.EncodeToString(record),
+		}
+		for range agreementTemplates {
+			agreementFiles = append(agreementFiles, consent)
+		}
+	} else {
+		if len(proposal.SignedAgreementPaths) == 0 {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Signed agreements are required to complete proposal")
+		}
+		// Read and hash the uploaded agreement files.
+		for _, path := range proposal.SignedAgreementPaths {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read agreement file")
+			}
+			hash := md5.Sum(fileContent)
+			agreementFiles = append(agreementFiles, satellite.AgreementFile{
+				Hash:       fmt.Sprintf("%x", hash),
+				FileBase64: base64.StdEncoding.EncodeToString(fileContent),
+			})
+		}
 	}
 
 	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
@@ -781,9 +1167,6 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	}
 
 	authRegistryURL := proposal.AuthRegistryUrl
-	if authRegistryURL == "" {
-		authRegistryURL = "https://ar.isharetest.net"
-	}
 
 	var payload interface{}
 	if flavor.UseDidIdentifiers {
@@ -811,7 +1194,7 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	// Create a new HTTP client
 	client := &http.Client{}
 
-	accessToken, err := h.getSatelliteAccessToken(client, assertionToken)
+	accessToken, err := satellite.ExchangeForAccessToken(client, h.Server.Config, assertionToken)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnauthorized, fmt.Sprintf("Failed to get satellite access token: %v", err))
 	}
@@ -855,11 +1238,26 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 
 	// Check the response status
 	if res.StatusCode != http.StatusOK {
-		// message, _ := responseData["message"].(string)
-		// if message == "" {
-		// 	message = "Failed to complete proposal"
-		// }
-		return responses.ErrorResponse(c, res.StatusCode, "unprocessable")
+		// Surface the satellite's own error message so failures are diagnosable
+		// instead of an opaque "unprocessable". PR-MW returns {"message": "..."}
+		// (ep_creation) or {"error_msg": "..."}; fall back to the raw body.
+		detail := strings.TrimSpace(string(body))
+		var parsed struct {
+			Message  string `json:"message"`
+			ErrorMsg string `json:"error_msg"`
+		}
+		if json.Unmarshal(body, &parsed) == nil {
+			if parsed.Message != "" {
+				detail = parsed.Message
+			} else if parsed.ErrorMsg != "" {
+				detail = parsed.ErrorMsg
+			}
+		}
+		if detail == "" {
+			detail = "Satellite rejected the party registration"
+		}
+		log.Printf("satellite: ep_creation rejected status=%d detail=%s", res.StatusCode, detail)
+		return responses.ErrorResponse(c, res.StatusCode, detail)
 	}
 
 	// Update the status to completed
@@ -872,6 +1270,214 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	}
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
+}
+
+func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Proposal, registrarId string) error {
+	normalizedPartyID := normalizePartyID(proposal.PartyId)
+	if normalizedPartyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
+	}
+	partyDID := satellite.BuildDidFromPartyID(normalizedPartyID)
+	aliases := []string{satellite.BuildEoriAlias(normalizedPartyID)}
+
+	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
+	endDate := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+
+	agreementTemplates := []satellite.AgreementTemplate{
+		{Type: "TermsOfUse", Title: "ToU-iSHARE"},
+		{Type: "AccessionAgreement", Title: "iSHARE-AA"},
+	}
+
+	var agreementFiles []satellite.AgreementFile
+	if proposal.SignedVia == "eherkenning" {
+		record := buildEherkenningConsentRecord(proposal)
+		hash := md5.Sum(record)
+		consent := satellite.AgreementFile{
+			Hash:       fmt.Sprintf("%x", hash),
+			FileBase64: base64.StdEncoding.EncodeToString(record),
+		}
+		for range agreementTemplates {
+			agreementFiles = append(agreementFiles, consent)
+		}
+	} else {
+		if len(proposal.SignedAgreementPaths) == 0 {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Signed agreements are required to complete proposal")
+		}
+		for _, path := range proposal.SignedAgreementPaths {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read agreement file")
+			}
+			hash := md5.Sum(fileContent)
+			agreementFiles = append(agreementFiles, satellite.AgreementFile{
+				Hash:       fmt.Sprintf("%x", hash),
+				FileBase64: base64.StdEncoding.EncodeToString(fileContent),
+			})
+		}
+	}
+
+	var settings models.Settings
+	settingsResult := h.Server.DB.First(&settings)
+	dataspaceId := h.Config.DataspaceId
+	dataspaceTitle := h.Config.DataspaceTitle
+	if settingsResult.Error == nil {
+		if strings.TrimSpace(settings.DataspaceId) != "" {
+			dataspaceId = settings.DataspaceId
+		}
+		if strings.TrimSpace(settings.DataspaceTitle) != "" {
+			dataspaceTitle = settings.DataspaceTitle
+		}
+	}
+
+	authRegistryURL := proposal.AuthRegistryUrl
+
+	agreements := satellite.BuildAgreements22FromFiles(agreementFiles, agreementTemplates, dataspaceId, dataspaceTitle, startDate, endDate)
+	payload, err := satellite.BuildParty22RequestFromProposal(proposal, partyDID, aliases, registrarId, authRegistryURL, dataspaceId, dataspaceTitle, agreements, startDate, endDate)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusUnprocessableEntity, "Cannot complete onboarding: "+err.Error())
+	}
+
+	status, body, err := h.postPartyPayload(payload)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to create party: "+err.Error())
+	}
+	if status != http.StatusOK && status != http.StatusCreated {
+		msg := extractSatelliteError(body)
+		if msg == "" {
+			msg = fmt.Sprintf("Satellite rejected the party registration (status %d)", status)
+		}
+		log.Printf("satellite: parties rejected status=%d detail=%s", status, msg)
+		return responses.ErrorResponse(c, status, msg)
+	}
+
+	proposal.Status = "completed"
+	if err := h.Server.DB.Save(proposal).Error; err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
+	}
+	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
+}
+
+// completeProposalV3 creates the party on a v3.0 (claim-model) satellite via the
+// register-new-party (/parties) endpoint, assembling the claim set from the
+// proposal plus the deployment's framework configuration.
+func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposal, registrarId string) error {
+	partyDID, eori := deriveV3Identity(proposal.PartyId)
+	if partyDID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
+	}
+	var aliases []string
+	if eori != "" {
+		aliases = []string{satellite.BuildEoriAlias(eori)}
+	}
+
+	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
+	endDate := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+
+	agreementID := strings.TrimSpace(h.Config.FrameworkAgreementId)
+	if agreementID == "" {
+		// Deterministic fallback when the deployment hasn't pinned an id.
+		agreementID = h.Config.FrameworkId + "-tou"
+	}
+
+	// Resolve a verificationHash per agreement type from the configured
+	// agreements: each claim carries the SHA-256 of the actual document the party
+	// agreed to. URL-sourced/unavailable documents fall back to the signed-artifact
+	// (or eHerkenning consent) hash so completion never hard-fails on hashing.
+	var settings models.Settings
+	h.Server.DB.First(&settings)
+	configuredAgreements := decodeAgreements(settings.Agreements)
+	signedHash, _ := h.agreementVerificationHash(proposal)
+
+	frameworkHash := signedHash
+	if fa := findAgreementByType(configuredAgreements, "frameworkAgreement"); fa != nil {
+		if docHash, ok := agreementDocumentHash(*fa); ok {
+			frameworkHash = docHash
+		}
+	}
+
+	includeDataspace := false
+	dataspaceHash := ""
+	dataspaceTitle := strings.TrimSpace(h.Config.DataspaceTitle)
+	if da := findAgreementByType(configuredAgreements, "dataspaceAgreement"); da != nil {
+		includeDataspace = true
+		if strings.TrimSpace(da.Title) != "" {
+			dataspaceTitle = da.Title
+		}
+		if docHash, ok := agreementDocumentHash(*da); ok {
+			dataspaceHash = docHash
+		} else {
+			dataspaceHash = signedHash
+		}
+	}
+
+	claims, err := satellite.BuildV3OnboardingClaims(proposal, satellite.V3OnboardingClaimConfig{
+		RegistrarID:        registrarId,
+		FrameworkID:        h.Config.FrameworkId,
+		AgreementType:      h.Config.FrameworkAgreementType,
+		AgreementID:        agreementID,
+		AgreementTitle:     h.Config.FrameworkAgreementTitle,
+		RoleID:             h.Config.FrameworkRoleId,
+		Loa:                h.Config.FrameworkRoleLoa,
+		LegalAdherence:     h.Config.FrameworkRoleLegalAdherence,
+		CompliancyVerified: h.Config.FrameworkRoleCompliancy,
+		VerificationHash:   frameworkHash,
+		StartDate:          startDate,
+		EndDate:            endDate,
+
+		IncludeDataspaceAgreement: includeDataspace,
+		DataspaceID:               h.Config.DataspaceId,
+		DataspaceAgreementType:    "DataspaceAgreement",
+		DataspaceAgreementID:      h.Config.FrameworkId + "-dsa",
+		DataspaceAgreementTitle:   dataspaceTitle,
+		DataspaceVerificationHash: dataspaceHash,
+	})
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusUnprocessableEntity, "Cannot complete onboarding: "+err.Error())
+	}
+
+	request := &requests.PartyV3CreateRequest{
+		ID:            proposal.PartyId,
+		Name:          proposal.PartyName,
+		AlsoKnownAs:   aliases,
+		SchemaVersion: "v3.0",
+		Claims:        claims,
+	}
+
+	status, body, err := h.postV3Party(request, partyDID, aliases)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to create party: "+err.Error())
+	}
+	if status != http.StatusOK && status != http.StatusCreated {
+		msg := extractSatelliteError(body)
+		if msg == "" {
+			msg = fmt.Sprintf("Satellite rejected the party registration (status %d)", status)
+		}
+		log.Printf("satellite: parties rejected status=%d detail=%s", status, msg)
+		return responses.ErrorResponse(c, status, msg)
+	}
+
+	proposal.Status = "completed"
+	if err := h.Server.DB.Save(proposal).Error; err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
+	}
+	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
+}
+
+// agreementVerificationHash returns the SHA-256 hex of the signed-agreement
+// artifact for the frameworkAgreement claim's verificationHash: the eHerkenning
+// consent record for consent-based signing, otherwise the first uploaded signed
+// agreement file.
+func (h *HandlerParty) agreementVerificationHash(proposal *models.Proposal) (string, error) {
+	if proposal.SignedVia == "eherkenning" || len(proposal.SignedAgreementPaths) == 0 {
+		sum := sha256.Sum256(buildEherkenningConsentRecord(proposal))
+		return hex.EncodeToString(sum[:]), nil
+	}
+	content, err := os.ReadFile(proposal.SignedAgreementPaths[0])
+	if err != nil {
+		return "", fmt.Errorf("failed to read signed agreement: %w", err)
+	}
+	sum := sha256.Sum256(content)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func normalizePartyID(raw string) string {
@@ -901,6 +1507,89 @@ func epCreationFlavorFromVersion(raw string) epCreationFlavor {
 		return epCreationFlavor{UseDidIdentifiers: true}
 	}
 	return epCreationFlavor{UseDidIdentifiers: false}
+}
+
+func isSatelliteVersion22(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	return strings.HasPrefix(trimmed, "2.2")
+}
+
+// deriveV3Identity turns the portal-supplied party id into a did:ishare id and
+// the bare EORI it was derived from. A did:ishare id is normalized through the
+// EORI form; any other DID method (did:web, did:ebsi, …) is preserved verbatim
+// with no EORI alias; a plain EORI/registration number is promoted to a DID.
+func deriveV3Identity(rawID string) (did string, eori string) {
+	trimmed := strings.TrimSpace(rawID)
+	if trimmed == "" {
+		return "", ""
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "did:ishare:") {
+		eori = normalizePartyID(trimmed[len("did:ishare:"):])
+		return satellite.BuildDidFromPartyID(eori), eori
+	}
+	if strings.HasPrefix(lower, "did:") {
+		return trimmed, ""
+	}
+	eori = normalizePartyID(trimmed)
+	return satellite.BuildDidFromPartyID(eori), eori
+}
+
+// cleanAliases trims, de-duplicates and drops empty alsoKnownAs entries.
+func cleanAliases(aliases []string) []string {
+	seen := map[string]bool{}
+	cleaned := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		a := strings.TrimSpace(alias)
+		if a == "" || seen[a] {
+			continue
+		}
+		seen[a] = true
+		cleaned = append(cleaned, a)
+	}
+	return cleaned
+}
+
+// validateMinimumClaims enforces the v3 "register-new-party" rule: a party must
+// provide frameworkCompliance, frameworkAgreement and frameworkRole claims plus
+// at least one identity-proof claim (x509Certificate or idpAssertion).
+func validateMinimumClaims(request *requests.PartyV3CreateRequest) error {
+	present := map[string]bool{}
+	for _, claim := range request.Claims {
+		if t, ok := claim["type"].(string); ok {
+			present[strings.TrimSpace(t)] = true
+		}
+	}
+
+	var missing []string
+	for _, required := range []string{"frameworkCompliance", "frameworkAgreement", "frameworkRole"} {
+		if !present[required] {
+			missing = append(missing, required)
+		}
+	}
+	if !present["x509Certificate"] && !present["idpAssertion"] {
+		missing = append(missing, "x509Certificate or idpAssertion")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required claim(s): %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// extractSatelliteError pulls a human-readable message out of a satellite error
+// body, tolerating the common JSON envelopes; returns "" when none is found.
+func extractSatelliteError(body []byte) string {
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	for _, key := range []string{"message", "error_description", "error", "detail"} {
+		if v, ok := parsed[key].(string); ok && strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // ModifyProposal godoc

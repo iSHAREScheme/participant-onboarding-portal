@@ -29,6 +29,16 @@ type Proposal struct {
 	CreatedAt       time.Time `json:"createdAt"`
 	KeycloakUsername string    `json:"keycloakUsername"`
 	SignedAgreementPaths []string  `json:"signedAgreementPaths" gorm:"type:text;serializer:json"`
+	// SignedVia records how the proposal was signed: "manual" (uploaded PDFs)
+	// or "eherkenning" (consent-based signing via a verified eHerkenning session).
+	SignedVia            string    `json:"signedVia"`
+	// Identity proof captured during onboarding, required to build the mandatory
+	// v3 identity claim at party creation: the eIDAS certificate (x509Certificate
+	// claim) or the eHerkenning assertion (idpAssertion claim).
+	CertSubjectName string `json:"certSubjectName"`
+	CertX5c         string `json:"certX5c" gorm:"type:text"`
+	CertX5tS256     string `json:"certX5tS256"`
+	IdpAssertion    string `json:"idpAssertion" gorm:"type:text"`
 }
 
 func (Proposal) TableName() string {

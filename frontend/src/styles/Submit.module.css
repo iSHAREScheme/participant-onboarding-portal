@@ -32,8 +32,8 @@
 }
 
 .sectionTitle {
-  color: #8b008b;
-  border-left: 3px solid #8b008b;
+  color: var(--text-secondary, #013A57);
+  border-left: 3px solid var(--button-primary, #0088cc);
   padding-left: 1rem;
   margin-bottom: 2rem;
   font-weight: 500;
@@ -52,4 +52,129 @@
 .buttonGroup {
   display: flex;
   gap: 1rem;
+}
+
+.uploadContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  border: 2px dashed #c9c9c9;
+  border-radius: 8px;
+  color: #666;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.uploadContainer:hover,
+.dragActive {
+  border-color: var(--button-primary, #0088cc);
+  background-color: #f0f7fb;
+}
+
+.uploadIcon {
+  font-size: 2rem;
+}
+
+.uploadText {
+  font-weight: 500;
+}
+
+.orText {
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.browseButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--button-primary, #0088cc);
+  border-radius: 8px;
+  color: var(--button-primary, #0088cc);
+  font-size: 0.95rem;
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.fileName {
+  color: #013A57;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.removeButton {
+  border: none;
+  background: none;
+  color: #d32f2f;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.errorMessage {
+  margin-top: 0.75rem;
+  color: #DC2626;
+  font-size: 0.875rem;
+}
+
+.repeaterField {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.repeaterLabel {
+  color: var(--text-secondary, #013A57);
+  font-weight: 500;
+}
+
+.repeaterRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.repeaterRow > :first-child {
+  flex: 1;
+}
+
+.repeaterRow .removeButton {
+  font-size: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+/* ---- Responsive ---- */
+/* The form grid already collapses to one column (auto-fit/minmax 300px); below
+   768px just tighten spacing and stop the wide action buttons from overflowing. */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  .section {
+    padding: 1rem;
+  }
+  .formGrid {
+    gap: 1.25rem;
+  }
+  .sectionHeader {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .buttonGroup {
+    flex-direction: column;
+  }
+  .minButton {
+    min-width: 0;
+    width: 100%;
+  }
 }

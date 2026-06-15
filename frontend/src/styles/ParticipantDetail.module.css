@@ -1,0 +1,409 @@
+.container {
+  /* Fill the scroll area (.main) as a column; only the body scrolls so the
+     header/title stay pinned and the page itself never scrolls. */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+}
+
+.back {
+  background: none;
+  border: none;
+  color: var(--button-primary, #0066ee);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.25rem 0;
+}
+.back:hover {
+  text-decoration: underline;
+}
+
+.titleRow {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.titleBlock {
+  min-width: 0;
+}
+
+.title {
+  font-size: 1.5rem;
+  color: var(--text-secondary, #013a57);
+  margin: 0;
+  word-break: break-word;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.schema {
+  flex: 0 0 auto;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.section {
+  margin-bottom: 1.25rem;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  color: var(--text-secondary, #013a57);
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #eee;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0 1.5rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #f4f4f5;
+  align-items: baseline;
+}
+
+.rowLabel {
+  flex: 0 0 42%;
+  max-width: 42%;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.rowValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0.4rem 1rem;
+}
+
+/* v3 claim cards get a coloured spine + a type badge. */
+.claimCard {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid var(--button-primary, #0066ee);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0.5rem 1rem 0.6rem;
+}
+
+.claimHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Matches the role badge on the participants overview (.roleBadge): a primary-
+   tinted pill that tracks the theme. */
+.claimType {
+  background: #ece5ec;
+  background: color-mix(in srgb, var(--primary-color) 12%, #fff);
+  color: var(--primary-color, #61265e);
+  border-radius: 20px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.pill {
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.active {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.inactive {
+  background: #fbe9e7;
+  color: #d32f2f;
+}
+
+.link {
+  color: var(--button-primary, #0066ee);
+  word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+/* "View more" affordance on claim cards that have long/truncated values. */
+.viewMore {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--button-primary, #0066ee);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.viewMore:hover {
+  text-decoration: underline;
+}
+
+/* Claim-details modal (full values, e.g. an x509 certificate). */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+.modalPanel {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid #eee;
+}
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+}
+.modalClose:hover {
+  color: #000;
+}
+.modalBody {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.modalField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.modalFieldLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #61265e);
+}
+.modalFieldValue {
+  font-size: 0.9rem;
+  color: var(--text-primary, #291d28);
+  word-break: break-word;
+}
+.modalFieldValueBlock {
+  margin: 0;
+  background: #f6f6f7;
+  border: 1px solid #ececec;
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.loading,
+.empty {
+  color: #666;
+  padding: 0.75rem 0;
+}
+
+.error {
+  color: #d32f2f;
+  background: #fbe9e7;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* Title-row actions (schema chip + edit button). */
+.titleActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.editBtn {
+  background-color: var(--button-primary, #0066ee);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.editBtn:hover {
+  background-color: var(--button-primary-hover, #006699);
+}
+
+/* Edit form. */
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+}
+
+.formLabel {
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.formInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.formInput:focus {
+  outline: none;
+  border-color: var(--button-primary, #0066ee);
+}
+
+.formActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.saveBtn {
+  background-color: var(--button-primary, #0066ee);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.saveBtn:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  background: white;
+  color: #374151;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.cancelBtn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+.cancelBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Mobile: single column, label stacked above value. */
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem 0.75rem;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .row {
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.4rem 0;
+  }
+  .rowLabel {
+    flex-basis: auto;
+    max-width: 100%;
+  }
+  .titleRow {
+    align-items: flex-start;
+  }
+}

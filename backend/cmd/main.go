@@ -8,12 +8,15 @@
 package main
 
 import (
+	fiberSwagger "github.com/swaggo/fiber-swagger"
 	"log"
 	"onboardingportal/config"
-	"onboardingportal/server"
-	"onboardingportal/server/routes"
-	fiberSwagger "github.com/swaggo/fiber-swagger"
 	_ "onboardingportal/docs"
+	"onboardingportal/integrations/satellite"
+	"onboardingportal/models"
+	"onboardingportal/server"
+	"onboardingportal/server/handlers"
+	"onboardingportal/server/routes"
 )
 
 func main() {
@@ -26,6 +29,36 @@ func main() {
 	server, err := server.NewServer(config)
 	if err != nil {
 		log.Fatalf("Error creating server: %v", err)
+	}
+
+	// Apply any persisted (non-secret) satellite-connection overrides from the
+	// admin Settings onto the env-derived config, before version detection, so the
+	// portal targets the satellite configured from the UI.
+	var settings models.Settings
+	if server.DB.First(&settings).Error == nil {
+		config.OverlaySatelliteSettings(&settings)
+	}
+
+	// Seed the bundled iSHARE agreements (Terms of Use + Accession Agreement) once,
+	// so a fresh deployment ships with them prefilled and removable.
+	if err := handlers.SeedBuiltinAgreements(server.DB); err != nil {
+		log.Printf("warning: failed to seed built-in agreements: %v", err)
+	}
+
+	// Auto-detect the connected iSHARE framework version and select the latest
+	// supported one; fall back to the configured SATELLITE_VERSION when the
+	// satellite advertises none.
+	if config.SatelliteVersionDetect {
+		if v, ok := satellite.DetectFrameworkVersion(config); ok {
+			if v != config.SatelliteVersion {
+				log.Printf("satellite: detected framework version %q (configured was %q) — using detected", v, config.SatelliteVersion)
+			} else {
+				log.Printf("satellite: detected framework version %q", v)
+			}
+			config.SatelliteVersion = v
+		} else {
+			log.Printf("satellite: no framework version advertised; using configured SATELLITE_VERSION=%q", config.SatelliteVersion)
+		}
 	}
 
 	routes.ConfigureRoutes(server, config)

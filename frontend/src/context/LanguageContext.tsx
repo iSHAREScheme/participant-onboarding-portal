@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useContext, useSyncExternalStore } from "react";
 import en from "../locales/en";
 import nl from "../locales/nl";
 
@@ -20,21 +20,49 @@ const LanguageContext = createContext<LanguageContextType | undefined>(
   undefined
 );
 
+const LANGUAGE_STORAGE_KEY = "language";
+
+// The selected language is persisted in localStorage so it survives reloads. It is
+// read through useSyncExternalStore (rather than useState + a mount effect) so the
+// server snapshot ("en") and the client snapshot stay consistent: this avoids a
+// hydration mismatch and keeps setState out of an effect (react-hooks/set-state-in-effect).
+const languageListeners = new Set<() => void>();
+
+function subscribeLanguage(callback: () => void): () => void {
+  languageListeners.add(callback);
+  // Reflect changes made in other tabs as well.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === LANGUAGE_STORAGE_KEY) callback();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    languageListeners.delete(callback);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function getLanguageSnapshot(): Language {
+  const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return saved === "nl" || saved === "en" ? saved : "en";
+}
+
+function getServerLanguageSnapshot(): Language {
+  return "en";
+}
+
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [language, setLanguageState] = useState<Language>("en");
-
-  useEffect(() => {
-    const savedLanguage = localStorage.getItem("language") as Language;
-    if (savedLanguage) {
-      setLanguageState(savedLanguage);
-    }
-  }, []);
+  const language = useSyncExternalStore(
+    subscribeLanguage,
+    getLanguageSnapshot,
+    getServerLanguageSnapshot
+  );
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem("language", lang);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    // The native "storage" event only fires in other tabs, so notify this tab too.
+    languageListeners.forEach((listener) => listener());
   };
 
   const t = (

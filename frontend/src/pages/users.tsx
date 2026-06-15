@@ -1,7 +1,9 @@
 import { NextPage } from "next";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 import AdminRoute from "components/AdminRoute";
+import Pagination from "components/Pagination";
+import { useFitRows } from "hooks";
 import styles from "styles/Users.module.css";
 import { useLanguage } from "../context/LanguageContext";
 import { getPublicEnv } from "config/publicEnv";
@@ -36,6 +38,15 @@ const Users: NextPage = () => {
     lastName: "",
   });
   const env = getPublicEnv();
+  const [page, setPage] = useState<number>(1);
+
+  // Fill the viewport: how many rows fit decides the client-side page size.
+  // Rows here carry a delete button + status/role badges on top of the 0.6rem
+  // cell padding, so each is ~53px tall; round up slightly to avoid a scroll.
+  const { rows: pageSize, ref: fitRef } = useFitRows({
+    rowHeight: 54,
+    recomputeKey: users.length,
+  });
 
   const fetchData = useCallback(() => {
     fetch(`${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users`, {
@@ -76,6 +87,7 @@ const Users: NextPage = () => {
 
         setError("");
         setUsers(usersWithRoles);
+        setPage(1);
       })
       .catch((error) => {
         setError(error.message);
@@ -255,7 +267,7 @@ const Users: NextPage = () => {
       setIsDialogOpen(false);
       setNewUserData({ email: "", firstName: "", lastName: "", role: "user" });
     } catch (error) {
-      setError(error.message);
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -268,6 +280,19 @@ const Users: NextPage = () => {
       [name]: value,
     }));
   };
+
+  // Client-side pagination over the loaded users, sized to fill the screen.
+  const size = pageSize ?? 10;
+  const totalPages = Math.max(1, Math.ceil(users.length / size));
+  // Keep the current page in range as the data or page size changes. Clamping during
+  // render (instead of in an effect) avoids react-hooks/set-state-in-effect and the
+  // extra commit an effect adds: React re-renders synchronously after this setState
+  // and the condition is already satisfied on the next pass.
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
+  const pageItems = users.slice((page - 1) * size, page * size);
+  const blankRows = users.length > 0 ? Math.max(0, size - pageItems.length) : 0;
 
   return (
     <AdminRoute fetchData={fetchData}>
@@ -369,13 +394,16 @@ const Users: NextPage = () => {
           </div>
         )}
 
-        {isLoading && (
-          <div className={styles.loading}>{t("users.loading")}</div>
-        )}
-        {error && <div className={styles.error}>{error}</div>}
+        {/* The scroll container always renders so useFitRows can measure the real
+            available height (its clientHeight) even before the first row loads. */}
+        <div ref={fitRef} className={styles.tableWrap}>
+          {isLoading && (
+            <div className={styles.loading}>{t("users.loading")}</div>
+          )}
+          {error && <div className={styles.error}>{error}</div>}
 
-        {!isLoading && !error && (
-          <table className={styles.table}>
+          {!isLoading && !error && (
+            <table className={styles.table}>
             <thead>
               <tr>
                 <th>{t("users.table.headers.username")}</th>
@@ -388,12 +416,18 @@ const Users: NextPage = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {pageItems.map((user) => (
                 <tr key={user.id}>
-                  <td>{user.username}</td>
-                  <td>{user.email}</td>
-                  <td>{`${user.firstName} ${user.lastName}`}</td>
-                  <td>
+                  <td data-label={t("users.table.headers.username")}>
+                    {user.username}
+                  </td>
+                  <td data-label={t("users.table.headers.email")}>
+                    {user.email}
+                  </td>
+                  <td data-label={t("users.table.headers.name")}>
+                    {`${user.firstName} ${user.lastName}`}
+                  </td>
+                  <td data-label={t("users.table.headers.role")}>
                     <span
                       className={`${styles.role} ${
                         styles[
@@ -408,7 +442,7 @@ const Users: NextPage = () => {
                         : t("users.roles.user")}
                     </span>
                   </td>
-                  <td>
+                  <td data-label={t("users.table.headers.status")}>
                     <span
                       className={`${styles.status} ${
                         user.enabled ? styles.active : styles.inactive
@@ -419,8 +453,10 @@ const Users: NextPage = () => {
                         : t("users.status.inactive")}
                     </span>
                   </td>
-                  <td>{formatDate(user.createdTimestamp)}</td>
-                  <td>
+                  <td data-label={t("users.table.headers.created")}>
+                    {formatDate(user.createdTimestamp)}
+                  </td>
+                  <td data-label={t("users.table.headers.actions")}>
                     <button
                       className={styles.deleteButton}
                       onClick={() => deleteUser(user.id)}
@@ -430,9 +466,28 @@ const Users: NextPage = () => {
                   </td>
                 </tr>
               ))}
+              {/* Pad short pages with blank rows so the table height stays
+                  constant across pages (desktop only; cards on mobile hide them). */}
+              {totalPages > 1 &&
+                Array.from({ length: blankRows }).map((_, i) => (
+                  <tr key={`empty-${i}`} aria-hidden="true">
+                    <td colSpan={7}>&nbsp;</td>
+                  </tr>
+                ))}
             </tbody>
-          </table>
-        )}
+            </table>
+          )}
+        </div>
+
+        <div className={styles.pagerSlot}>
+          {!isLoading && !error && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
+          )}
+        </div>
       </div>
     </AdminRoute>
   );

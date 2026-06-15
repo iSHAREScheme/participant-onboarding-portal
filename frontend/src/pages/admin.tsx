@@ -3,8 +3,11 @@ import { NextPage } from "next"
 import styles from "styles/Admin.module.css"
 import { useRouter } from "next/router"
 import AdminRoute from "components/AdminRoute"
+import Pagination from "components/Pagination"
+import { useFitRows } from "hooks"
 import { useLanguage } from "../context/LanguageContext"
 import { getPublicEnv } from "config/publicEnv"
+import { PATH } from "const"
 
 import API from 'api/client'
 
@@ -106,9 +109,18 @@ const Admin: NextPage = () => {
   const [applications, setApplications] = useState<Application[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState<number>(1)
   const { t } = useLanguage()
 
   const api = useMemo(() => new API(), [])
+
+  // Fill the viewport: how many rows fit decides the client-side page size.
+  // Rows here carry action buttons (~0.5rem padding) on top of the 0.6rem cell
+  // padding, so each is ~53px tall; round up slightly to avoid an internal scroll.
+  const { rows: pageSize, ref: fitRef } = useFitRows({
+    rowHeight: 54,
+    recomputeKey: applications.length,
+  })
 
   const loadApplications = useCallback(async () => {
     const { NEXT_PUBLIC_BASE_SERVER_URL } = getPublicEnv()
@@ -125,6 +137,7 @@ const Admin: NextPage = () => {
       const data: BackendData[] = await response.data
       const transformedData = data.map(transformBackendData)
       setApplications(transformedData)
+      setPage(1)
     } catch (err) {
       console.error("Error fetching applications:", err)
       setError(t('admin.messages.loadFailed'))
@@ -157,85 +170,74 @@ const Admin: NextPage = () => {
     router.replace(`/admin/verify/${applicationId}`)
   }
 
+  // Client-side pagination over the loaded proposals, sized to fill the screen.
+  const size = pageSize ?? 10
+  const totalPages = Math.max(1, Math.ceil(applications.length / size))
+  // Keep the current page in range as the data or page size changes. Clamping during
+  // render (instead of in an effect) avoids react-hooks/set-state-in-effect and the
+  // extra commit an effect adds: React re-renders synchronously after this setState
+  // and the condition is already satisfied on the next pass.
+  if (page > totalPages) {
+    setPage(totalPages)
+  }
+  const pageItems = applications.slice((page - 1) * size, page * size)
+  const blankRows =
+    applications.length > 0 ? Math.max(0, size - pageItems.length) : 0
+
   return (
     <AdminRoute fetchData={loadApplications}>
       <div className={styles.container}>
-        <h1 className={styles.title}>{t('admin.title')}</h1>
-        {error && <p className={styles.errorMessage}>{error}</p>}
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>{t('admin.table.headers.applicant')}</th>
-              <th>{t('admin.table.headers.company')}</th>
-              <th>{t('admin.table.headers.role')}</th>
-              <th>
-                {t('admin.table.headers.status')}
-                <svg
-                  className={styles.sortIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                >
-                  <path d="M8 10L4 6H12L8 10Z" fill="currentColor" />
-                </svg>
-              </th>
-              <th>
-                {t('admin.table.headers.nextStepBy')}
-                <svg
-                  className={styles.sortIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                >
-                  <path d="M8 10L4 6H12L8 10Z" fill="currentColor" />
-                </svg>
-              </th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && !applications.length ? (
+        <div className={styles.headerSection}>
+          <h1 className={styles.title}>{t('admin.title')}</h1>
+          <button
+            className={styles.createButton}
+            onClick={() => router.push(PATH.SUBMIT)}
+          >
+            {t('admin.actions.createParty')}
+          </button>
+        </div>
+
+        {/* The scroll container always renders so useFitRows can measure the real
+            available height (its clientHeight) even before the first row loads. */}
+        <div ref={fitRef} className={styles.tableWrap}>
+          {isLoading && (
+            <div className={styles.loading}>{t('common.loading')}</div>
+          )}
+          {error && <div className={styles.error}>{error}</div>}
+
+          {!isLoading && !error && (
+            <table className={styles.table}>
+            <thead>
               <tr>
-                <td colSpan={6}>{t('common.loading')}</td>
+                <th>{t('admin.table.headers.applicant')}</th>
+                <th>{t('admin.table.headers.company')}</th>
+                <th>{t('admin.table.headers.role')}</th>
+                <th>{t('admin.table.headers.status')}</th>
+                <th>{t('admin.table.headers.nextStepBy')}</th>
+                <th>{t('admin.table.headers.actions')}</th>
               </tr>
-            ) : (
-              applications.map((app, index) => (
-                <tr key={index}>
-                  <td>{app.applicant || t('admin.common.na')}</td>
-                  <td>{app.company || t('admin.common.na')}</td>
-                  <td>{app.role || t('admin.common.na')}</td>
-                  <td>
+            </thead>
+            <tbody>
+              {pageItems.map((app) => (
+                <tr key={app.id}>
+                  <td data-label={t('admin.table.headers.applicant')}>{app.applicant || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.company')}>{app.company || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.role')}>{app.role || t('admin.common.na')}</td>
+                  <td data-label={t('admin.table.headers.status')}>
                     <span
                       className={`${styles.status} ${getStatusStyle(app.status)}`}
                     >
                       {t(`admin.status.${app.status.toLowerCase().replace(/\s+/g, '_')}`)}
                     </span>
                   </td>
-                  <td>{app.nextStepBy || t('admin.common.na')}</td>
-                  <td className={styles.actions}>
+                  <td data-label={t('admin.table.headers.nextStepBy')}>{app.nextStepBy || t('admin.common.na')}</td>
+                  <td className={styles.actions} data-label={t('admin.table.headers.actions')}>
                     {!["Completed", "Rejected", "Sign agreements"].includes(app.status) && (
                       <button
                         className={styles.verifyButton}
                         onClick={(e) => handleVerifyClick(e, app.id)}
                       >
                         {t('admin.actions.verify')}
-                        <svg
-                          className={styles.arrowIcon}
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                        >
-                          <path
-                            d="M6 12L10 8L6 4"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
                       </button>
                     )}
                     <button
@@ -246,28 +248,32 @@ const Admin: NextPage = () => {
                       }}
                     >
                       {t('admin.actions.view')}
-                      <svg
-                        className={styles.arrowIcon}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                      >
-                        <path
-                          d="M6 12L10 8L6 4"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
                     </button>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+              {/* Pad short pages with blank rows so the table height stays
+                  constant across pages (desktop only; cards on mobile hide them). */}
+              {totalPages > 1 &&
+                Array.from({ length: blankRows }).map((_, i) => (
+                  <tr key={`empty-${i}`} aria-hidden="true">
+                    <td colSpan={6}>&nbsp;</td>
+                  </tr>
+                ))}
+            </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className={styles.pagerSlot}>
+          {!isLoading && !error && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
+          )}
+        </div>
       </div>
     </AdminRoute>
   )

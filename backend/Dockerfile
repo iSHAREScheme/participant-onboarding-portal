@@ -7,7 +7,7 @@
 # EXPOSE 8081
 # ENTRYPOINT [ "/opt/app/app" ]
 
-FROM golang:1.23-alpine AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /opt/app
 RUN apk add --no-cache build-base sqlite-dev
 
@@ -22,7 +22,7 @@ ENV CGO_ENABLED=1
 RUN go build -ldflags="-s -w" -o app ./cmd/...
 
 # Final stage
-FROM alpine:3.18
+FROM alpine:3.22
 # Install CA certificates and SQLite runtime
 RUN apk add --no-cache ca-certificates sqlite-libs su-exec
 
@@ -40,6 +40,10 @@ COPY --chown=appuser:appgroup --chmod=0555 --from=build /opt/app/app /app/app
 RUN mkdir -p /app/config /app/keys /app/resources
 COPY --chown=appuser:appgroup --chmod=0440 config/*.yaml /app/config/
 COPY --chown=appuser:appgroup --chmod=0440 resources/ /app/resources/
+# COPY --chmod=0440 also strips the execute bit from any copied SUBDIRECTORY
+# (e.g. resources/agreements), making files inside it untraversable at runtime.
+# Restore dir traversal (0555) while keeping the files themselves read-only.
+RUN find /app/resources -type d -exec chmod 0555 {} \;
 
 WORKDIR /app
 # bootstrap: ensure parent dir for DB exists (if path has a slash) and uploads dir exists

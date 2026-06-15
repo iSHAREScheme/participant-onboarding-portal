@@ -5,24 +5,29 @@ import { useLanguage } from "../context/LanguageContext";
 import { useUserProposal } from "../hooks/useUserProposal";
 import OnboardingStatus from "../components/OnboardingStatus";
 import { useKeycloak } from "@react-keycloak/web";
+import { useHydrated } from "../hooks/useHydrated";
 
-import API from 'api/client'
+import API, { AgreementView } from 'api/client'
 import { getPublicEnv } from "config/publicEnv"
+import { sanitizeRichText } from "util/sanitizeHtml"
 
 interface SettingsResponse {
   description?: string;
   registrarId?: string;
   dataspaceId?: string;
-  agreements?: string[];
+  agreements?: AgreementView[];
 }
 
 
 const Home: NextPage = () => {
   const [description, setDescription] = useState("Loading...");
   const { t } = useLanguage();
-  const [agreements, setAgreements] = useState<string[]>([]);
+  const [agreements, setAgreements] = useState<AgreementView[]>([]);
   const { proposalData, loading: proposalLoading } = useUserProposal();
   const [keycloak] = useKeycloak();
+  // false on the server + first client render, true after hydration — gates the
+  // admin-authored HTML below (DOMPurify needs a DOM) so server/client markup matches.
+  const mounted = useHydrated();
 
   const Api = new API()
 
@@ -34,7 +39,7 @@ const Home: NextPage = () => {
           throw new Error(t("settings.messages.backendNotConfigured"));
         }
 
-        const response = await Api.fetchSettings()
+        const response = await Api.fetchPublicSettings()
 
         const data: SettingsResponse = await response.data;
         setDescription(data.description ?? "");
@@ -91,7 +96,14 @@ const Home: NextPage = () => {
         <div className={styles.leftSection}>
           <h1 className={styles.title}>{t("home.title")}</h1>
 
-          <p className={styles.description}>{description}</p>
+          {mounted ? (
+            <div
+              className={styles.richText}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(description) }}
+            />
+          ) : (
+            <p className={styles.description}>{description}</p>
+          )}
 
           {agreements.length > 0 && (
             <>
@@ -103,11 +115,23 @@ const Home: NextPage = () => {
               </p>
 
               <ul className={styles.agreementList}>
-                {agreements.map((url, index) => (
-                  <li key={index}>
-                    <a href={url} target="_blank" rel="noopener noreferrer">
-                      {t(`home.agreement${index + 1}`, `Agreement ${index + 1}`)}
-                    </a>
+                {agreements.map((a) => (
+                  <li key={a.id}>
+                    {a.hasDocument ? (
+                      <a
+                        href={Api.agreementDocumentUrl(a.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {a.title}
+                        {a.version ? ` (${a.version})` : ""}
+                      </a>
+                    ) : (
+                      <span>
+                        {a.title}
+                        {a.version ? ` (${a.version})` : ""}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

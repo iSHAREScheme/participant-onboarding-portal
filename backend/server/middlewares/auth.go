@@ -29,7 +29,10 @@ type KeycloakClaims struct {
 	jwt.RegisteredClaims
 	PreferredUsername string `json:"preferred_username,omitempty"`
 	Email             string `json:"email,omitempty"`
-	RealmAccess       struct {
+	// Idp is the identity-provider alias the session authenticated through
+	// (e.g. eHerkenning). Brokered Keycloak logins expose this as the "idp" claim.
+	Idp         string `json:"idp,omitempty"`
+	RealmAccess struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access,omitempty"`
 	ResourceAccess map[string]struct {
@@ -37,12 +40,33 @@ type KeycloakClaims struct {
 	} `json:"resource_access,omitempty"`
 	KvkNumber            string `json:"kvkNumber,omitempty"`
 	KvkNumberPascalCase  string `json:"KvkNumber,omitempty"`
+	CompanyName          string `json:"companyName,omitempty"`
+	CompanyNameLowerCase string `json:"companyname,omitempty"`
+	CompanyNamePascal    string `json:"CompanyName,omitempty"`
 	LegalSubjectID       string `json:"legalSubjectId,omitempty"`
 	LegalSubjectIDUpper  string `json:"legalSubjectID,omitempty"`
 	LegalSubjectIDPascal string `json:"LegalSubjectId,omitempty"`
 }
 
-// LegalEntityIdentifier returns the identifier a user is allowed to act on (kvk/legalSubject).
+func (k *KeycloakClaims) OrganizationName() string {
+	if k == nil {
+		return ""
+	}
+	switch {
+	case k.CompanyName != "":
+		return k.CompanyName
+	case k.CompanyNameLowerCase != "":
+		return k.CompanyNameLowerCase
+	case k.CompanyNamePascal != "":
+		return k.CompanyNamePascal
+	default:
+		return ""
+	}
+}
+
+// LegalEntityIdentifier returns the organization identifier asserted by the
+// authenticated session. A plain username is intentionally not an organization
+// claim; non-IdP/eIDAS-certificate flows prove organization identity elsewhere.
 func (k *KeycloakClaims) LegalEntityIdentifier() string {
 	if k == nil {
 		return ""
@@ -58,8 +82,6 @@ func (k *KeycloakClaims) LegalEntityIdentifier() string {
 		return k.LegalSubjectIDUpper
 	case k.LegalSubjectIDPascal != "":
 		return k.LegalSubjectIDPascal
-	case k.PreferredUsername != "":
-		return k.PreferredUsername
 	default:
 		return ""
 	}
@@ -92,7 +114,16 @@ func Auth(cfg OIDCConfig) (fiber.Handler, error) {
 
 		if method == fiber.MethodGet || method == fiber.MethodHead {
 			switch path {
-			case "/settings", "/settings/logo", "/registry":
+			// "/settings" is intentionally NOT public — it carries the satellite
+			// connection config + registrar/dataspace IDs. The landing page and
+			// app-wide theming use the curated "/settings/public" subset instead.
+			case "/settings/public", "/settings/logo", "/settings/favicon", "/settings/agreements", "/registry":
+				return c.Next()
+			}
+			// Public agreement document downloads (/settings/agreements/<id>/document).
+			// These are loaded as raw <a href>/<link> GETs that carry no bearer
+			// token; the documents are not confidential (every applicant signs them).
+			if strings.HasPrefix(path, "/settings/agreements/") && strings.HasSuffix(path, "/document") {
 				return c.Next()
 			}
 		}

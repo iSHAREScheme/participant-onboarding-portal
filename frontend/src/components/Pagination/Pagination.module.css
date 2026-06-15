@@ -1,0 +1,74 @@
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+/* Every pager slot — number, ellipsis and the two arrows — is the SAME fixed box
+   so the control's width never changes as you page through. */
+.pageNumber,
+.pageArrow,
+.pageEllipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: var(--text-secondary, #013a57);
+  font-size: 14px;
+}
+
+.pageNumber,
+.pageArrow {
+  cursor: pointer;
+}
+
+.pageNumber:hover:not(:disabled),
+.pageArrow:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.pageArrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The current page: filled and non-interactive (it is the disabled item, but
+   must stay highlighted rather than greyed). */
+.pageNumberActive,
+.pageNumberActive:disabled {
+  background-color: var(--button-primary, #0066ee);
+  border-color: var(--button-primary, #0066ee);
+  color: white;
+  cursor: default;
+  opacity: 1;
+}
+
+/* Ellipsis occupies a full slot (transparent border) so widths stay identical. */
+.pageEllipsis {
+  border-color: transparent;
+  background: transparent;
+  color: #495057;
+  user-select: none;
+}
+
+/* Slightly smaller pager slots so the constant-width control fits a phone. */
+@media (max-width: 640px) {
+  .pageNumber,
+  .pageArrow,
+  .pageEllipsis {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 4px;
+    font-size: 13px;
+  }
+}

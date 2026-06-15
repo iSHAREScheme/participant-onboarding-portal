@@ -1,0 +1,203 @@
+package satellite
+
+import (
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
+	"fmt"
+	"strings"
+
+	"onboardingportal/models"
+)
+
+// V3OnboardingClaimConfig carries the deployment's framework-specific identifiers
+// used to assemble a v3 claim-based party from an onboarding proposal. The
+// proposal supplies the party-specific data (id, name, capability url, contact,
+// identity proof); these values come from configuration.
+type V3OnboardingClaimConfig struct {
+	RegistrarID        string
+	FrameworkID        string
+	AgreementType      string
+	AgreementID        string
+	AgreementTitle     string
+	RoleID             string
+	Loa                string
+	LegalAdherence     string
+	CompliancyVerified string
+	VerificationHash   string // SHA-256 hex of the framework agreement document
+	StartDate          string
+	EndDate            string
+
+	// Optional dataspaceAgreement claim. Built only when IncludeDataspaceAgreement
+	// is true AND DataspaceID is set (the claim requires a dataspaceId per spec).
+	IncludeDataspaceAgreement bool
+	DataspaceID               string
+	DataspaceAgreementType    string
+	DataspaceAgreementID      string
+	DataspaceAgreementTitle   string
+	DataspaceVerificationHash string // SHA-256 hex of the dataspace agreement document
+}
+
+// BuildV3OnboardingClaims assembles the minimum valid v3 claim set the satellite
+// requires for register-new-party: frameworkCompliance, frameworkAgreement,
+// frameworkRole and a mandatory identity claim — x509Certificate (from a captured
+// eIDAS certificate) or idpAssertion (from a verified eHerkenning session).
+//
+// It returns an error when no identity proof is available, since the satellite
+// rejects any party without one (and additionally requires an x509 certificate
+// for framework roles other than ServiceConsumer/EntitledParty).
+func BuildV3OnboardingClaims(proposal *models.Proposal, cfg V3OnboardingClaimConfig) ([]map[string]interface{}, error) {
+	claims := make([]map[string]interface{}, 0, 4)
+
+	// 1) frameworkCompliance — the party adheres to the framework.
+	compliance := map[string]interface{}{
+		"type":        "frameworkCompliance",
+		"registrarId": cfg.RegistrarID,
+		"status":      "active",
+		"frameworkId": cfg.FrameworkID,
+		"startDate":   cfg.StartDate,
+		"endDate":     cfg.EndDate,
+	}
+	if strings.TrimSpace(proposal.CapabilitiesUrl) != "" {
+		compliance["capabilityUrl"] = proposal.CapabilitiesUrl
+	}
+	additionalInfo := map[string]interface{}{}
+	if strings.TrimSpace(proposal.Website) != "" {
+		additionalInfo["website"] = normalizeWebsiteURL(proposal.Website)
+	}
+	if strings.TrimSpace(proposal.ContactEmail) != "" {
+		additionalInfo["companyEmail"] = proposal.ContactEmail
+	}
+	if strings.TrimSpace(proposal.ContactPhone) != "" {
+		additionalInfo["companyPhone"] = proposal.ContactPhone
+	}
+	if len(additionalInfo) > 0 {
+		compliance["additionalInfo"] = additionalInfo
+	}
+	claims = append(claims, compliance)
+
+	// 2) frameworkAgreement — the signed framework agreement (e.g. Terms of Use).
+	agreement := map[string]interface{}{
+		"type":          "frameworkAgreement",
+		"registrarId":   cfg.RegistrarID,
+		"status":        "active",
+		"frameworkId":   cfg.FrameworkID,
+		"agreementType": cfg.AgreementType,
+		"agreementId":   cfg.AgreementID,
+		"title":         cfg.AgreementTitle,
+	}
+	// verificationHash must be a SHA-256 hex string when present.
+	if cfg.VerificationHash != "" {
+		agreement["verificationHash"] = cfg.VerificationHash
+	}
+	claims = append(claims, agreement)
+
+	// 2b) dataspaceAgreement — optional; mirrors frameworkAgreement but is scoped
+	// to a dataspace (dataspaceId instead of frameworkId). Only added when a
+	// dataspace agreement is configured and a dataspace id is available.
+	if cfg.IncludeDataspaceAgreement && strings.TrimSpace(cfg.DataspaceID) != "" {
+		dsAgreement := map[string]interface{}{
+			"type":          "dataspaceAgreement",
+			"registrarId":   cfg.RegistrarID,
+			"status":        "active",
+			"dataspaceId":   cfg.DataspaceID,
+			"agreementType": cfg.DataspaceAgreementType,
+			"agreementId":   cfg.DataspaceAgreementID,
+			"title":         cfg.DataspaceAgreementTitle,
+		}
+		if cfg.DataspaceVerificationHash != "" {
+			dsAgreement["verificationHash"] = cfg.DataspaceVerificationHash
+		}
+		claims = append(claims, dsAgreement)
+	}
+
+	// 3) frameworkRole — the party's role within the framework.
+	claims = append(claims, map[string]interface{}{
+		"type":               "frameworkRole",
+		"registrarId":        cfg.RegistrarID,
+		"status":             "active",
+		"frameworkId":        cfg.FrameworkID,
+		"roleId":             cfg.RoleID,
+		"startDate":          cfg.StartDate,
+		"endDate":            cfg.EndDate,
+		"loa":                cfg.Loa,
+		"compliancyVerified": cfg.CompliancyVerified,
+		"legalAdherence":     cfg.LegalAdherence,
+	})
+
+	// 4) Mandatory identity claim: eIDAS certificate or eHerkenning assertion.
+	switch {
+	case strings.TrimSpace(proposal.CertX5c) != "":
+		subjectName, err := subjectNameFromX5C(proposal.CertX5c)
+		if err != nil {
+			return nil, fmt.Errorf("invalid eIDAS certificate payload: %w", err)
+		}
+		claims = append(claims, map[string]interface{}{
+			"type":        "x509Certificate",
+			"registrarId": cfg.RegistrarID,
+			"status":      "active",
+			"startDate":   cfg.StartDate,
+			"endDate":     cfg.EndDate,
+			// The participant registry validates subjectName against the x5c
+			// bytes. Derive it here from the same certificate instead of trusting
+			// the frontend/display copy, whose DN formatting may differ.
+			"subjectName": subjectName,
+			// Per the iSHARE v3.0 spec, certificateType is a free string (example
+			// "eSEAL") and x5c is a single base64 string (not an array).
+			"certificateType": "eSEAL",
+			"x5c":             proposal.CertX5c,
+			"x5t#s256":        proposal.CertX5tS256,
+		})
+	case strings.TrimSpace(proposal.IdpAssertion) != "":
+		claims = append(claims, map[string]interface{}{
+			"type":        "idpAssertion",
+			"registrarId": cfg.RegistrarID,
+			"status":      "active",
+			"assertion":   proposal.IdpAssertion,
+		})
+	default:
+		return nil, fmt.Errorf("no identity proof captured for this proposal (eIDAS certificate or eHerkenning assertion); it is required to create a v3 party")
+	}
+
+	return claims, nil
+}
+
+func subjectNameFromX5C(x5c string) (string, error) {
+	cert, err := parseFirstX5CCertificate(x5c)
+	if err != nil {
+		return "", err
+	}
+	return cert.Subject.String(), nil
+}
+
+func parseFirstX5CCertificate(x5c string) (*x509.Certificate, error) {
+	certificateValue := strings.TrimSpace(x5c)
+	if certificateValue == "" {
+		return nil, fmt.Errorf("x5c is empty")
+	}
+
+	if block, _ := pem.Decode([]byte(certificateValue)); block != nil {
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		return cert, nil
+	}
+
+	// x5c is normally a single base64 DER certificate, but accept a comma-
+	// separated chain and validate the leaf certificate at index 0.
+	certificateValue = strings.TrimSpace(strings.Split(certificateValue, ",")[0])
+	der, err := base64.StdEncoding.DecodeString(certificateValue)
+	if err != nil {
+		der, err = base64.RawStdEncoding.DecodeString(certificateValue)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
+}

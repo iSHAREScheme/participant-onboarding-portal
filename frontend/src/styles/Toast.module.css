@@ -1,0 +1,115 @@
+/* Fixed overlay stack of transient notifications. pointer-events:none on the
+   container so it never blocks the UI; individual toasts re-enable clicks. */
+.container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border-left: 4px solid #9ca3af;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  cursor: pointer;
+  animation: toastIn 0.22s cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+.leaving {
+  animation: toastOut 0.2s ease forwards;
+}
+
+.success {
+  border-left-color: #1e7e34;
+}
+.error {
+  border-left-color: #d32f2f;
+}
+.info {
+  border-left-color: var(--button-primary, #0066ee);
+}
+
+.icon {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.05rem;
+}
+.success .icon {
+  color: #1e7e34;
+}
+.error .icon {
+  color: #d32f2f;
+}
+.info .icon {
+  color: var(--button-primary, #0066ee);
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.close {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+.close:hover {
+  color: #4b5563;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .leaving {
+    animation-duration: 0.01ms;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    left: 1rem;
+    right: 1rem;
+    max-width: none;
+  }
+}

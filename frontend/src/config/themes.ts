@@ -1,4 +1,6 @@
 // Theme configuration for multi-tenant styling
+import { BRAND_THEME_COLORS } from "./themeTokens";
+
 export interface ThemeConfig {
   id: string;
   name: string;
@@ -36,14 +38,16 @@ export interface ThemeConfig {
 export const themes: Record<string, ThemeConfig> = {
   default: {
     id: 'default',
-    name: 'Default Theme (Current Colors)',
-    colors: {
-      primary: '#61365E',
-      secondary: '#003145',
-      accent: '#004C6C',
-      background: '#F8F7F4',
-      buttonPrimary: '#0088cc',
-      buttonPrimaryHover: '#006699'
+    name: 'iSHARE Brand (default)',
+    // Brand palette, single-sourced from config/themeTokens.ts. Deployment
+    // overrides are applied on top at runtime by SettingsContext.
+    colors: { ...BRAND_THEME_COLORS },
+    // Brand fonts (Montserrat headings/buttons, Lato body). The --font-* vars are
+    // defined on :root by _document.tsx; keep stacks in sync with config/fonts.ts.
+    fonts: {
+      heading: "var(--font-montserrat), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      primary: "var(--font-lato), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      button: "var(--font-montserrat), 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     },
     button: {
       borderRadius: '4px',

@@ -1,11 +1,385 @@
+/* Fit-to-page like the rest of the admin screens: the header + save stay pinned
+   and only the form area scrolls. */
 .container {
-  padding: 2rem;
-  max-width: 800px;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 920px;
   margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
+.headerSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  margin: 0;
+  color: var(--text-secondary, #013a57);
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.saveButton {
+  flex: 0 0 auto;
+  background-color: var(--button-primary, #0066ee);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.4rem;
+  border-radius: var(--button-border-radius, 40px);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.saveButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* The only scroll area on the page. */
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #eef0f2;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 1.25rem 1.5rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* A ghost button that carries a leading icon (import / export / reset). */
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.iconButton .uploadIcon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.cardTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-secondary, #013a57);
+  margin: 0 0 1rem;
+}
+.cardHeader .cardTitle {
+  margin-bottom: 0;
+}
+
+.cardHint {
+  margin: 0 0 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* ---- iSHARE connection card ---- */
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.statusItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.statusLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a94a6;
+  font-weight: 600;
+}
+
+.statusValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #1976d2;
+  background: #e3f2fd;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  padding: 0.3rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.connected {
+  color: #1e7e34;
+  background: #e6f4ea;
+}
+.disconnected {
+  color: #d32f2f;
+  background: #fbe9e7;
+}
+.checking {
+  color: #8a6d00;
+  background: #fff4d6;
+}
+.checking .dot {
+  animation: fitPulse 1s ease-in-out infinite;
+}
+@keyframes fitPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.ghostButton {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid #d0d5dd;
+  color: var(--text-secondary, #013a57);
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.ghostButton:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+.ghostButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Form fields ---- */
 .formGroup {
+  margin-bottom: 1.1rem;
+}
+.formGroup:last-child {
+  margin-bottom: 0;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+.fieldRow .formGroup {
+  margin-bottom: 0;
+}
+
+.label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+  margin-bottom: 0.4rem;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+}
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--button-primary, #0066ee);
+}
+.textarea {
+  resize: vertical;
+}
+
+/* Placeholder box while the client-only rich-text editor loads. */
+.editorLoading {
+  min-height: 190px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.fileInput {
+  font-size: 0.9rem;
+}
+
+/* Styled file-picker button (replaces the native file input). Outlined pill in
+   the portal's button shape, with an upload icon; the native input is hidden
+   but kept clickable/focusable via the wrapping label. */
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--button-primary, #0066ee);
+  color: var(--button-primary, #0066ee);
+  background: #fff;
+  border-radius: var(--button-border-radius, 40px);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.uploadButton:hover {
+  background: color-mix(in srgb, var(--button-primary, #0066ee) 8%, #fff);
+}
+.uploadButton:focus-within {
+  outline: 2px solid var(--button-primary, #0066ee);
+  outline-offset: 2px;
+}
+.uploadIcon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+/* Visually-hidden native input (still focusable + label-triggerable). */
+.uploadInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.uploadedName {
+  font-size: 0.85rem;
+  color: #4b5563;
+  word-break: break-all;
+}
+
+/* Logo & favicon share one consistent media-upload row, so both fields align
+   identically whether or not an image is set: [preview] [button + constraints]. */
+.mediaField {
   margin-bottom: 1.5rem;
+}
+.mediaField:last-child {
+  margin-bottom: 0;
+}
+.mediaField .label {
+  margin-bottom: 0.35rem;
+}
+.mediaRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.mediaPreview {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 6px;
+  box-sizing: border-box;
+  color: #9ca3af;
+}
+/* Dashed outline when nothing is uploaded yet, so the slot still reads as a
+   media placeholder and the row doesn't jump once an image is added. */
+.mediaPreviewEmpty {
+  border-style: dashed;
+}
+.mediaPreview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.mediaPlaceholderIcon {
+  width: 26px;
+  height: 26px;
+}
+.mediaControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.mediaHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
 }
 
 .checkboxLabel {
@@ -13,32 +387,505 @@
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
 }
-
 .helperText {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  color: #555;
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
 }
 
-.textarea {
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  margin-top: 0.5rem;
+/* ---- Agreements ---- */
+.list {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
-
-.saveButton {
-  background-color: var(--button-primary, #0066EE);
-  color: white;
+.listItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #eef0f2;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.listItemText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.removeButton {
+  flex: 0 0 auto;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: var(--button-border-radius, 40px);
+  background: transparent;
+  color: #d32f2f;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.removeButton:hover {
+  color: #b71c1c;
+}
+
+.agreementInputWrapper {
+  display: flex;
+  gap: 0.5rem;
+}
+.agreementInputWrapper .input {
+  flex: 1;
+}
+.addButton {
+  flex: 0 0 auto;
+  margin-top: 0.85rem;
+  background-color: var(--button-primary, #0066ee);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.addButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #006699);
+}
+.addButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Agreements (structured list + add panel) ---- */
+.agreementList {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.agreementItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8f9fa;
+  border: 1px solid #eef0f2;
+  border-radius: 8px;
+}
+.agreementMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.agreementName {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agreementMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sourceBadge,
+.versionBadge,
+.protectedBadge,
+.typeBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.typeBadge {
+  background: color-mix(in srgb, #6d28d9 12%, #fff);
+  color: #6d28d9;
+}
+.sourceBadge {
+  background: color-mix(in srgb, var(--button-primary, #0066ee) 12%, #fff);
+  color: var(--button-primary, #0066ee);
+}
+.versionBadge {
+  background: #eef0f2;
+  color: #4b5563;
+}
+.protectedBadge {
+  background: #fef3c7;
+  color: #92400e;
+}
+.agreementActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.agreementOpen {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--button-primary, #0066ee);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.agreementOpen:hover {
+  text-decoration: underline;
+}
+
+.agreementAdd {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eef0f2;
+}
+.agreementAddTitle {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+.modeToggle {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+  background: #f1f3f5;
+  border-radius: 9px;
+  padding: 0.25rem;
+}
+.modeButton {
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.modeButtonActive {
+  background: #fff;
+  color: var(--button-primary, #0066ee);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.headerRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.headerSecret {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--button-primary, #0066ee);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+/* Persistent warning shown whenever fewer than two agreements are configured
+   (onboarding can't be completed below that threshold). */
+.agreementWarning {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #f5d9a8;
+  border-left: 3px solid #d97706;
+  border-radius: 8px;
+  background: #fef6e7;
+  color: #92400e;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* ---- Tabs ---- */
+.tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #eef0f2;
+  margin-bottom: 1rem;
+}
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--text-secondary, #61265e);
+}
+.tabActive {
+  color: var(--text-secondary, #61265e);
+  border-bottom-color: var(--button-primary, #eb5e55);
+}
+
+/* ---- Theme: colour editor ---- */
+.colorGroup {
+  margin-bottom: 1.25rem;
+}
+/* Group header that pairs the section title with a trailing action (the
+   editor-wide "reset to brand defaults" sits beside Typography). */
+.colorGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.colorGroupHeader .colorGroupTitle {
+  margin-bottom: 0;
+}
+.colorGroupTitle {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #8a94a6;
+  font-weight: 700;
+  margin: 0 0 0.6rem;
+}
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+.colorField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.colorLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+.colorInputRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.colorSwatch {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.colorSwatch::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+.colorSwatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.colorSwatch::-moz-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.colorHex {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+}
+.colorHex:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+.fontSelect {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.fontSelect:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+
+/* Named-theme library toolbar (select / name / save / apply / delete). */
+.themeLibrary {
+  margin: 0 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #d4d2d4);
+  border-radius: 8px;
+  background: #fafafa;
+}
+.themeLibraryRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.themeNameInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+}
+.themeNameInput:focus {
+  outline: none;
+  border-color: var(--button-primary, #eb5e55);
+}
+.libraryHint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-secondary, #61265e);
+  opacity: 0.85;
+}
+.themeLibraryActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+.activeThemeBadge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #61265e);
+}
+.themeLibraryButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.applyButton {
+  flex: 0 0 auto;
+  background-color: var(--button-primary, #eb5e55);
+  color: #fff;
+  border: none;
+  padding: 0.35rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.applyButton:hover:not(:disabled) {
+  background-color: var(--button-primary-hover, #c84152);
+}
+.applyButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .themeLibraryRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Theme: live preview ---- */
+.themePreview {
+  margin-top: 1.25rem;
+}
+.previewCard {
+  background: var(--background-color, #f8f7f4);
+  border: 1px solid var(--border-color, #d4d2d4);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+.previewHeading {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-secondary, #61265e);
+}
+.previewBody {
+  margin: 0 0 1rem;
+  font-family: var(--font-primary);
+  font-size: 0.92rem;
+  color: var(--text-primary, #291d28);
+}
+.previewButtons {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.previewPrimary {
+  border: none;
+  background: var(--button-primary, #eb5e55);
+  color: #fff;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--button-border-radius, 8px);
+  font-family: var(--font-button);
+  font-weight: 600;
+  cursor: pointer;
+}
+.previewPrimary:hover {
+  background: var(--button-primary-hover, #c84152);
+}
+.previewSecondary {
+  border: 1px solid var(--button-secondary, #8e3459);
+  background: transparent;
+  color: var(--button-secondary, #8e3459);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--button-border-radius, 8px);
+  font-family: var(--font-button);
+  font-weight: 600;
   cursor: pointer;
 }
 
-.saveButton:hover {
-  background-color: var(--button-primary-hover, #006699);
+/* ---- Responsive ---- */
+@media (max-width: 1024px) {
+  .container {
+    padding: 0.75rem 1rem;
+  }
+}
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem 0.6rem;
+  }
+  .card {
+    padding: 1rem;
+  }
+  .headerSection {
+    align-items: stretch;
+  }
+  .saveButton {
+    width: 100%;
+  }
 }

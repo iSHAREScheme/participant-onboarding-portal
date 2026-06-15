@@ -780,7 +780,7 @@
           "config": {
             "introspection.token.claim": "true",
             "userinfo.token.claim": "true",
-            "user.attribute": "username",
+            "user.attribute": "kvk",
             "id.token.claim": "true",
             "lightweight.claim": "false",
             "access.token.claim": "true",
@@ -802,6 +802,22 @@
             "lightweight.claim": "false",
             "access.token.claim": "true",
             "claim.name": "kvk",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "id": "0aa7af3f-4ef5-45a1-b9b3-17efe2e22417",
+          "name": "idp",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.session.note": "identity_provider",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "idp",
             "jsonType.label": "String"
           }
         },
@@ -1737,7 +1753,7 @@
       "enabled": true,
       "updateProfileFirstLoginMode": "on",
       "trustEmail": false,
-      "storeToken": false,
+      "storeToken": true,
       "addReadTokenRoleOnCreate": false,
       "authenticateByDefault": false,
       "linkOnly": false,
@@ -1813,7 +1829,7 @@
       "identityProviderMapper": "oidc-username-idp-mapper",
       "config": {
         "syncMode": "IMPORT",
-        "template": "urn:etoegang:core:ActingSubjectID",
+        "template": "${CLAIM.urn:etoegang:core:ActingSubjectID}",
         "target": "BROKER_ID"
       }
     },
@@ -2238,6 +2254,15 @@
       "builtIn": true,
       "authenticationExecutions": [
         {
+          "authenticatorConfig": "portal link current user config",
+          "authenticator": "portal-link-authenticated-user",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 5,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
           "authenticatorConfig": "create unique user config",
           "authenticator": "idp-create-user-if-unique",
           "authenticatorFlow": false,
@@ -2611,6 +2636,13 @@
   ],
   "authenticatorConfig": [
     {
+      "id": "447c4f56-0b9d-4d35-89a4-f0b0b3e8aab4",
+      "alias": "portal link current user config",
+      "config": {
+        "identity.provider.aliases": "eHerkenning"
+      }
+    },
+    {
       "id": "638e9620-28cc-46cf-b995-4fdaf90ffaf4",
       "alias": "create unique user config",
       "config": {
@@ -2757,7 +2789,7 @@
     "clientSessionMaxLifespan": "0",
     "darkMode": "true"
   },
-  "keycloakVersion": "26.3.2",
+  "keycloakVersion": "26.6.2",
   "userManagedAccessAllowed": false,
   "organizationsEnabled": false,
   "verifiableCredentialsEnabled": false,

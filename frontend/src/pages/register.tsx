@@ -1,16 +1,28 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { NextPage } from "next";
+import { useRouter } from "next/router";
 import styles from "styles/Register.module.css";
 import { useKeycloak } from "@react-keycloak/web";
 import ProtectedRoute from "../components/ProtectedRoute";
 import { useLanguage } from "../context/LanguageContext";
-import { FormInput, Tooltip } from "../components";
+import { FormInput, Tooltip, Loading } from "../components";
 import Placeholder from "../components/Placeholder";
 import EmailNotification from "util/notify"
 import preValidateEidasCert from "util/validateEidas"
-import API from "api/client"
+import { extractCertificateFields, type CertificateFields } from "util/certificate"
+import API, { AgreementView } from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
+import {
+  loadStoredIdpActionState,
+  setPendingIdpLinkAction,
+  type StoredIdpActionState,
+} from "util/idpActionState"
+import {
+  fetchKeycloakLinkedAccounts,
+  hasLinkedIdentityProvider,
+} from "util/keycloakLinkedAccounts"
+import { getKeycloakUserInfo, refreshKeycloakUserInfo } from "util/keycloakUserInfo"
 
 const KVK_BASE_URL = 'https://developers.kvk.nl/api/v2'
 
@@ -62,6 +74,20 @@ const StepsV3 = {
 
 const parseBoolEnv = (value?: string) =>
   typeof value === "string" && ["1", "true", "yes", "on"].includes(value?.toLowerCase())
+
+const toTrimmedStringValue = (value: unknown): string => {
+  if (typeof value === "string") return value.trim()
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
+    return value[0].trim()
+  }
+  return ""
+}
+
+const toNormalizedKvkValue = (value: unknown): string => {
+  const raw = toTrimmedStringValue(value)
+  if (!raw) return ""
+  return raw.replace(/\D+/g, "")
+}
 
 const REGISTER_STATE_DB_NAME = "register:form-state"
 const REGISTER_STATE_STORE = "state"
@@ -175,6 +201,11 @@ interface FormData {
     kvkNumber: string
     partyId: string
     partyName: string
+    // eIDAS certificate fields parsed at upload, sent with the proposal so the
+    // backend can build the v3 x509Certificate identity claim at party creation.
+    certSubjectName?: string
+    certX5c?: string
+    certX5tS256?: string
   }
   eidasCert?: File
   location: {
@@ -210,11 +241,27 @@ interface FormData {
 
 
 
+// Brand-aligned success badge (check mark) reused on every celebratory step.
+const SuccessCheckIcon = () => (
+  <div className={styles.successIcon} aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </div>
+);
+
 const SuccessScreen = () => {
   const { t } = useLanguage()
 
   return (
     <div className={styles.successContainer}>
+      <SuccessCheckIcon />
       <h1 className={styles.successTitle}>
         {t("register.agreements.receiveTitle")}
       </h1>
@@ -231,6 +278,8 @@ const SuccessScreen = () => {
 type RegistryParty = {
   party_id: string;
   name: string;
+  url?: string;
+  capabilities_url?: string;
 };
 
 
@@ -238,6 +287,18 @@ type RegistryParty = {
 const Register: NextPage = () => {
   const Api = new API()
   const { keycloak } = useKeycloak();
+  const router = useRouter();
+  // Admins don't onboard — send them straight to the proposal overview so the
+  // register flow never renders/flashes for them (the render is short-circuited
+  // to a loader below while this redirect runs).
+  const isAdmin = Boolean(
+    keycloak?.authenticated &&
+    typeof keycloak.hasRealmRole === "function" &&
+    keycloak.hasRealmRole("onboarding-admin")
+  );
+  useEffect(() => {
+    if (isAdmin) router.replace("/admin");
+  }, [isAdmin, router]);
   const rawGivenNameFromToken = keycloak?.tokenParsed?.given_name;
   const givenNameFromToken =
     typeof rawGivenNameFromToken === "string" ? rawGivenNameFromToken.trim() : "";
@@ -246,9 +307,9 @@ const Register: NextPage = () => {
     typeof rawGivenNameFromIdToken === "string"
       ? rawGivenNameFromIdToken.trim()
       : "";
-  const keycloakUserInfo = (keycloak as any)?.userInfo as
-    | Record<string, unknown>
-    | undefined;
+  const keycloakUserInfo = keycloak
+    ? (getKeycloakUserInfo(keycloak) as Record<string, unknown> | undefined)
+    : undefined;
   const givenNameFromUserInfo =
     typeof keycloakUserInfo?.given_name === "string"
       ? keycloakUserInfo.given_name.trim()
@@ -269,19 +330,12 @@ const Register: NextPage = () => {
     fullNameFromUserInfo !== ""
       ? fullNameFromUserInfo.split(" ")[0]?.trim() || ""
       : "";
-  const toTrimmedString = (value: unknown): string => {
-    if (typeof value === "string") return value.trim();
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === "string") {
-      return value[0].trim();
-    }
-    return "";
-  };
-  const kvkFromUserInfo = toTrimmedString(
+  const kvkFromUserInfo = toNormalizedKvkValue(
     keycloakUserInfo?.["legalSubjectId"] ??
     keycloakUserInfo?.["kvkNumber"] ??
     keycloakUserInfo?.["kvk"]
   );
-  const companyNameFromUserInfo = toTrimmedString(
+  const companyNameFromUserInfo = toTrimmedStringValue(
     keycloakUserInfo?.["companyName"] ?? keycloakUserInfo?.["companyname"]
   );
   const prefilledPartyId = kvkFromUserInfo
@@ -312,25 +366,31 @@ const Register: NextPage = () => {
       ? keycloak.tokenParsed.email.trim()
       : "";
   const prefilledEmail = emailFromUserInfo || emailFromToken;
-  const env = getPublicEnv()
+  // Memoized so env-derived values keep a stable identity for the memos/effects
+  // below; the public env is fixed after startup, so resolving it once is correct.
+  const env = useMemo(() => getPublicEnv(), [])
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
   const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
-  const staticParty = parseBoolEnv(env.NEXT_PUBLIC_STATIC_PARTY)
   const autoAcceptProposal = parseBoolEnv(env.NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL)
   const skipRoleStep = parseBoolEnv(env.NEXT_PUBLIC_SKIP_ROLES)
-  const skipSettings = parseBoolEnv(env.NEXT_PUBLIC_SKIP_SETTINGS)
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
+  const eherkenningAlias =
+    keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+      ? keycloakIdp
+      : "eHerkenning"
+  // Whether an eHerkenning IdP is configured for this deployment. The eHerkenning
+  // identity option is only offered when a broker alias is set; with no IdP we
+  // hide it and route users down the eIDAS-certificate path instead.
+  const eherkenningConfigured = Boolean(
+    keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+  )
 
-  const steps = alwaysM2M ? (staticParty ? StepsV3 : StepsV2) : StepsV1
+  const steps = alwaysM2M ? StepsV2 : StepsV1
   const activeRoles = env.NEXT_PUBLIC_ACTIVE_ROLES
     ? env.NEXT_PUBLIC_ACTIVE_ROLES.split(",").map((t) => t.trim()).filter(Boolean)
     : ["dataowner", "dataconsumer", "dataprovider"]
-  const defaultPartyId = env.NEXT_PUBLIC_PARTY_ID || ""
-  const defaultPartyName = env.NEXT_PUBLIC_PARTY_NAME || ""
-  const defaultPartyUrl = env.NEXT_PUBLIC_PARTY_REGISTER_URL || ""
-  const defaultPartyCapabilitiesUrl = env.NEXT_PUBLIC_PARTY_CAPABILITIES_URL || ""
   const defaultRoleValue = env.NEXT_PUBLIC_DEFAULT_ROLE
   const defaultRoles = useMemo(
     () => ({
@@ -342,7 +402,6 @@ const Register: NextPage = () => {
   )
 
   const firstInteractiveStep = skipRoleStep ? (steps.role ?? 0) + 1 : (steps.role ?? 0)
-  const useStaticParty = staticParty
   const useAutoAcceptProposal = autoAcceptProposal
   const registerStateKey = useMemo(() => {
     const rawSub = keycloak?.tokenParsed?.sub
@@ -365,7 +424,7 @@ const Register: NextPage = () => {
       idCheck: {
         idCheckMethod: alwaysM2M ? "eidas" : undefined,
         companyName: "",
-        kvkNumber: "",
+        kvkNumber: kvkFromUserInfo,
         partyId: prefilledPartyId,
         partyName: prefilledPartyName,
       },
@@ -399,20 +458,37 @@ const Register: NextPage = () => {
         method: "",
       },
     }),
-    [alwaysM2M, defaultRoles, prefilledEmail, prefilledFullName, prefilledPartyId, prefilledPartyName]
+    [
+      alwaysM2M,
+      defaultRoles,
+      kvkFromUserInfo,
+      prefilledEmail,
+      prefilledFullName,
+      prefilledPartyId,
+      prefilledPartyName,
+    ]
   )
 
   const [currentStep, setCurrentStep] = useState(firstInteractiveStep)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const hasHydratedRef = useRef(false)
+  const [idpActionState, setIdpActionState] = useState<StoredIdpActionState | undefined>(() =>
+    loadStoredIdpActionState()
+  )
+  const [, setUserInfoVersion] = useState(0)
+  const [hasEherkenningLink, setHasEherkenningLink] = useState<boolean | undefined>(undefined)
 
   // load saved state
   useEffect(() => {
     if (!registerStateKey) return
     let cancelled = false
     hasHydratedRef.current = false
-    setFormData(initialFormData)
-    setCurrentStep(firstInteractiveStep)
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // runs before the async hydrate below resolves, so the reset still lands first.
+    queueMicrotask(() => {
+      setFormData(initialFormData)
+      setCurrentStep(firstInteractiveStep)
+    })
 
     const hydrate = async () => {
       try {
@@ -503,7 +579,6 @@ const Register: NextPage = () => {
   }, [registerStateKey, initialFormData, firstInteractiveStep])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const autoAdvancedFromEherkenningRef = useRef(false)
   const [validationError, setValidationError] = useState<string>("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -513,19 +588,105 @@ const Register: NextPage = () => {
   const shouldShowAgreementTerms = useAutoAcceptProposal;
   const requiresTermsConsent = shouldShowAgreementTerms;
   const [hideCapabilitiesUrlField, setHideCapabilitiesUrlField] = useState(false);
+  const actingSubjectId = toTrimmedStringValue(
+    keycloak?.tokenParsed?.["actingSubjectId"] ??
+      keycloakUserInfo?.["actingSubjectId"]
+  )
+  const isAuthenticated = Boolean(keycloak?.authenticated)
+  const currentIdp = String(keycloak?.tokenParsed?.idp ?? "").toLowerCase()
+  const hasEherkenningSession = currentIdp === eherkenningAlias.toLowerCase()
+  const hasSuccessfulEherkenningLink =
+    idpActionState?.status === "success" &&
+    idpActionState.alias?.toLowerCase() === eherkenningAlias.toLowerCase()
+  const canUseFreshEherkenningLink =
+    isAuthenticated && !hasEherkenningSession && hasSuccessfulEherkenningLink
+  const hasKnownEherkenningLink =
+    hasEherkenningSession ||
+    hasSuccessfulEherkenningLink ||
+    hasEherkenningLink === true
+  const isCheckingEherkenningLink =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !hasSuccessfulEherkenningLink &&
+    hasEherkenningLink === undefined
+  const canUseCurrentEherkenning = isAuthenticated && hasEherkenningSession
+  const shouldUseLinkedEherkenning =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !hasSuccessfulEherkenningLink &&
+    hasKnownEherkenningLink
+  const shouldLinkEherkenning =
+    isAuthenticated &&
+    !hasEherkenningSession &&
+    !isCheckingEherkenningLink &&
+    !hasKnownEherkenningLink
+  const currentAccountLabel =
+    toTrimmedStringValue(
+      keycloak?.tokenParsed?.preferred_username ?? keycloak?.tokenParsed?.email
+    ) || prefilledEmail
+  const eherkenningIdentityLabel =
+    companyNameFromUserInfo ||
+    kvkFromUserInfo ||
+    actingSubjectId
+
+  // eHerkenning signing only works inside a verified eHerkenning session — the
+  // backend rejects it otherwise. When it isn't available we hide the option and
+  // route the user down the manual upload path, avoiding a dead-end 403. It also
+  // requires an eHerkenning IdP to be configured at all.
+  const eherkenningSigningAvailable = eherkenningConfigured && canUseCurrentEherkenning
+
+  // Keep the chosen signing method valid for the current session: once the
+  // session is known, default to eHerkenning when available, otherwise force
+  // manual. Leaves an explicit user choice untouched.
+  useEffect(() => {
+    if (!isAuthenticated) return // wait until the session (and its idp) is known
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // the guarded updater no-ops when unchanged, so this cannot loop.
+    queueMicrotask(() => setFormData((prev) => {
+      const current = prev.signingMethod.method
+      const next = eherkenningSigningAvailable
+        ? current === ""
+          ? "eherkenning"
+          : current
+        : "manual"
+      if (next === current) return prev
+      return {
+        ...prev,
+        signingMethod: { ...prev.signingMethod, method: next },
+      }
+    }))
+  }, [isAuthenticated, eherkenningSigningAvailable])
+
+  // With no eHerkenning IdP configured, the eHerkenning identity option is hidden;
+  // force the eIDAS-certificate method so the sole remaining option is selected.
+  // Guarded + deferred so it no-ops when already correct and never loops.
+  useEffect(() => {
+    if (eherkenningConfigured) return
+    queueMicrotask(() => setFormData((prev) =>
+      prev.idCheck.idCheckMethod === "eidas"
+        ? prev
+        : { ...prev, idCheck: { ...prev.idCheck, idCheckMethod: "eidas" } }
+    ))
+  }, [eherkenningConfigured])
 
   useEffect(() => {
-    if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName) return;
+    if (!prefilledPartyId && !prefilledPartyName && !prefilledEmail && !prefilledFullName && !kvkFromUserInfo) return;
 
-    setFormData((prev) => {
-      const nextPartyId = prev.idCheck.partyId || prefilledPartyId;
-      const nextPartyName = prev.idCheck.partyName || prefilledPartyName;
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
+    // the guarded updater no-ops when unchanged, so this cannot loop.
+    queueMicrotask(() => setFormData((prev) => {
+      const nextPartyId = prefilledPartyId || prev.idCheck.partyId;
+      const nextPartyName = prefilledPartyName || prev.idCheck.partyName;
+      const nextCompanyName = prefilledPartyName || prev.idCheck.companyName;
+      const nextKvkNumber = kvkFromUserInfo || prev.idCheck.kvkNumber;
       const nextAccountName = prev.account.name || prefilledFullName;
       const nextAccountEmail = prev.account.email || prefilledEmail;
 
       if (
         nextPartyId === prev.idCheck.partyId &&
         nextPartyName === prev.idCheck.partyName &&
+        nextCompanyName === prev.idCheck.companyName &&
+        nextKvkNumber === prev.idCheck.kvkNumber &&
         nextAccountName === prev.account.name &&
         nextAccountEmail === prev.account.email
       ) {
@@ -536,6 +697,8 @@ const Register: NextPage = () => {
         ...prev,
         idCheck: {
           ...prev.idCheck,
+          companyName: nextCompanyName,
+          kvkNumber: nextKvkNumber,
           partyId: nextPartyId,
           partyName: nextPartyName,
         },
@@ -545,23 +708,26 @@ const Register: NextPage = () => {
           email: nextAccountEmail,
         },
       };
-    });
-  }, [prefilledPartyId, prefilledPartyName, prefilledEmail, prefilledFullName]);
+    }));
+  }, [kvkFromUserInfo, prefilledPartyId, prefilledPartyName, prefilledEmail, prefilledFullName]);
 
   useEffect(() => {
     if (currentStep !== steps.confirm) return;
 
     if (!useAutoAcceptProposal) {
-      setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
-      setFormData((prev) => {
-        if (prev.agreements.termsConsent) return prev;
-        return {
-          ...prev,
-          agreements: {
-            ...prev.agreements,
-            termsConsent: true,
-          },
-        };
+      // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+      queueMicrotask(() => {
+        setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+        setFormData((prev) => {
+          if (prev.agreements.termsConsent) return prev;
+          return {
+            ...prev,
+            agreements: {
+              ...prev.agreements,
+              termsConsent: true,
+            },
+          };
+        });
       });
       return;
     }
@@ -572,7 +738,8 @@ const Register: NextPage = () => {
       // { id: "term2", label: "Agreement-link-2.pdf", url: "" }
     ];
 
-    setAgreementTerms((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setAgreementTerms((prev) => {
       const isSameLength = prev.length === mockTerms.length;
       const isSameContent = isSameLength && prev.every((term, index) => {
         const candidate = mockTerms[index];
@@ -584,11 +751,12 @@ const Register: NextPage = () => {
       });
 
       return isSameContent ? prev : mockTerms;
-    });
+    }));
 
-    setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev));
+    queueMicrotask(() => setAcceptedTerms((prev) => (Object.keys(prev).length > 0 ? {} : prev)));
 
-    setFormData((prev) => {
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
       if (!prev.agreements.termsConsent) return prev;
       return {
         ...prev,
@@ -597,7 +765,7 @@ const Register: NextPage = () => {
           termsConsent: false,
         },
       };
-    });
+    }));
   }, [currentStep, useAutoAcceptProposal]);
 
 
@@ -630,37 +798,44 @@ const Register: NextPage = () => {
 
   useEffect(() => {
     if (hideCapabilitiesUrlField) {
-      setFormData((prev) => ({
+      // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+      queueMicrotask(() => setFormData((prev) => ({
         ...prev,
         association: {
           ...prev.association,
           capabilitiesUrl: "",
         },
-      }));
+      })));
     }
   }, [hideCapabilitiesUrlField]);
 
   const { t } = useLanguage()
 
-  const progressStepKeys = useMemo(
-    () =>
-      Object.entries(steps)
-        .filter(([, index]) => index < steps.success)
-        .sort((a, b) => a[1] - b[1])
-        .map(([key]) => key as keyof typeof steps)
-        .filter((key) => !(skipRoleStep && key === "role")),
-    [steps, skipRoleStep]
-  )
+  // Order the wizard's step keys for the progress bar. Cheap to derive each render
+  // (small fixed-size object) and only read in JSX, so it isn't memoized.
+  const progressStepKeys = Object.entries(steps)
+    .filter(([, index]) => index < steps.success)
+    .sort((a, b) => a[1] - b[1])
+    .map(([key]) => key as keyof typeof steps)
+    .filter((key) => !(skipRoleStep && key === "role"))
 
   const canGoBack = currentStep > firstInteractiveStep
 
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
+  const [isStaticAuthRegistry, setIsStaticAuthRegistry] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [certificatePreview, setCertificatePreview] = useState<CertificateFields | null>(null)
   const [uploadError, setUploadError] = useState<string>("")
   const [isDragging, setIsDragging] = useState(false)
   const [registryParties, setRegistryParties] = useState<RegistryParty[]>([])
   const [registrarId, setRegistrarId] = useState("")
+  // Onboarding agreement documents (configured in Settings), shown for download
+  // on the signing steps. Secrets are redacted server-side.
+  const [agreements, setAgreements] = useState<AgreementView[]>([])
+  // Manual signing requires one signed upload per configured agreement (derived,
+  // not hardcoded) so the step can never dead-end when the agreement set changes.
+  const requiredAgreementCount = agreements.length
 
   const urlRegex =
     /^(https?:\/\/)([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
@@ -669,44 +844,129 @@ const Register: NextPage = () => {
 
 
   useEffect(() => {
-    // if always-m2m and always-eherkenning are both set
-    // do not skip id-check since this dictates an eSeal is required
-    if (alwaysM2M && alwaysEherkenning)
-      return
-
-    if (autoAdvancedFromEherkenningRef.current) return
-    if (typeof steps.idCheck !== "number") return
-    if (currentStep !== steps.idCheck) return
-
-    const hasEherkenningAuth =
-      String(keycloak?.tokenParsed?.idp ?? "").toLowerCase() === "eherkenning"
-
-    if (!hasEherkenningAuth) return
-
-    autoAdvancedFromEherkenningRef.current = true
-    setCurrentStep((prev) => prev + 1)
-  }, [currentStep, keycloak])
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setIdpActionState(loadStoredIdpActionState()))
+  }, [keycloak?.authenticated, keycloak?.token, keycloak?.tokenParsed?.sub])
 
   useEffect(() => {
-    if (!useStaticParty) return;
+    let cancelled = false
 
-    if (!defaultPartyId || !defaultPartyName) {
-      console.warn('env.STATIC_PARTY was set but missing PARTY_ID/PARTY_NAME')
-      return
+    if (!keycloak?.authenticated) {
+      queueMicrotask(() => setHasEherkenningLink(undefined))
+      return () => {
+        cancelled = true
+      }
     }
 
-    setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
-    setFormData((prev) => ({
-      ...prev,
-      association: {
-        ...prev.association,
-        authRegistry: defaultPartyId,
-        authRegistryName: defaultPartyName,
-        authRegistryUrl: defaultPartyUrl || prev.association?.authRegistryUrl,
-        // capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association?.capabilitiesUrl,
-      },
+    if (hasEherkenningSession || hasSuccessfulEherkenningLink) {
+      queueMicrotask(() => setHasEherkenningLink(true))
+      return () => {
+        cancelled = true
+      }
+    }
+
+    queueMicrotask(() => setHasEherkenningLink(undefined))
+
+    const loadLinkedAccounts = async () => {
+      try {
+        const linkedAccounts = await fetchKeycloakLinkedAccounts(keycloak)
+        if (cancelled) return
+        setHasEherkenningLink(
+          hasLinkedIdentityProvider(linkedAccounts, eherkenningAlias)
+        )
+      } catch (error) {
+        if (cancelled) return
+        console.error("Failed to load linked eHerkenning accounts", error)
+        setHasEherkenningLink(false)
+      }
+    }
+
+    void loadLinkedAccounts()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    keycloak,
+    keycloak?.authenticated,
+    keycloak?.tokenParsed?.sub,
+    eherkenningAlias,
+    hasEherkenningSession,
+    hasSuccessfulEherkenningLink,
+  ])
+
+  useEffect(() => {
+    if (!canUseCurrentEherkenning && !canUseFreshEherkenningLink) return
+
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
+      if (prev.idCheck.idCheckMethod === "eherkenning") return prev
+      return {
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eherkenning",
+        },
+      }
     }))
-  }, [useStaticParty, defaultPartyId, defaultPartyName, defaultPartyUrl])
+  }, [canUseCurrentEherkenning, canUseFreshEherkenningLink])
+
+  useEffect(() => {
+    const isHumanFlow = formData.m2m.useM2M === "no" && !alwaysM2M
+    if (!isHumanFlow) return
+
+    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setFormData((prev) => {
+      if (prev.idCheck.idCheckMethod === "eherkenning") return prev
+      return {
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eherkenning",
+        },
+      }
+    }))
+  }, [formData.m2m.useM2M, alwaysM2M])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!keycloak?.authenticated) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    if (!hasEherkenningSession && !hasSuccessfulEherkenningLink) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const refreshUserInfo = async () => {
+      try {
+        await refreshKeycloakUserInfo(keycloak)
+        if (cancelled) return
+        setUserInfoVersion((version) => version + 1)
+      } catch (error) {
+        if (cancelled) return
+        console.error("Failed to refresh Keycloak user info for eHerkenning", error)
+      }
+    }
+
+    void refreshUserInfo()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    keycloak,
+    keycloak?.authenticated,
+    keycloak?.token,
+    keycloak?.tokenParsed?.sub,
+    hasEherkenningSession,
+    hasSuccessfulEherkenningLink,
+  ])
 
   const validateStep = async (step: number, data: FormData): Promise<boolean> => {
 
@@ -729,19 +989,23 @@ const Register: NextPage = () => {
         }
 
       case steps.idCheck: // ID Check
-        if (!data.idCheck.idCheckMethod) {
-          setValidationError("register.validation.selectOption");
-          return false
+        // Selection is optional: user can continue with either a ready eHerkenning identity
+        // or a valid uploaded eIDAS certificate.
+        if (canUseCurrentEherkenning || canUseFreshEherkenningLink) {
+          return true
         }
-        if (data.idCheck.idCheckMethod === "eidas" && !uploadedFile) {
-          setValidationError("register.validation.idcheckRequired");
-          return false
-        } // TODO: also allow eherkenning check
-        else if (data.idCheck.idCheckMethod === "eidas" && !(await preValidateEidasCert(uploadedFile))) {
-          setValidationError("register.validation.idcheckRequired")
-          return false
+
+        const eidasFile = data.eidasCert ?? uploadedFile
+        if (eidasFile) {
+          if (!(await preValidateEidasCert(eidasFile))) {
+            setValidationError("register.validation.identityRequired")
+            return false
+          }
+          return true
         }
-        return true
+
+        setValidationError("register.validation.identityRequired")
+        return false
 
       case steps.location: // Location
         if (
@@ -762,17 +1026,14 @@ const Register: NextPage = () => {
       // }
 
       case steps.association: // Association
-        if (!data.association.authRegistry || !data.association.authRegistryUrl) {
-          setValidationError("register.validation.associationRequired");
-          return false;
-        } else if (
+        if (
           !hideCapabilitiesUrlField &&
           data.association.capabilitiesUrl &&
           !urlRegex.test(data.association.capabilitiesUrl)
         ) {
           setValidationError("register.validation.invalidCapabilitiesUrl");
           return false;
-        } else if (!urlRegex.test(data.association.authRegistryUrl)) {
+        } else if (data.association.authRegistryUrl && !urlRegex.test(data.association.authRegistryUrl)) {
           setValidationError("register.validation.invalidRegistryUrl");
           return false;
         } else if (
@@ -816,8 +1077,6 @@ const Register: NextPage = () => {
 
   const fetchSettings = async () => {
     try {
-      if (skipSettings) return
-
       if (!baseUrl)
         throw new Error("Backend URL not configured")
 
@@ -828,6 +1087,24 @@ const Register: NextPage = () => {
       // Store registrarId in form data
       setRegistrarId(settingsData.registrarId || "")
       setHideCapabilitiesUrlField(Boolean(settingsData.hideCapabilitiesUrl))
+      setAgreements(
+        Array.isArray(settingsData.agreements) ? settingsData.agreements : []
+      )
+      const hasStaticAuthRegistry =
+        Boolean(settingsData.prefillAuthRegistry) && Boolean(settingsData.authRegistryId)
+      setIsStaticAuthRegistry(hasStaticAuthRegistry)
+      setIsSingleAssociation(hasStaticAuthRegistry)
+      if (hasStaticAuthRegistry) {
+        setFormData((prev) => ({
+          ...prev,
+          association: {
+            ...prev.association,
+            authRegistry: settingsData.authRegistryId || "",
+            authRegistryName: settingsData.authRegistryName || "",
+            authRegistryUrl: settingsData.authRegistryUrl || "",
+          },
+        }))
+      }
 
     } catch (e) {
       console.error("Error fetching settings data:", e)
@@ -836,8 +1113,6 @@ const Register: NextPage = () => {
   }
 
   const fetchRegistry = async () => {
-    if (useStaticParty) return
-
     try {
       if (!baseUrl)
         throw new Error("Backend URL not configured")
@@ -848,39 +1123,19 @@ const Register: NextPage = () => {
       const data = response.data
       const parties = data.parties_info?.data || []
 
-      const partiesInfo = parties?.map((party) => ({
+      const partiesInfo: RegistryParty[] = parties?.map((party) => ({
         party_id: party.party_id,
         name: party.party_name,
+        url: party.url,
+        capabilities_url: party.capabilities_url,
       }))
 
-      const fallbackPartyId = defaultPartyId || 'EORI.NL123456789'
-      const fallbackPartyName = defaultPartyName || 'example.party'
-
-      if (!partiesInfo?.length)
-        (fallbackPartyId && fallbackPartyName)
-          ? partiesInfo.push({ party_id: `${fallbackPartyId}`, name: `${fallbackPartyName}` })
-          : console.warn('No parties found in registry, and no PARTY_ID/NAME env vars set')
-
       setRegistryParties(partiesInfo)
-      if (partiesInfo.length === 1) {
-        const singleParty = partiesInfo[0];
-        setFormData((prev) => ({
-          ...prev,
-          association: {
-            ...prev.association,
-            authRegistry: singleParty.party_id,
-            authRegistryName: singleParty.name,
-            authRegistryUrl: defaultPartyUrl || prev.association.authRegistryUrl,
-            capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association.capabilitiesUrl,
-          },
-        }));
-        setIsSingleAssociation(true);
-      }
+      setIsSingleAssociation((prev) => (isStaticAuthRegistry ? true : prev));
 
-      return registryParties
+      return partiesInfo
     } catch (e) {
-      // always set the default
-      setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
+      setRegistryParties([])
 
       if (e instanceof AxiosError && e.status === 404) {
         return
@@ -910,6 +1165,16 @@ const Register: NextPage = () => {
         // we'll return without setting the fetched data
         if (process.env.IS_PENTEST) return
 
+        const proposalKvkNumber = toNormalizedKvkValue(proposalData.kvkNumber) || kvkFromUserInfo
+        const proposalPartyId = toTrimmedStringValue(proposalData.partyId)
+        const proposalPartyName = toTrimmedStringValue(proposalData.partyName)
+        const proposalCompanyName = toTrimmedStringValue(proposalData.companyName)
+        const proposalPartyIdFromKvk = proposalKvkNumber
+          ? `EU.EORI.NL.KVK${proposalKvkNumber}`
+          : ""
+        const resolvedPartyId = proposalPartyIdFromKvk || proposalPartyId
+        const resolvedPartyName = prefilledPartyName || proposalPartyName
+
         // Update form data with existing proposal regardless of status
         setFormData({
           roles: {
@@ -922,10 +1187,10 @@ const Register: NextPage = () => {
             useM2M: proposalData.useM2M,
           },
           idCheck: {
-            companyName: proposalData.companyName,
-            kvkNumber: proposalData.kvkNumber,
-            partyId: proposalData.partyId,
-            partyName: proposalData.partyName,
+            companyName: proposalCompanyName || resolvedPartyName,
+            kvkNumber: proposalKvkNumber,
+            partyId: resolvedPartyId,
+            partyName: resolvedPartyName,
           },
           location: {
             address: proposalData.address,
@@ -1033,6 +1298,7 @@ const Register: NextPage = () => {
     // so it won't appear on the later CTT proof upload step.
     if (currentStep === steps.idCheck) {
       setUploadedFile(null)
+      setCertificatePreview(null)
     }
 
     // TODO: better check on required data for e-herkenning id-check step
@@ -1052,18 +1318,34 @@ const Register: NextPage = () => {
       // fetch registry data. if there is only one registry, set isSingleAssociation to true and prefill
       const registries = await fetchRegistry()
 
-      if (registries?.length === 1) {
+      if (!isStaticAuthRegistry && registries?.length === 1) {
         setIsSingleAssociation(true)
 
         const [registry] = registries
 
-        // prefill formData
-        formData.association.authRegistry = registry.party_id
-        formData.association.authRegistryName = registry.name
-        formData.association.authRegistryUrl = registry.url
-        if (!hideCapabilitiesUrlField) {
-          formData.association.capabilitiesUrl = registry.capabilities_url
-        }
+        // Prefill the association fields immutably. Mutating the formData object in
+        // place is flagged by react-hooks/immutability (and wouldn't trigger a
+        // re-render on its own). The registry list carries only id + name, so only
+        // adopt a URL when one is actually present; otherwise keep the existing value
+        // (an env default or empty) so the fields below stay user-editable.
+        setFormData((prev) => ({
+          ...prev,
+          association: {
+            ...prev.association,
+            authRegistry: registry.party_id,
+            authRegistryName: registry.name,
+            authRegistryUrl:
+              (registry as any).url ?? prev.association.authRegistryUrl ?? "",
+            ...(hideCapabilitiesUrlField
+              ? {}
+              : {
+                  capabilitiesUrl:
+                    (registry as any).capabilities_url ??
+                    prev.association.capabilitiesUrl ??
+                    "",
+                }),
+          },
+        }))
       }
     } else {
       try {
@@ -1141,9 +1423,35 @@ const Register: NextPage = () => {
 
     // kvk data prefetch
     if ((currentStep + 1) === steps.location) {
-        // see if we can prefetch location details based on user (kvk) data
-        const kvkNumber = formData.idCheck.kvkNumber || keycloak?.userInfo?.legalSubjectId || keycloak?.tokenParsed?.preferred_username
-        formData.idCheck.kvkNumber = kvkNumber
+        // see if we can prefill details from the linked eHerkenning identity claims
+        const kvkNumber = toNormalizedKvkValue(formData.idCheck.kvkNumber) || kvkFromUserInfo
+        const partyIdFromKvk = kvkNumber ? `EU.EORI.NL.KVK${kvkNumber}` : ""
+        const partyNameFromCompany = prefilledPartyName
+
+        setFormData((prev) => {
+          const nextPartyId = partyIdFromKvk || prev.idCheck.partyId
+          const nextPartyName = partyNameFromCompany || prev.idCheck.partyName
+
+          if (
+            nextPartyId === prev.idCheck.partyId &&
+            nextPartyName === prev.idCheck.partyName &&
+            kvkNumber === prev.idCheck.kvkNumber &&
+            (partyNameFromCompany || prev.idCheck.companyName) === prev.idCheck.companyName
+          ) {
+            return prev
+          }
+
+          return {
+            ...prev,
+            idCheck: {
+              ...prev.idCheck,
+              companyName: partyNameFromCompany || prev.idCheck.companyName,
+              kvkNumber,
+              partyId: nextPartyId,
+              partyName: nextPartyName,
+            },
+          }
+        })
 
         // NOTE: disabling due to current CSP
         // if (kvkNumber) {
@@ -1166,7 +1474,6 @@ const Register: NextPage = () => {
 
   const handleBack = () => {
     setValidationError(""); // Clear any existing error
-    const hasEherkenningAuth = String(keycloak?.tokenParsed?.idp)?.toLowerCase() === 'eherkenning'
     if (currentStep === steps.signingMethod) {
       // go to index page if on agreements step
       window.location.href = "/";
@@ -1174,17 +1481,35 @@ const Register: NextPage = () => {
     }
     if (!canGoBack)
       return
-    if (currentStep === steps.m2m && hasEherkenningAuth) {
-      setCurrentStep((prev) => Math.max(prev - 2, firstInteractiveStep))
-    } else {
-      setCurrentStep((prev) => Math.max(prev - 1, firstInteractiveStep))
-    }
+    setCurrentStep((prev) => Math.max(prev - 1, firstInteractiveStep))
   };
 
   const handleSignAndCommit = async () => {
-    if (formData.agreements.files.length < 2) {
-      setUploadError(t("register.agreements.minimumFiles"));
-      return;
+    setUploadError("");
+    const isEherkenning = formData.signingMethod.method === "eherkenning";
+
+    if (isEherkenning) {
+      // eHerkenning signing is consent-based: the authenticated eHerkenning
+      // identity plus explicit consent is the signature — no files are uploaded.
+      if (!formData.agreements.eherkenningConsent) {
+        setUploadError(t("register.agreements.consentRequired"));
+        return;
+      }
+    } else {
+      // Manual signing requires at least two uploaded, signed documents.
+      if (formData.agreements.files.length < requiredAgreementCount) {
+        setUploadError(t("register.agreements.minimumFiles"));
+        return;
+      }
+      // Guard the combined upload size against the backend body limit (50MB).
+      const totalBytes = formData.agreements.files.reduce(
+        (sum, f) => sum + f.size,
+        0
+      );
+      if (totalBytes > 45 * 1024 * 1024) {
+        setUploadError(t("register.agreements.totalTooLarge"));
+        return;
+      }
     }
 
     try {
@@ -1193,11 +1518,24 @@ const Register: NextPage = () => {
         throw new Error("Backend URL not configured");
       }
 
-      // Create FormData object for multipart/form-data
+      // Create FormData object for multipart/form-data. The signing method tells
+      // the backend whether to expect uploaded documents (manual) or to record a
+      // consent-based eHerkenning signature.
       const formDataToSend = new FormData();
-      formData.agreements.files.forEach((file, index) => {
-        formDataToSend.append(`signedAgreement${index + 1}`, file);
-      });
+      if (isEherkenning) {
+        formDataToSend.append("signingMethod", "eherkenning");
+        formDataToSend.append("eherkenningConsent", "true");
+        // The current (eHerkenning-brokered) session token serves as the identity
+        // assertion for the v3 idpAssertion claim at party creation.
+        if (keycloak?.token) {
+          formDataToSend.append("idpAssertion", keycloak.token);
+        }
+      } else {
+        formDataToSend.append("signingMethod", "manual");
+        formData.agreements.files.forEach((file, index) => {
+          formDataToSend.append(`signedAgreement${index + 1}`, file);
+        });
+      }
       formDataToSend.append(
         "keycloakUsername",
         keycloak?.tokenParsed?.preferred_username || ""
@@ -1215,10 +1553,14 @@ const Register: NextPage = () => {
       }
 
       setValidationError("");
-      setCurrentStep(10);
+      setCurrentStep(steps.completed);
     } catch (error) {
       console.error("Error signing agreements:", error);
-      setValidationError(error.message || "Failed to sign agreements");
+      // Prefer the backend's specific message (e.g. the eHerkenning session
+      // check) over the generic axios error, falling back to a friendly default.
+      const detail =
+        (error as any)?.response?.data?.error || (error as any)?.message;
+      setUploadError(detail || t("register.agreements.signError"));
     } finally {
       setIsSubmitting(false);
     }
@@ -1247,9 +1589,38 @@ const Register: NextPage = () => {
         return
       }
 
+      // Parse the certificate into the fields the v3 x509Certificate identity
+      // claim needs (x5c, x5t#s256 thumbprint, subject DN). Best-effort: a parse
+      // failure must not block onboarding (irrelevant on a v2 satellite).
+      let certFields: CertificateFields | null = null
+      try {
+        certFields = await extractCertificateFields(file)
+      } catch (e) {
+        console.error("[extractCertificateFields Error]", e)
+      }
+
       setFormData((prev) => ({ ...prev, eidasCert: file }))
+      setFormData((prev) => ({
+        ...prev,
+        idCheck: {
+          ...prev.idCheck,
+          idCheckMethod: "eidas",
+          companyName:
+            prev.idCheck.companyName || certFields?.organizationName || "",
+          kvkNumber:
+            prev.idCheck.kvkNumber || certFields?.kvkNumber || "",
+          partyId:
+            prev.idCheck.partyId || certFields?.partyId || "",
+          partyName:
+            prev.idCheck.partyName || certFields?.organizationName || "",
+          certSubjectName: certFields?.subjectName,
+          certX5c: certFields?.x5c,
+          certX5tS256: certFields?.thumbprint,
+        },
+      }))
       setUploadError("")
       setUploadedFile(file)
+      setCertificatePreview(certFields)
 
       return
     }
@@ -1261,9 +1632,10 @@ const Register: NextPage = () => {
         return
       }
 
-      // Validate file size - max 100MB
-      if (file.size > 100 * 1024 * 1024) {
-        setUploadError("File size exceeds 100MB limit")
+      // Validate file size — keep each file well under the backend's 50MB total
+      // upload limit so two signed agreements always fit.
+      if (file.size > 20 * 1024 * 1024) {
+        setUploadError(t("register.agreements.fileTooLarge"))
         return
       }
 
@@ -1337,29 +1709,295 @@ const Register: NextPage = () => {
     e.target.value = '';
   };
 
+  const handleUseCurrentEherkenning = () => {
+    setFormData((prev) => ({
+      ...prev,
+      idCheck: {
+        ...prev.idCheck,
+        idCheckMethod: "eherkenning",
+      },
+    }))
+    setValidationError("")
+    setCurrentStep((prev) => prev + 1)
+  }
+
   const initiateIDPCheck = () => {
     if (!keycloak) return
-
-    const idpHint =
-      idpOnly && keycloakIdp &&
-      keycloakIdp !== "undefined" &&
-      keycloakIdp !== ""
-        ? keycloakIdp
-        : undefined;
 
     const redirectUri =
       typeof window !== "undefined" ? `${window.location.origin}/register` : undefined
 
-    keycloak.login({
+    if (keycloak.authenticated && !hasEherkenningSession) {
+      if (hasKnownEherkenningLink) {
+        void keycloak.login({
+          redirectUri,
+          idpHint: eherkenningAlias,
+          scope: "openid profile email",
+          prompt: "login",
+        })
+        return
+      }
+
+      if (isCheckingEherkenningLink) return
+
+      setPendingIdpLinkAction(eherkenningAlias)
+      setIdpActionState(loadStoredIdpActionState())
+      void keycloak.login({
+        redirectUri,
+        idpHint: eherkenningAlias,
+        action: `idp_link:${eherkenningAlias}`,
+        scope: "openid profile email",
+      })
+      return
+    }
+
+    const idpHint =
+      idpOnly && keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
+        ? keycloakIdp
+        : eherkenningAlias
+
+    void keycloak.login({
       redirectUri,
       idpHint,
       scope: "openid profile email",
       prompt: "login"
-    });
-  };
+    })
+  }
+
+  const formatCertificateDate = (value?: string) => {
+    if (!value) return t("register.idCheck.certPreview.empty")
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date)
+  }
+
+  const renderCertificateRows = (
+    rows: Array<{ label: string; value?: string }>
+  ) => (
+    <dl className={styles.certPreviewRows}>
+      {rows.map(({ label, value }) => (
+        <div className={styles.certPreviewRow} key={label}>
+          <dt>{label}</dt>
+          <dd>{value || t("register.idCheck.certPreview.empty")}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+
+  const renderAttributeRows = (attributes: CertificateFields["subjectAttributes"]) =>
+    attributes.length > 0
+      ? renderCertificateRows(
+          attributes.map((attribute) => ({
+            label: attribute.shortName,
+            value: attribute.value,
+          }))
+        )
+      : (
+        <p className={styles.certPreviewEmpty}>
+          {t("register.idCheck.certPreview.empty")}
+        </p>
+      )
+
+  const renderCertificatePreview = () => {
+    if (!certificatePreview) return null
+
+    return (
+      <div className={styles.certPreview}>
+        <h3>{t("register.idCheck.certPreview.title")}</h3>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.identity")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.organizationName"),
+              value: certificatePreview.organizationName,
+            },
+            {
+              label: t("register.idCheck.certPreview.organizationIdentifier"),
+              value: certificatePreview.organizationIdentifier,
+            },
+            {
+              label: t("register.idCheck.certPreview.kvkNumber"),
+              value: certificatePreview.kvkNumber,
+            },
+            {
+              label: t("register.idCheck.certPreview.partyId"),
+              value: certificatePreview.partyId,
+            },
+          ])}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.subject")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.distinguishedName"),
+              value: certificatePreview.subjectName,
+            },
+          ])}
+          {renderAttributeRows(certificatePreview.subjectAttributes)}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.issuer")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.distinguishedName"),
+              value: certificatePreview.issuerName,
+            },
+          ])}
+          {renderAttributeRows(certificatePreview.issuerAttributes)}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.validity")}</h4>
+          {renderCertificateRows([
+            {
+              label: t("register.idCheck.certPreview.serialNumber"),
+              value: certificatePreview.serialNumber,
+            },
+            {
+              label: t("register.idCheck.certPreview.validFrom"),
+              value: formatCertificateDate(certificatePreview.validFrom),
+            },
+            {
+              label: t("register.idCheck.certPreview.validTo"),
+              value: formatCertificateDate(certificatePreview.validTo),
+            },
+          ])}
+        </section>
+        <section className={styles.certPreviewSection}>
+          <h4>{t("register.idCheck.certPreview.fingerprints")}</h4>
+          {renderCertificateRows([
+            {
+              label: "x5t#S256",
+              value: certificatePreview.thumbprint,
+            },
+          ])}
+        </section>
+      </div>
+    )
+  }
+
+  // Renders the configured onboarding agreements with per-document download
+  // links (built-ins, uploads and protected URLs all stream through the proxy).
+  const renderAgreementDownloads = () => {
+    if (!agreements || agreements.length === 0) {
+      return (
+        <div className={styles.agreementFile}>
+          {t("home.noAgreements")}
+        </div>
+      )
+    }
+    return agreements.map((a) => (
+      <div key={a.id} className={styles.agreementRow}>
+        <span className={styles.agreementFile}>
+          {a.title}
+          {a.version ? ` (${a.version})` : ""}
+        </span>
+        {a.hasDocument && (
+          <a
+            className={styles.downloadLink}
+            href={Api.agreementDocumentUrl(a.id)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t("register.agreements.download")} ↓
+          </a>
+        )}
+      </div>
+    ))
+  }
+
+  const renderEherkenningAction = () => {
+    const linkWasAttempted =
+      idpActionState?.alias?.toLowerCase() === eherkenningAlias.toLowerCase()
+    const showPortalAccount =
+      isAuthenticated &&
+      !hasEherkenningSession &&
+      !canUseFreshEherkenningLink &&
+      !isCheckingEherkenningLink
+    const helperText = canUseCurrentEherkenning
+      ? t("register.idCheck.currentSessionDescription")
+      : canUseFreshEherkenningLink
+      ? t("register.idCheck.linkedReadyDescription")
+      : isCheckingEherkenningLink
+      ? t("register.idCheck.checkingLinkDescription")
+      : shouldUseLinkedEherkenning
+      ? t("register.idCheck.linkedAccountDescription")
+      : shouldLinkEherkenning
+      ? t("register.idCheck.linkDescription")
+      : t("register.idCheck.loginDescription")
+    const buttonLabel = canUseCurrentEherkenning
+      ? t("register.idCheck.useCurrentSession")
+      : canUseFreshEherkenningLink
+      ? t("register.idCheck.useLinkedIdentity")
+      : shouldUseLinkedEherkenning
+      ? t("register.idCheck.continueWithEherkenning")
+      : shouldLinkEherkenning
+      ? t("register.idCheck.linkAccount")
+      : t("common.login")
+
+    return (
+      <div className={styles.idCheckContainer}>
+        <button
+          type="button"
+          className={styles.eHerkenningButton}
+          disabled={isCheckingEherkenningLink}
+          onClick={
+            canUseCurrentEherkenning || canUseFreshEherkenningLink
+              ? handleUseCurrentEherkenning
+              : initiateIDPCheck
+          }
+        >
+          <img
+            src="/resources/img/eherkenning-logo.png"
+            alt="eHerkenning"
+            className={styles.eHerkenningImage}
+          />
+          <span className={styles.eHerkenningRight}>{buttonLabel}</span>
+        </button>
+        <div className={styles.idCheckStatusCard}>
+          <p className={styles.idCheckStatusText}>{helperText}</p>
+          {hasKnownEherkenningLink && eherkenningIdentityLabel && (
+            <p className={styles.idCheckStatusMeta}>
+              {t("register.idCheck.currentIdentity", {
+                identity: eherkenningIdentityLabel,
+              })}
+            </p>
+          )}
+          {showPortalAccount && currentAccountLabel && (
+            <p className={styles.idCheckStatusMeta}>
+              {t("register.idCheck.currentAccount", {
+                account: currentAccountLabel,
+              })}
+            </p>
+          )}
+          {linkWasAttempted && idpActionState?.status === "cancelled" && (
+            <p className={styles.idCheckStatusWarning}>
+              {t("register.idCheck.linkCancelled")}
+            </p>
+          )}
+          {linkWasAttempted && idpActionState?.status === "error" && (
+            <p className={styles.errorMessage}>
+              {t("register.idCheck.linkError")}
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Add handler for registry selection
   const handleRegistrySelection = (registryId: string) => {
+    if (isStaticAuthRegistry) return;
+
+    if (!registryId) {
+      handleInputChange("association", "authRegistry", "");
+      handleInputChange("association", "authRegistryName", "");
+      handleInputChange("association", "authRegistryUrl", "");
+      return;
+    }
+
     const selectedRegistry = registryParties.find(
       (party) => party.party_id === registryId
     );
@@ -1549,12 +2187,12 @@ const Register: NextPage = () => {
             <div className={styles.header}>
               <h1 className={styles.title}>{t("register.idCheck.title")}</h1>
               <p className={styles.subtitle}>
-                {(formData.m2m.useM2M === "yes" || alwaysM2M) ? (
+                {(formData.m2m.useM2M === "yes" || alwaysM2M || !eherkenningConfigured) ? (
                   <div>
                     {/* <p>{t("register.idCheck.eidasCertificate")}</p> */}
                     <p>{t("register.idCheck.subtitle")}</p>
                     <div className={styles.radioGroup}>
-                      {!alwaysEherkenning && <div className={styles.radioOption}>
+                      {eherkenningConfigured && !alwaysEherkenning && <div className={styles.radioOption}>
                         <input
                           type="radio"
                           id="eherkenning"
@@ -1569,16 +2207,7 @@ const Register: NextPage = () => {
                         <Tooltip content={t("register.idCheck.eHerkenningInfo")}>
                           <span className={styles.infoIcon}>ⓘ</span>
                         </Tooltip>
-                        <div className={styles.roleDescription}>
-                          <button className={styles.eHerkenningButton} onClick={initiateIDPCheck}>
-                            <img
-                              src="/resources/img/eherkenning-logo.png"
-                              alt="eHerkenning"
-                              className={styles.eHerkenningImage}
-                            />
-                            <span className={styles.eHerkenningRight}>{t("common.login")}</span>
-                          </button>
-                        </div>
+                        <div className={styles.roleDescription}>{renderEherkenningAction()}</div>
                       </div>}
 
                       <div className={styles.radioOption}>
@@ -1604,18 +2233,31 @@ const Register: NextPage = () => {
                           <div className={styles.provideCertificate}>{t("register.idCheck.eidasProvide")}</div>
                           {uploadedFile ? (
                             <div className={styles.fileInfo}>
-                              <span className={styles.fileName}>{uploadedFile.name}</span>
-                              <button
-                                className={styles.removeButton}
-                                onClick={(e) => {
-                                  formData.idCheck.idCheckMethod = "eidas"
-                                  e.stopPropagation();
-                                  setUploadedFile(null);
-                                  setFormData({ ...formData, eidasCert: undefined });
-                                }}
-                              >
-                                ✕
-                              </button>
+                              <div className={styles.fileInfoHeader}>
+                                <span className={styles.fileName}>{uploadedFile.name}</span>
+                                <button
+                                  className={styles.removeButton}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setUploadedFile(null);
+                                    setCertificatePreview(null);
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      eidasCert: undefined,
+                                      idCheck: {
+                                        ...prev.idCheck,
+                                        idCheckMethod:
+                                          prev.idCheck.idCheckMethod === "eidas"
+                                            ? undefined
+                                            : prev.idCheck.idCheckMethod,
+                                      },
+                                    }));
+                                  }}
+                                >
+                                  x
+                                </button>
+                              </div>
+                              {renderCertificatePreview()}
                             </div>
                           ) : (
                             <div
@@ -1640,7 +2282,6 @@ const Register: NextPage = () => {
                                 className={styles.hiddenInput}
                                 ref={fileInputRef}
                                 onChange={(e) => {
-                                  formData.idCheck.idCheckMethod = "eidas"
                                   const file = e.target.files?.[0]
                                   if (file) handleFileUpload(file)
                                 }}
@@ -1656,25 +2297,16 @@ const Register: NextPage = () => {
                     <p>
                       {t("register.idCheck.subtitle", { id: "eHerkenning" })}
                     </p>
-                    <div className={styles.idCheckContainer}>
-                      <button className={styles.eHerkenningButton} onClick={() => { }}>
-                        <img
-                          src="/resources/img/eherkenning-logo.png"
-                          alt="eHerkenning"
-                          className={styles.eHerkenningImage}
-                        />
-                        <span className={styles.eHerkenningRight}>{t("common.login")}</span>
-                      </button>
-                      <p className={styles.infoText}>
-                        {t("register.idCheck.info", { id: "eHerkenning" })}
-                        <a
-                          href="https://www.eherkenning.nl"
-                          className={styles.link}
-                        >
-                          {t("register.idCheck.forMoreInfo")}
-                        </a>
-                      </p>
-                    </div>
+                    {renderEherkenningAction()}
+                    <p className={styles.infoText}>
+                      {t("register.idCheck.info", { id: "eHerkenning" })}
+                      <a
+                        href="https://www.eherkenning.nl"
+                        className={styles.link}
+                      >
+                        {t("register.idCheck.forMoreInfo")}
+                      </a>
+                    </p>
                   </>
                 )}
               </p >
@@ -1696,7 +2328,6 @@ const Register: NextPage = () => {
                 <div className={styles.formSection}>
                   <div className={styles.inputGroup}>
                     <FormInput
-                      disabled={useStaticParty}
                       label={t("register.idCheck.partyId")}
                       id="partyId"
                       name="partyId"
@@ -1712,7 +2343,6 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
-                      disabled={useStaticParty}
                       label={t("register.idCheck.partyName")}
                       id="partyName"
                       name="partyName"
@@ -1831,9 +2461,18 @@ const Register: NextPage = () => {
                   className={styles.select}
                   disabled={isSingleAssociation}
                 >
-                  <option value="" disabled>
+                  <option value="">
                     {t("register.association.selectRegistry")}
                   </option>
+                  {isStaticAuthRegistry &&
+                    formData.association.authRegistry &&
+                    !registryParties.some(
+                      (party) => party.party_id === formData.association.authRegistry
+                    ) && (
+                      <option value={formData.association.authRegistry}>
+                        {formData.association.authRegistry}
+                      </option>
+                    )}
                   {registryParties.map((party) => (
                     <option key={party.party_id} value={party.party_id}>
                       {party.party_id}
@@ -1863,7 +2502,6 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
-                  disabled={isSingleAssociation}
                   label={t("register.association.authRegistryUrl")}
                   id="authRegistryUrl"
                   name="authRegistryUrl"
@@ -1877,7 +2515,6 @@ const Register: NextPage = () => {
                       e.target.value
                     )
                   }
-                  required
                 />
                 <span className={styles.infoIcon} title="Information">
                   ⓘ
@@ -1887,7 +2524,6 @@ const Register: NextPage = () => {
               {!hideCapabilitiesUrlField && (
                 <div className={styles.inputGroup}>
                   <FormInput
-                    disabled={isSingleAssociation}
                     label={t("register.association.capabilitiesUrl")}
                     id="capabilitiesUrl"
                     name="capabilitiesUrl"
@@ -2192,6 +2828,7 @@ const Register: NextPage = () => {
 
             <div className={styles.questionContainer}>
               <div className={styles.radioGroup}>
+                {eherkenningSigningAvailable && (
                 <div className={styles.radioOption}>
                   <input
                     type="radio"
@@ -2209,6 +2846,7 @@ const Register: NextPage = () => {
                     {t("register.agreements.eherkenningSigningDescription")}
                   </div>
                 </div>
+                )}
 
                 <div className={styles.radioOption}>
                   <input
@@ -2229,10 +2867,8 @@ const Register: NextPage = () => {
                 </div>
               </div>
 
-              <div className={styles.agreementsLink}>
-                <a href="#" className={styles.downloadLink}>
-                  {t("register.agreements.download")} ↓
-                </a>
+              <div className={styles.agreementsList}>
+                {renderAgreementDownloads()}
               </div>
             </div>
           </>
@@ -2241,21 +2877,16 @@ const Register: NextPage = () => {
       case steps.agreement: // Agreements step
         return (
           <>
-            {formData.signingMethod.method === "manual" ? (
-              // Manual signing - updated file upload interface
+            {formData.signingMethod.method !== "eherkenning" ? (
+              // Manual signing - updated file upload interface (also the safe
+              // default when no method is selected / eHerkenning is unavailable)
               <div className={styles.signAgreementsContainer}>
                 <h3>{t("register.agreements.manualTitle")}</h3>
                 <p className={styles.description}>{t("register.agreements.manualDescription")}</p>
 
-                {/* TODO: Available agreements list */}
+                {/* Agreements configured in Settings (built-ins + custom). */}
                 <div className={styles.agreementsList}>
-                  <div className={styles.agreementFile}>Agreement-file-name.pdf</div>
-                  <div className={styles.agreementFile}>Agreement-other-file-name.pdf</div>
-                  <div className={styles.agreementsLink}>
-                    <a href="#" className={styles.downloadLink}>
-                      {t("register.agreements.download")} ↓
-                    </a>
-                  </div>
+                  {renderAgreementDownloads()}
                 </div>
 
                 <div className={styles.uploadSection}>
@@ -2290,7 +2921,7 @@ const Register: NextPage = () => {
                         {t("register.agreements.browse")}
                       </button>
                       <div className={styles.maxSizeText}>
-                        Max. 500MB • .pdf, .png
+                        {t("register.agreements.uploadLimits")}
                       </div>
                     </div>
                   </div>
@@ -2300,7 +2931,7 @@ const Register: NextPage = () => {
                   )}
 
                   <div className={styles.uploadStatus}>
-                    {formData.agreements.files.length}/2 agreements uploaded
+                    {formData.agreements.files.length}/{requiredAgreementCount} agreements uploaded
                   </div>
 
                   {formData.agreements.files.length > 0 && (
@@ -2359,10 +2990,10 @@ const Register: NextPage = () => {
                     {t("register.agreements.back")}
                   </button>
                   <button
-                    className={`${styles.commitButton} ${formData.agreements.files.length < 2 && styles.disabled
+                    className={`${styles.commitButton} ${formData.agreements.files.length < requiredAgreementCount && styles.disabled
                       }`}
                     onClick={handleSignAndCommit}
-                    disabled={formData.agreements.files.length < 2 || isSubmitting}
+                    disabled={formData.agreements.files.length < requiredAgreementCount || isSubmitting}
                   >
                     {isSubmitting
                       ? t("register.agreements.committing")
@@ -2394,6 +3025,9 @@ const Register: NextPage = () => {
                     {t("register.agreements.confirmText")}
                   </label>
                 </div>
+                {uploadError && (
+                  <div className={styles.errorMessage}>{uploadError}</div>
+                )}
                 <div className={styles.buttonContainer}>
                   <button className={styles.backButton} onClick={handleBack}>
                     {t("register.agreements.back")}
@@ -2420,6 +3054,7 @@ const Register: NextPage = () => {
       case steps.completed: // Completed step
         return (
           <div className={styles.completedContainer}>
+            <SuccessCheckIcon />
             <h1 className={styles.completedTitle}>
               {t("register.completed.title")}
             </h1>
@@ -2457,13 +3092,44 @@ const Register: NextPage = () => {
     submitSuccess ||
     (requiresTermsConsent && !formData.agreements.termsConsent);
 
-
+  // Admin landed on /register: show only a loader while redirecting to /admin —
+  // the onboarding flow is never rendered for them.
+  if (isAdmin) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "70vh",
+        }}
+      >
+        <Loading />
+      </div>
+    );
+  }
 
   return (
     <ProtectedRoute fetchData={fetchProposalData}>
       <div className={styles.container}>
         {currentStep <= steps.confirm && ( // Only show steps container for steps 0-6
           <div className={styles.stepsContainer}>
+            <div className={styles.mobileSteps}>
+              <span className={styles.mobileStepCount}>
+                {t("register.stepCounter", {
+                  current:
+                    progressStepKeys.findIndex((k) => steps[k] === currentStep) + 1,
+                  total: progressStepKeys.length,
+                })}
+              </span>
+              <span className={styles.mobileStepName}>
+                {t(
+                  `register.steps.${
+                    progressStepKeys.find((k) => steps[k] === currentStep) ?? "role"
+                  }`
+                )}
+              </span>
+            </div>
             {progressStepKeys.map((stepKey) => {
               const stepNumber = steps[stepKey]
               const isActive = stepNumber === currentStep
@@ -2495,44 +3161,43 @@ const Register: NextPage = () => {
               <div className={styles.errorMessage}>{t(validationError)}</div>
             )}
           </div>
-
-          {(currentStep <= steps.confirm || currentStep === steps.signingMethod) && ( // Show navigation buttons for steps 0-6 and 8
-            <div className={styles.buttonContainer}>
-              {canGoBack && (
-                <button
-                  className={`${styles.backButton} ${isSubmitting || submitSuccess ? styles.disabled : ""
-                    }`}
-                  onClick={handleBack}
-                  disabled={isSubmitting || submitSuccess}
-                >
-                  {t("register.confirm.buttons.back")}
-                </button>
-              )}
-              {(currentStep < steps.confirm || currentStep === steps.signingMethod) && (
-                <button
-                  className={styles.continueButton}
-                  onClick={handleContinue}
-                >
-                  {currentStep === steps.signingMethod ? t("register.agreements.title") : t("register.confirm.buttons.continue")}
-                </button>
-              )}
-              {currentStep === steps.confirm && (
-                <button
-                  className={`${styles.submitButton} ${isSubmitDisabled ? styles.disabled : ""}`}
-                  onClick={handleContinue}
-                  disabled={isSubmitDisabled}
-                >
-                  {submitSuccess
-                    ? t("register.confirm.buttons.submitted")
-                    : t("register.confirm.buttons.submit")}
-                </button>
-              )}
-            </div>
-          )}
-          {/* <pre style={{ whiteSpace: "pre-wrap" }}>
-            {JSON.stringify(formData, null, 2)}
-          </pre> */}
         </div>
+
+        {/* Pinned footer: kept OUTSIDE the scrolling content so it stays at the
+            bottom of the wizard column on every step (short or tall). */}
+        {(currentStep <= steps.confirm || currentStep === steps.signingMethod) && ( // Show navigation buttons for steps 0-6 and 8
+          <div className={styles.buttonContainer}>
+            {canGoBack && (
+              <button
+                className={`${styles.backButton} ${isSubmitting || submitSuccess ? styles.disabled : ""
+                  }`}
+                onClick={handleBack}
+                disabled={isSubmitting || submitSuccess}
+              >
+                {t("register.confirm.buttons.back")}
+              </button>
+            )}
+            {(currentStep < steps.confirm || currentStep === steps.signingMethod) && (
+              <button
+                className={styles.continueButton}
+                onClick={handleContinue}
+              >
+                {currentStep === steps.signingMethod ? t("register.agreements.title") : t("register.confirm.buttons.continue")}
+              </button>
+            )}
+            {currentStep === steps.confirm && (
+              <button
+                className={`${styles.submitButton} ${isSubmitDisabled ? styles.disabled : ""}`}
+                onClick={handleContinue}
+                disabled={isSubmitDisabled}
+              >
+                {submitSuccess
+                  ? t("register.confirm.buttons.submitted")
+                  : t("register.confirm.buttons.submit")}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   );

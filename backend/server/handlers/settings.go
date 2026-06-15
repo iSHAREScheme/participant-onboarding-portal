@@ -1,15 +1,16 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/datatypes"
+	"log"
 	"onboardingportal/config"
 	"onboardingportal/models"
 	"onboardingportal/responses"
 	s "onboardingportal/server"
-	"github.com/gofiber/fiber/v2"
-	"gorm.io/datatypes"
 	"os"
-	"log"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -42,15 +43,61 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 	if result.Error != nil {
 		// If no settings found, return empty description
 		return c.JSON(fiber.Map{
-			"description": "",
-			"registrarId": os.Getenv("SATELLITE_ISS"),
-			"dataspaceId": "",
-			"agreements":  []string{},
-			"logoPath":    "",
+			"description":         "",
+			"registrarId":         os.Getenv("SATELLITE_ISS"),
+			"dataspaceId":         "",
+			"prefillAuthRegistry": false,
+			"agreements":          []string{},
+			"logoPath":            "",
+			"faviconPath":         "",
+			"theme":               nil,
+			"themes":              nil,
+			"activeTheme":         "",
 		})
 	}
 
+	// Redact agreements before returning: replace the stored array (which holds
+	// encrypted protected-URL credentials) with the same secret-free view the
+	// dedicated agreements endpoint serves.
+	if redacted, err := json.Marshal(viewAgreements(decodeAgreements(settings.Agreements))); err == nil {
+		settings.Agreements = datatypes.JSON(redacted)
+	}
+
 	return c.JSON(settings)
+}
+
+// GetPublicSettings godoc
+// @Summary      Get public settings
+// @Description  Returns only the branding + content fields needed by the public
+// @Description  landing page and app-wide theming. Excludes the satellite
+// @Description  connection config, registrar/dataspace identifiers and the saved
+// @Description  theme library, which are served only to authenticated callers.
+// @Tags         settings
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /settings/public [get]
+func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
+	var settings models.Settings
+	if h.Server.DB.First(&settings).Error != nil {
+		return c.JSON(fiber.Map{
+			"description": "",
+			"theme":       nil,
+			"logoPath":    "",
+			"faviconPath": "",
+			"activeTheme": "",
+			"agreements":  []agreementView{},
+		})
+	}
+	// Deliberately a curated allowlist of public fields — never spread the whole
+	// settings struct here, so satellite/registrar config can't leak by default.
+	return c.JSON(fiber.Map{
+		"description": settings.Description,
+		"theme":       settings.Theme,
+		"logoPath":    settings.LogoPath,
+		"faviconPath": settings.FaviconPath,
+		"activeTheme": settings.ActiveTheme,
+		"agreements":  viewAgreements(decodeAgreements(settings.Agreements)),
+	})
 }
 
 // UpdateSettings godoc
@@ -65,11 +112,35 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 // @Failure      500      {object}  map[string]string
 // @Router       /settings [put]
 func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
+	// Pointer fields give merge semantics: only fields present in the request
+	// body are updated. This lets the Theme tab save just `theme` without wiping
+	// description/registrarId/etc, and vice-versa for the General tab.
 	var input struct {
-		Description string   `json:"description"`
-		RegistrarId string   `json:"registrarId"`
-		DataspaceId string   `json:"dataspaceId"`
-		Agreements  []string `json:"agreements"`
+		Description         *string `json:"description"`
+		RegistrarId         *string `json:"registrarId"`
+		DataspaceId         *string `json:"dataspaceId"`
+		PrefillAuthRegistry *bool   `json:"prefillAuthRegistry"`
+		AuthRegistryId      *string `json:"authRegistryId"`
+		AuthRegistryName    *string `json:"authRegistryName"`
+		AuthRegistryUrl     *string `json:"authRegistryUrl"`
+		// Agreements are intentionally NOT handled here — they are managed through
+		// the dedicated /settings/agreements endpoints (which validate files,
+		// fetch URLs and redact/encrypt credentials). Ignoring any `agreements`
+		// field in this generic update prevents clobbering them.
+		Theme       json.RawMessage `json:"theme"`
+		Themes      json.RawMessage `json:"themes"`
+		ActiveTheme *string         `json:"activeTheme"`
+
+		// Non-secret satellite connection overrides (credentials stay env-only).
+		SatelliteBaseUrl            *string `json:"satelliteBaseUrl"`
+		SatelliteIss                *string `json:"satelliteIss"`
+		SatelliteAud                *string `json:"satelliteAud"`
+		SatelliteVersion            *string `json:"satelliteVersion"`
+		SatelliteEpCreationEndpoint *string `json:"satelliteEpCreationEndpoint"`
+		SatellitePartiesEndpoint    *string `json:"satellitePartiesEndpoint"`
+		SatelliteTokenEndpoint      *string `json:"satelliteTokenEndpoint"`
+		SatelliteTokenScope         *string `json:"satelliteTokenScope"`
+		DataspaceTitle              *string `json:"dataspaceTitle"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -77,25 +148,79 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 
 	var settings models.Settings
-	result := h.Server.DB.First(&settings)
+	creating := h.Server.DB.First(&settings).Error != nil
 
-	if result.Error != nil {
-		// Create new settings if none exist
-		settings = models.Settings{
-			Description: input.Description,
-			RegistrarId: input.RegistrarId,
-			DataspaceId: input.DataspaceId,
-			Agreements:  datatypes.JSONSlice[string](input.Agreements),
-		}
-		h.Server.DB.Create(&settings)
-	} else {
-		// Update existing settings
-		settings.Description = input.Description
-		settings.RegistrarId = input.RegistrarId
-		settings.DataspaceId = input.DataspaceId
-		settings.Agreements = datatypes.JSONSlice[string](input.Agreements)
-		h.Server.DB.Save(&settings)
+	if input.Description != nil {
+		settings.Description = *input.Description
 	}
+	if input.RegistrarId != nil {
+		settings.RegistrarId = *input.RegistrarId
+	}
+	if input.DataspaceId != nil {
+		settings.DataspaceId = *input.DataspaceId
+	}
+	if input.PrefillAuthRegistry != nil {
+		settings.PrefillAuthRegistry = *input.PrefillAuthRegistry
+	}
+	if input.AuthRegistryId != nil {
+		settings.AuthRegistryId = strings.TrimSpace(*input.AuthRegistryId)
+	}
+	if input.AuthRegistryName != nil {
+		settings.AuthRegistryName = strings.TrimSpace(*input.AuthRegistryName)
+	}
+	if input.AuthRegistryUrl != nil {
+		settings.AuthRegistryUrl = strings.TrimSpace(*input.AuthRegistryUrl)
+	}
+	if len(input.Theme) > 0 {
+		settings.Theme = datatypes.JSON(input.Theme)
+	}
+	if len(input.Themes) > 0 {
+		settings.Themes = datatypes.JSON(input.Themes)
+	}
+	if input.ActiveTheme != nil {
+		settings.ActiveTheme = *input.ActiveTheme
+	}
+	if input.SatelliteBaseUrl != nil {
+		settings.SatelliteBaseUrl = strings.TrimSpace(*input.SatelliteBaseUrl)
+	}
+	if input.SatelliteIss != nil {
+		settings.SatelliteIss = strings.TrimSpace(*input.SatelliteIss)
+	}
+	if input.SatelliteAud != nil {
+		settings.SatelliteAud = strings.TrimSpace(*input.SatelliteAud)
+	}
+	if input.SatelliteVersion != nil {
+		settings.SatelliteVersion = strings.TrimSpace(*input.SatelliteVersion)
+	}
+	if input.SatelliteEpCreationEndpoint != nil {
+		settings.SatelliteEpCreationEndpoint = strings.TrimSpace(*input.SatelliteEpCreationEndpoint)
+	}
+	if input.SatellitePartiesEndpoint != nil {
+		settings.SatellitePartiesEndpoint = strings.TrimSpace(*input.SatellitePartiesEndpoint)
+	}
+	if input.SatelliteTokenEndpoint != nil {
+		settings.SatelliteTokenEndpoint = strings.TrimSpace(*input.SatelliteTokenEndpoint)
+	}
+	if input.SatelliteTokenScope != nil {
+		settings.SatelliteTokenScope = strings.TrimSpace(*input.SatelliteTokenScope)
+	}
+	if input.DataspaceTitle != nil {
+		settings.DataspaceTitle = strings.TrimSpace(*input.DataspaceTitle)
+	}
+
+	if creating {
+		if err := h.Server.DB.Create(&settings).Error; err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save settings")
+		}
+	} else {
+		if err := h.Server.DB.Save(&settings).Error; err != nil {
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update settings")
+		}
+	}
+
+	// Apply the non-secret satellite overrides onto the shared runtime config so
+	// they take effect immediately for satellite calls (no restart required).
+	h.Config.OverlaySatelliteSettings(&settings)
 
 	return responses.MessageResponse(c, fiber.StatusOK, "Settings updated successfully")
 }
@@ -220,4 +345,107 @@ func (h *HandlerSettings) GetLogo(c *fiber.Ctx) error {
 
 	// Serve the file with proper content type
 	return c.SendFile(settings.LogoPath)
+}
+
+// UploadFavicon godoc
+// @Summary      Upload or update the favicon
+// @Description  Accepts a favicon file (ico, png, svg) and stores it. Replaces existing favicon if present.
+// @Tags         settings
+// @Accept       mpfd
+// @Produce      json
+// @Param        favicon  formData  file  true  "Favicon file (ico, png, svg)"
+// @Success      200   {object}  map[string]string
+// @Failure      400   {object}  map[string]string
+// @Failure      500   {object}  map[string]string
+// @Router       /settings/favicon [post]
+func (h *HandlerSettings) UploadFavicon(c *fiber.Ctx) error {
+	file, err := c.FormFile("favicon")
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Favicon file is required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowedExtensions := map[string]bool{
+		".ico": true,
+		".png": true,
+		".svg": true,
+	}
+	if !allowedExtensions[ext] {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid file type. Only ico, png, svg are allowed")
+	}
+
+	// Favicons are tiny; cap at 1MB.
+	if file.Size > int64(1*1024*1024) {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "File size exceeds 1MB limit")
+	}
+
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
+		log.Printf("Failed to ensure uploads dir: %v", err)
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create upload directory")
+	}
+
+	var settings models.Settings
+	result := h.Server.DB.First(&settings)
+
+	// Delete old favicon file if it exists
+	if result.Error == nil && settings.FaviconPath != "" {
+		if err := os.Remove(settings.FaviconPath); err != nil {
+			log.Printf("Failed to remove old favicon file: %v", err)
+		}
+	}
+
+	timestamp := time.Now().Format("20060102150405")
+	faviconPath := fmt.Sprintf("%s/%s_favicon%s", uploadDir, timestamp, ext)
+
+	if err := c.SaveFile(file, faviconPath); err != nil {
+		log.Printf("Failed to save favicon file: %v", err)
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save favicon file")
+	}
+
+	if result.Error != nil {
+		settings = models.Settings{FaviconPath: faviconPath}
+		if err := h.Server.DB.Create(&settings).Error; err != nil {
+			if removeErr := os.Remove(faviconPath); removeErr != nil {
+				log.Printf("Failed to remove favicon file during rollback: %v", removeErr)
+			}
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save settings")
+		}
+	} else {
+		settings.FaviconPath = faviconPath
+		if err := h.Server.DB.Save(&settings).Error; err != nil {
+			if removeErr := os.Remove(faviconPath); removeErr != nil {
+				log.Printf("Failed to remove favicon file during rollback: %v", removeErr)
+			}
+			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to update settings")
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":     "Favicon uploaded successfully",
+		"faviconPath": faviconPath,
+	})
+}
+
+// GetFavicon godoc
+// @Summary      Get favicon file
+// @Description  Returns the uploaded favicon file
+// @Tags         settings
+// @Produce      image/x-icon,image/png,image/svg+xml
+// @Success      200  {file}  file
+// @Failure      404  {object}  map[string]string
+// @Router       /settings/favicon [get]
+func (h *HandlerSettings) GetFavicon(c *fiber.Ctx) error {
+	var settings models.Settings
+	result := h.Server.DB.First(&settings)
+
+	if result.Error != nil || settings.FaviconPath == "" {
+		return responses.ErrorResponse(c, fiber.StatusNotFound, "Favicon not found")
+	}
+
+	if _, err := os.Stat(settings.FaviconPath); os.IsNotExist(err) {
+		return responses.ErrorResponse(c, fiber.StatusNotFound, "Favicon file not found")
+	}
+
+	return c.SendFile(settings.FaviconPath)
 }
