@@ -48,6 +48,12 @@ type Config struct {
 	RBACHeaderName string
 	RBACAdminToken string
 
+	// AgreementAuthKey is the AES master key (16/24/32 bytes) used to encrypt the
+	// fetch credentials of protected agreement URLs at rest. Nil when
+	// AGREEMENT_AUTH_MASTER_KEY is unset — in which case adding a protected URL is
+	// refused rather than storing secrets in the clear.
+	AgreementAuthKey []byte
+
 	KeycloakBaseURL       string
 	KeycloakRealm         string
 	KeycloakAdminUsername string
@@ -201,6 +207,13 @@ func (config *Config) LoadEnvironment() error {
 		config.RBACHeaderName = "X-RBAC-Token"
 	}
 	config.RBACAdminToken = os.Getenv("RBAC_ADMIN_TOKEN")
+
+	// Master key for encrypting protected-agreement-URL credentials at rest.
+	if key, err := utils.ParseSecretKey(os.Getenv("AGREEMENT_AUTH_MASTER_KEY")); err != nil {
+		return fmt.Errorf("invalid AGREEMENT_AUTH_MASTER_KEY: %w", err)
+	} else {
+		config.AgreementAuthKey = key
+	}
 
 	config.KeycloakBaseURL = strings.TrimRight(os.Getenv("KEYCLOAK_ADMIN_BASE_URL"), "/")
 	if config.KeycloakBaseURL == "" {

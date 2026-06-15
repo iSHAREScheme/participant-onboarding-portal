@@ -55,7 +55,48 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 		})
 	}
 
+	// Redact agreements before returning: replace the stored array (which holds
+	// encrypted protected-URL credentials) with the same secret-free view the
+	// dedicated agreements endpoint serves.
+	if redacted, err := json.Marshal(viewAgreements(decodeAgreements(settings.Agreements))); err == nil {
+		settings.Agreements = datatypes.JSON(redacted)
+	}
+
 	return c.JSON(settings)
+}
+
+// GetPublicSettings godoc
+// @Summary      Get public settings
+// @Description  Returns only the branding + content fields needed by the public
+// @Description  landing page and app-wide theming. Excludes the satellite
+// @Description  connection config, registrar/dataspace identifiers and the saved
+// @Description  theme library, which are served only to authenticated callers.
+// @Tags         settings
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /settings/public [get]
+func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
+	var settings models.Settings
+	if h.Server.DB.First(&settings).Error != nil {
+		return c.JSON(fiber.Map{
+			"description": "",
+			"theme":       nil,
+			"logoPath":    "",
+			"faviconPath": "",
+			"activeTheme": "",
+			"agreements":  []agreementView{},
+		})
+	}
+	// Deliberately a curated allowlist of public fields — never spread the whole
+	// settings struct here, so satellite/registrar config can't leak by default.
+	return c.JSON(fiber.Map{
+		"description": settings.Description,
+		"theme":       settings.Theme,
+		"logoPath":    settings.LogoPath,
+		"faviconPath": settings.FaviconPath,
+		"activeTheme": settings.ActiveTheme,
+		"agreements":  viewAgreements(decodeAgreements(settings.Agreements)),
+	})
 }
 
 // UpdateSettings godoc
@@ -77,7 +118,10 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		Description *string         `json:"description"`
 		RegistrarId *string         `json:"registrarId"`
 		DataspaceId *string         `json:"dataspaceId"`
-		Agreements  *[]string       `json:"agreements"`
+		// Agreements are intentionally NOT handled here — they are managed through
+		// the dedicated /settings/agreements endpoints (which validate files,
+		// fetch URLs and redact/encrypt credentials). Ignoring any `agreements`
+		// field in this generic update prevents clobbering them.
 		Theme       json.RawMessage `json:"theme"`
 		Themes      json.RawMessage `json:"themes"`
 		ActiveTheme *string         `json:"activeTheme"`
@@ -109,9 +153,6 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.DataspaceId != nil {
 		settings.DataspaceId = *input.DataspaceId
-	}
-	if input.Agreements != nil {
-		settings.Agreements = datatypes.JSONSlice[string](*input.Agreements)
 	}
 	if len(input.Theme) > 0 {
 		settings.Theme = datatypes.JSON(input.Theme)

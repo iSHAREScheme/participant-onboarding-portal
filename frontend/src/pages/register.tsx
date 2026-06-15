@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { NextPage } from "next";
+import { useRouter } from "next/router";
 import styles from "styles/Register.module.css";
 import { useKeycloak } from "@react-keycloak/web";
 import ProtectedRoute from "../components/ProtectedRoute";
 import { useLanguage } from "../context/LanguageContext";
-import { FormInput, Tooltip } from "../components";
+import { FormInput, Tooltip, Loading } from "../components";
 import Placeholder from "../components/Placeholder";
 import EmailNotification from "util/notify"
 import preValidateEidasCert from "util/validateEidas"
 import { extractCertificateFields } from "util/certificate"
-import API from "api/client"
+import API, { AgreementView } from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
 import {
@@ -284,6 +285,18 @@ type RegistryParty = {
 const Register: NextPage = () => {
   const Api = new API()
   const { keycloak } = useKeycloak();
+  const router = useRouter();
+  // Admins don't onboard — send them straight to the proposal overview so the
+  // register flow never renders/flashes for them (the render is short-circuited
+  // to a loader below while this redirect runs).
+  const isAdmin = Boolean(
+    keycloak?.authenticated &&
+    typeof keycloak.hasRealmRole === "function" &&
+    keycloak.hasRealmRole("onboarding-admin")
+  );
+  useEffect(() => {
+    if (isAdmin) router.replace("/admin");
+  }, [isAdmin, router]);
   const rawGivenNameFromToken = keycloak?.tokenParsed?.given_name;
   const givenNameFromToken =
     typeof rawGivenNameFromToken === "string" ? rawGivenNameFromToken.trim() : "";
@@ -820,6 +833,12 @@ const Register: NextPage = () => {
   const [isDragging, setIsDragging] = useState(false)
   const [registryParties, setRegistryParties] = useState<RegistryParty[]>([])
   const [registrarId, setRegistrarId] = useState("")
+  // Onboarding agreement documents (configured in Settings), shown for download
+  // on the signing steps. Secrets are redacted server-side.
+  const [agreements, setAgreements] = useState<AgreementView[]>([])
+  // Manual signing requires one signed upload per configured agreement (derived,
+  // not hardcoded) so the step can never dead-end when the agreement set changes.
+  const requiredAgreementCount = agreements.length
 
   const urlRegex =
     /^(https?:\/\/)([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
@@ -1100,6 +1119,9 @@ const Register: NextPage = () => {
       // Store registrarId in form data
       setRegistrarId(settingsData.registrarId || "")
       setHideCapabilitiesUrlField(Boolean(settingsData.hideCapabilitiesUrl))
+      setAgreements(
+        Array.isArray(settingsData.agreements) ? settingsData.agreements : []
+      )
 
     } catch (e) {
       console.error("Error fetching settings data:", e)
@@ -1513,7 +1535,7 @@ const Register: NextPage = () => {
       }
     } else {
       // Manual signing requires at least two uploaded, signed documents.
-      if (formData.agreements.files.length < 2) {
+      if (formData.agreements.files.length < requiredAgreementCount) {
         setUploadError(t("register.agreements.minimumFiles"));
         return;
       }
@@ -1771,6 +1793,36 @@ const Register: NextPage = () => {
       scope: "openid profile email",
       prompt: "login"
     })
+  }
+
+  // Renders the configured onboarding agreements with per-document download
+  // links (built-ins, uploads and protected URLs all stream through the proxy).
+  const renderAgreementDownloads = () => {
+    if (!agreements || agreements.length === 0) {
+      return (
+        <div className={styles.agreementFile}>
+          {t("home.noAgreements")}
+        </div>
+      )
+    }
+    return agreements.map((a) => (
+      <div key={a.id} className={styles.agreementRow}>
+        <span className={styles.agreementFile}>
+          {a.title}
+          {a.version ? ` (${a.version})` : ""}
+        </span>
+        {a.hasDocument && (
+          <a
+            className={styles.downloadLink}
+            href={Api.agreementDocumentUrl(a.id)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t("register.agreements.download")} ↓
+          </a>
+        )}
+      </div>
+    ))
   }
 
   const renderEherkenningAction = () => {
@@ -2713,10 +2765,8 @@ const Register: NextPage = () => {
                 </div>
               </div>
 
-              <div className={styles.agreementsLink}>
-                <a href="#" className={styles.downloadLink}>
-                  {t("register.agreements.download")} ↓
-                </a>
+              <div className={styles.agreementsList}>
+                {renderAgreementDownloads()}
               </div>
             </div>
           </>
@@ -2732,15 +2782,9 @@ const Register: NextPage = () => {
                 <h3>{t("register.agreements.manualTitle")}</h3>
                 <p className={styles.description}>{t("register.agreements.manualDescription")}</p>
 
-                {/* TODO: Available agreements list */}
+                {/* Agreements configured in Settings (built-ins + custom). */}
                 <div className={styles.agreementsList}>
-                  <div className={styles.agreementFile}>Agreement-file-name.pdf</div>
-                  <div className={styles.agreementFile}>Agreement-other-file-name.pdf</div>
-                  <div className={styles.agreementsLink}>
-                    <a href="#" className={styles.downloadLink}>
-                      {t("register.agreements.download")} ↓
-                    </a>
-                  </div>
+                  {renderAgreementDownloads()}
                 </div>
 
                 <div className={styles.uploadSection}>
@@ -2775,7 +2819,7 @@ const Register: NextPage = () => {
                         {t("register.agreements.browse")}
                       </button>
                       <div className={styles.maxSizeText}>
-                        Max. 500MB • .pdf, .png
+                        {t("register.agreements.uploadLimits")}
                       </div>
                     </div>
                   </div>
@@ -2785,7 +2829,7 @@ const Register: NextPage = () => {
                   )}
 
                   <div className={styles.uploadStatus}>
-                    {formData.agreements.files.length}/2 agreements uploaded
+                    {formData.agreements.files.length}/{requiredAgreementCount} agreements uploaded
                   </div>
 
                   {formData.agreements.files.length > 0 && (
@@ -2844,10 +2888,10 @@ const Register: NextPage = () => {
                     {t("register.agreements.back")}
                   </button>
                   <button
-                    className={`${styles.commitButton} ${formData.agreements.files.length < 2 && styles.disabled
+                    className={`${styles.commitButton} ${formData.agreements.files.length < requiredAgreementCount && styles.disabled
                       }`}
                     onClick={handleSignAndCommit}
-                    disabled={formData.agreements.files.length < 2 || isSubmitting}
+                    disabled={formData.agreements.files.length < requiredAgreementCount || isSubmitting}
                   >
                     {isSubmitting
                       ? t("register.agreements.committing")
@@ -2946,7 +2990,22 @@ const Register: NextPage = () => {
     submitSuccess ||
     (requiresTermsConsent && !formData.agreements.termsConsent);
 
-
+  // Admin landed on /register: show only a loader while redirecting to /admin —
+  // the onboarding flow is never rendered for them.
+  if (isAdmin) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "70vh",
+        }}
+      >
+        <Loading />
+      </div>
+    );
+  }
 
   return (
     <ProtectedRoute fetchData={fetchProposalData}>

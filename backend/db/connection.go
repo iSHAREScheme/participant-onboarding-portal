@@ -82,5 +82,13 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		}
 	}
 
+	// One-time seed guard for the bundled agreements (boolean; defaults to false
+	// so existing rows get their built-ins seeded once on the next startup).
+	if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, "agreements_initialized") {
+		if err := db.Exec("ALTER TABLE settings ADD COLUMN agreements_initialized BOOLEAN DEFAULT 0").Error; err != nil {
+			return nil, err
+		}
+	}
+
 	return db, nil
 }

@@ -7,7 +7,14 @@ type Settings struct {
 	Description string                 		`json:"description"`
 	RegistrarId string                 		`json:"registrarId"`
 	DataspaceId string                 		`json:"dataspaceId"`
-	Agreements  datatypes.JSONSlice[string] `gorm:"type:json" json:"agreements"`
+	// Agreements is the JSON array of onboarding agreement documents (see
+	// models.Agreement). Stored raw so it tolerates the legacy []string shape on
+	// read and is managed through the dedicated /settings/agreements endpoints
+	// (which redact secrets) rather than the generic settings update.
+	Agreements  datatypes.JSON              `gorm:"type:json" json:"agreements"`
+	// AgreementsInitialized guards one-time seeding of the bundled iSHARE
+	// agreements: once true, removed built-ins are not re-added on restart.
+	AgreementsInitialized bool              `json:"agreementsInitialized"`
 	LogoPath    string                 		`json:"logoPath"`
 	// FaviconPath is the uploaded browser-tab icon; empty means the iSHARE default.
 	FaviconPath string                 		`json:"faviconPath"`

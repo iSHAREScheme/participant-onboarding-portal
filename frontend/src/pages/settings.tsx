@@ -4,7 +4,13 @@ import styles from "../styles/Settings.module.css";
 import AdminRoute from "components/AdminRoute";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettings } from "../context/SettingsContext";
-import API from "api/client";
+import { useToast } from "../context/ToastContext";
+import API, {
+  AgreementView,
+  AgreementAuthMethod,
+  AgreementUrlInput,
+  AgreementClaimType,
+} from "api/client";
 import dynamic from "next/dynamic";
 import { sanitizeRichText } from "util/sanitizeHtml";
 import {
@@ -34,8 +40,158 @@ const RichTextEditor = dynamic(() => import("components/RichTextEditor"), {
 });
 
 type ConnStatus = "checking" | "connected" | "disconnected";
-type Notice = { kind: "success" | "error"; text: string } | null;
 type TabKey = "general" | "theme";
+
+// Draft state for the "add URL agreement" auth form. Secret fields are plain
+// strings here; they are sent to the backend (which encrypts them) and never
+// read back — the redacted view only reports whether a secret is set.
+type AgreementAuthDraft = {
+  method: AgreementAuthMethod;
+  username?: string;
+  password?: string;
+  headerName?: string;
+  scheme?: string;
+  token?: string;
+  tokenUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  scope?: string;
+  headers: { name: string; value: string; secret: boolean }[];
+};
+
+// Upload glyph (lucide "upload"), inherits the button's text colour.
+const UploadIcon = () => (
+  <svg
+    className={styles.uploadIcon}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
+// A styled file picker: a pill button (matching the portal's buttons) with an
+// upload icon, wrapping a visually-hidden native input so the picker looks
+// consistent everywhere instead of the browser's default file control.
+function UploadField({
+  id,
+  accept,
+  label,
+  onChange,
+  inputRef,
+}: {
+  id?: string;
+  accept: string;
+  label: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
+}) {
+  return (
+    <label className={styles.uploadButton}>
+      <UploadIcon />
+      <span>{label}</span>
+      <input
+        ref={inputRef}
+        id={id}
+        type="file"
+        accept={accept}
+        onChange={onChange}
+        className={styles.uploadInput}
+      />
+    </label>
+  );
+}
+
+// Faint media placeholder shown in an empty logo/favicon preview slot.
+const ImagePlaceholderIcon = () => (
+  <svg
+    className={styles.mediaPlaceholderIcon}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.8}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="1.6" />
+    <path d="m21 15-4.5-4.5L7 20" />
+  </svg>
+);
+
+// Upload constraints, enforced client-side (and matched by the backend's caps).
+// Dimension bounds apply to raster images only; SVGs are vector and skipped.
+const LOGO_LIMITS = { maxBytes: 5 * 1024 * 1024, maxLabel: "5 MB", minDim: 48, maxDim: 4096 };
+const FAVICON_LIMITS = { maxBytes: 1 * 1024 * 1024, maxLabel: "1 MB", minDim: 16, maxDim: 1024 };
+
+// Reads an image file's pixel dimensions, or null when they can't be determined.
+function readImageDimensions(file: File): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      const dims = { w: img.naturalWidth, h: img.naturalHeight };
+      URL.revokeObjectURL(url);
+      resolve(dims);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+// Download glyph (lucide "download") for the theme export button.
+const DownloadIcon = () => (
+  <svg
+    className={styles.uploadIcon}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+// Counter-clockwise rotate glyph (lucide "rotate-ccw") for the reset button.
+const RotateIcon = () => (
+  <svg
+    className={styles.uploadIcon}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </svg>
+);
+
+// Slugify a theme name into a safe download filename stem.
+const slugifyName = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "theme";
 
 const Settings: NextPage = () => {
   const { t } = useLanguage();
@@ -66,13 +222,52 @@ const Settings: NextPage = () => {
   const [registrarId, setRegistrarId] = useState("");
   const [dataspaceId, setDataspaceId] = useState("");
   const [hideCapabilitiesUrl, setHideCapabilitiesUrl] = useState(false);
-  // Agreements
-  const [agreements, setAgreements] = useState<string[]>([]);
-  const [newAgreement, setNewAgreement] = useState("");
+  // Agreements (structured: built-in / uploaded PDF / URL with optional fetch auth)
+  const [agreements, setAgreements] = useState<AgreementView[]>([]);
+  const [agMode, setAgMode] = useState<"file" | "url">("file");
+  const [agTitle, setAgTitle] = useState("");
+  const [agVersion, setAgVersion] = useState("");
+  const [agUrl, setAgUrl] = useState("");
+  const [agFile, setAgFile] = useState<File | null>(null);
+  const [agAuth, setAgAuth] = useState<AgreementAuthDraft>({
+    method: "none",
+    headers: [],
+  });
+  const [agBusy, setAgBusy] = useState(false);
+  const [agType, setAgType] = useState<AgreementClaimType>("frameworkAgreement");
+  const agFileRef = useRef<HTMLInputElement | null>(null);
   // iSHARE connection
   const [version, setVersion] = useState("");
   const [claimModel, setClaimModel] = useState(false);
   const [connStatus, setConnStatus] = useState<ConnStatus>("checking");
+
+  // Agreement type options track the connected framework version: v3 uses the
+  // framework/dataspace agreement claims, v2 uses Terms of Use / Accession.
+  const agreementTypeOptions = useMemo<AgreementClaimType[]>(
+    () =>
+      claimModel
+        ? ["frameworkAgreement", "dataspaceAgreement"]
+        : ["TermsOfUse", "AccessionAgreement"],
+    [claimModel]
+  );
+  const agreementTypeLabel = (ty: string): string => {
+    switch (ty) {
+      case "dataspaceAgreement":
+        return t("settings.agreements.types.dataspaceAgreement");
+      case "TermsOfUse":
+        return t("settings.agreements.types.termsOfUse");
+      case "AccessionAgreement":
+        return t("settings.agreements.types.accessionAgreement");
+      default:
+        return t("settings.agreements.types.frameworkAgreement");
+    }
+  };
+  // Keep the add-form's selected type valid for the current version's options.
+  // Clamped during render (not in an effect) to avoid react-hooks/set-state-in-effect;
+  // setting state during render triggers an immediate re-render and the guard then holds.
+  if (!agreementTypeOptions.includes(agType)) {
+    setAgType(agreementTypeOptions[0]);
+  }
   // Resolved connection details (for display) + editable non-secret overrides.
   const [conn, setConn] = useState<Record<string, any>>({});
   const [sat, setSat] = useState({
@@ -87,31 +282,22 @@ const Settings: NextPage = () => {
     dataspaceTitle: "",
   });
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<
-    { ok: boolean; error?: string; version?: string } | null
-  >(null);
   // Dataspaces fetched from the Participant Registry (for the selector).
   const [dataspaces, setDataspaces] = useState<
     Array<{ id: string; title?: string }>
   >([]);
   // Save / upload feedback
   const [isSaving, setIsSaving] = useState(false);
-  const [notice, setNotice] = useState<Notice>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useToast();
 
-  const flash = useCallback((kind: "success" | "error", text: string) => {
-    setNotice({ kind, text });
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    if (kind === "success") {
-      noticeTimer.current = setTimeout(() => setNotice(null), 3500);
-    }
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+  // Thin wrapper so existing call sites stay unchanged; action feedback now
+  // shows as a transient toast instead of an inline banner that shifts the page.
+  const flash = useCallback(
+    (kind: "success" | "error", text: string) => {
+      if (kind === "success") toast.success(text);
+      else toast.error(text);
     },
-    []
+    [toast]
   );
 
   const loadSettings = useCallback(async () => {
@@ -201,28 +387,31 @@ const Settings: NextPage = () => {
   }, [api]);
 
   // Real connectivity test: owner-token exchange + version probe on the satellite.
+  // The result is surfaced as a toast (consistent with all other feedback).
   const handleTest = async () => {
     setTesting(true);
-    setTestResult(null);
     try {
       const res = await api.testConnection();
       const d = res.data || {};
-      setTestResult({ ok: Boolean(d.ok), error: d.error, version: d.version });
       if (d.ok) {
         setConnStatus("connected");
         if (d.version) {
           setVersion(String(d.version));
           setClaimModel(Boolean(d.claimModel));
         }
+        flash(
+          "success",
+          t("settings.connection.testOk", { version: d.version || version || "" })
+        );
       } else {
         setConnStatus("disconnected");
+        flash("error", t("settings.connection.testFailed", { error: d.error || "" }));
       }
     } catch (e: any) {
-      setTestResult({
-        ok: false,
-        error: e?.response?.data?.error || e?.message,
-      });
       setConnStatus("disconnected");
+      flash("error", t("settings.connection.testFailed", {
+        error: e?.response?.data?.error || e?.message || "",
+      }));
     } finally {
       setTesting(false);
     }
@@ -234,9 +423,46 @@ const Settings: NextPage = () => {
     checkStatus();
   }, [loadSettings, checkStatus]);
 
+  // Validate an image upload against its size/dimension limits, surfacing a clear
+  // toast on rejection. Returns true when the file is acceptable.
+  const validateImageUpload = useCallback(
+    async (
+      file: File,
+      limits: { maxBytes: number; maxLabel: string; minDim: number; maxDim: number }
+    ): Promise<boolean> => {
+      if (file.size > limits.maxBytes) {
+        flash("error", t("settings.theme.fileTooLarge", { max: limits.maxLabel }));
+        return false;
+      }
+      const isSvg =
+        file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg");
+      if (!isSvg) {
+        const dims = await readImageDimensions(file);
+        if (dims) {
+          const minSide = Math.min(dims.w, dims.h);
+          const maxSide = Math.max(dims.w, dims.h);
+          if (minSide < limits.minDim || maxSide > limits.maxDim) {
+            flash("error", t("settings.theme.badDimensions", {
+              min: String(limits.minDim),
+              max: String(limits.maxDim),
+            }));
+            return false;
+          }
+        }
+      }
+      return true;
+    },
+    [flash, t]
+  );
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
+    if (!(await validateImageUpload(file, LOGO_LIMITS))) {
+      input.value = ""; // let the user re-pick after a rejection
+      return;
+    }
     const formData = new FormData();
     formData.append("logo", file);
     try {
@@ -250,8 +476,13 @@ const Settings: NextPage = () => {
   };
 
   const handleFaviconChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
+    if (!(await validateImageUpload(file, FAVICON_LIMITS))) {
+      input.value = "";
+      return;
+    }
     const formData = new FormData();
     formData.append("favicon", file);
     try {
@@ -264,16 +495,155 @@ const Settings: NextPage = () => {
     }
   };
 
-  const handleAddAgreement = () => {
-    const value = newAgreement.trim();
-    if (!value) return;
-    setAgreements((prev) => [...prev, value]);
-    setNewAgreement("");
+  // Refetch the redacted agreement list after any mutation.
+  const reloadAgreements = useCallback(async () => {
+    try {
+      const res = await api.listAgreements();
+      const list = res.data?.agreements;
+      if (Array.isArray(list)) setAgreements(list);
+    } catch {
+      /* non-fatal: keep the current list */
+    }
+  }, [api]);
+
+  const resetAgreementForm = () => {
+    setAgTitle("");
+    setAgVersion("");
+    setAgUrl("");
+    setAgFile(null);
+    setAgAuth({ method: "none", headers: [] });
+    setAgType(agreementTypeOptions[0]);
+    if (agFileRef.current) agFileRef.current.value = "";
   };
 
-  const handleRemoveAgreement = (index: number) => {
-    setAgreements((prev) => prev.filter((_, i) => i !== index));
+  const handleAddAgreementFile = async () => {
+    if (!agFile) {
+      flash("error", t("settings.agreements.messages.fileRequired"));
+      return;
+    }
+    if (!agTitle.trim()) {
+      flash("error", t("settings.agreements.messages.titleRequired"));
+      return;
+    }
+    setAgBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", agFile);
+      form.append("title", agTitle.trim());
+      form.append("version", agVersion.trim());
+      form.append("type", agType);
+      await api.uploadAgreementFile(form);
+      flash("success", t("settings.agreements.messages.added"));
+      resetAgreementForm();
+      await reloadAgreements();
+    } catch {
+      flash("error", t("settings.agreements.messages.addFailed"));
+    } finally {
+      setAgBusy(false);
+    }
   };
+
+  // Map the auth draft to the API payload, dropping fields irrelevant to the
+  // chosen method and empty custom headers.
+  const buildAgreementAuth = (): AgreementUrlInput["auth"] => {
+    const a = agAuth;
+    switch (a.method) {
+      case "basic":
+        return { method: "basic", username: a.username, password: a.password };
+      case "bearer":
+        return {
+          method: "bearer",
+          token: a.token,
+          headerName: a.headerName,
+          scheme: a.scheme,
+        };
+      case "oauth2":
+        return {
+          method: "oauth2",
+          tokenUrl: a.tokenUrl,
+          clientId: a.clientId,
+          clientSecret: a.clientSecret,
+          scope: a.scope,
+        };
+      case "custom":
+        return {
+          method: "custom",
+          headers: a.headers
+            .filter((h) => h.name.trim())
+            .map((h) => ({ name: h.name.trim(), value: h.value, secret: h.secret })),
+        };
+      default:
+        return { method: "none" };
+    }
+  };
+
+  const handleAddAgreementUrl = async () => {
+    if (!agTitle.trim()) {
+      flash("error", t("settings.agreements.messages.titleRequired"));
+      return;
+    }
+    if (!agUrl.trim()) {
+      flash("error", t("settings.agreements.messages.urlRequired"));
+      return;
+    }
+    setAgBusy(true);
+    try {
+      await api.addAgreementUrl({
+        title: agTitle.trim(),
+        version: agVersion.trim(),
+        type: agType,
+        url: agUrl.trim(),
+        auth: buildAgreementAuth(),
+      });
+      flash("success", t("settings.agreements.messages.added"));
+      resetAgreementForm();
+      await reloadAgreements();
+    } catch (err: any) {
+      // Surface the backend message (e.g. the missing-master-key hint).
+      const msg = err?.response?.data?.error || err?.response?.data?.message;
+      flash("error", msg || t("settings.agreements.messages.addFailed"));
+    } finally {
+      setAgBusy(false);
+    }
+  };
+
+  const handleRemoveAgreement = async (id: string) => {
+    // Built-in agreements are required for onboarding completion — warn loudly
+    // that removing one will block applicants from finishing.
+    const target = agreements.find((a) => a.id === id);
+    const message =
+      target?.source === "builtin"
+        ? t("settings.agreements.removeBuiltinWarning")
+        : t("settings.agreements.removeConfirm");
+    if (!window.confirm(message)) return;
+    try {
+      await api.deleteAgreement(id);
+      flash("success", t("settings.agreements.messages.removed"));
+      await reloadAgreements();
+    } catch {
+      flash("error", t("settings.agreements.messages.removeFailed"));
+    }
+  };
+
+  // Custom-header row helpers (auth method "custom").
+  const addAuthHeader = () =>
+    setAgAuth((a) => ({
+      ...a,
+      headers: [...a.headers, { name: "", value: "", secret: true }],
+    }));
+  const updateAuthHeader = (
+    index: number,
+    patch: Partial<{ name: string; value: string; secret: boolean }>
+  ) =>
+    setAgAuth((a) => ({
+      ...a,
+      headers: a.headers.map((h, i) => (i === index ? { ...h, ...patch } : h)),
+    }));
+  const removeAuthHeader = (index: number) =>
+    setAgAuth((a) => ({
+      ...a,
+      headers: a.headers.filter((_, i) => i !== index),
+    }));
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -282,7 +652,6 @@ const Settings: NextPage = () => {
         description: sanitizeRichText(description),
         registrarId,
         dataspaceId,
-        agreements,
         hideCapabilitiesUrl,
         ...sat,
       });
@@ -318,6 +687,75 @@ const Settings: NextPage = () => {
     applyThemeColors(defaultColors);
     applyThemeFonts(defaultFonts);
     flash("success", t("settings.theme.messages.resetDone"));
+  };
+
+  // Download the current editor theme as a portable JSON file.
+  const handleExportTheme = () => {
+    const name = themeName.trim() || activeThemeName || "theme";
+    const payload = {
+      _type: "ishare-onboarding-theme",
+      _version: 1,
+      name,
+      colors: { ...themeColors },
+      fontHeading: themeFonts.fontHeading,
+      fontBody: themeFonts.fontBody,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slugifyName(name)}-theme.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    flash("success", t("settings.theme.library.exportedToast"));
+  };
+
+  // Load a theme JSON file into the editor (preview + prefilled name). The user
+  // then Saves it to the library / Applies it. Validated + tolerant of both the
+  // {colors:{…}} envelope and a bare colour map; invalid files are rejected.
+  const handleImportTheme = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const parsed: any = JSON.parse(await file.text());
+      const src =
+        parsed && typeof parsed === "object" && parsed.colors && typeof parsed.colors === "object"
+          ? parsed.colors
+          : parsed;
+      const looksLikeTheme =
+        src &&
+        typeof src === "object" &&
+        THEME_COLOR_TOKENS.some((tk) => isValidHex((src as Record<string, unknown>)[tk.key]));
+      if (!looksLikeTheme) {
+        flash("error", t("settings.theme.library.importError"));
+        return;
+      }
+      const colors = normalizeThemeColors(src);
+      const fonts = {
+        fontHeading: isFontKey(parsed?.fontHeading)
+          ? parsed.fontHeading
+          : brandFonts().fontHeading,
+        fontBody: isFontKey(parsed?.fontBody) ? parsed.fontBody : brandFonts().fontBody,
+      };
+      const name =
+        typeof parsed?.name === "string" ? parsed.name.trim().slice(0, 60) : "";
+      setThemeColors(colors);
+      setThemeFonts(fonts);
+      applyThemeColors(colors);
+      applyThemeFonts(fonts);
+      setThemeName(name);
+      setSelectedThemeName(""); // an imported draft, not yet a saved selection
+      flash("success", t("settings.theme.library.importedToast"));
+    } catch {
+      flash("error", t("settings.theme.library.importError"));
+    } finally {
+      input.value = ""; // allow re-importing the same file
+    }
   };
 
   // --- Named themes (library) -------------------------------------------
@@ -517,17 +955,6 @@ const Settings: NextPage = () => {
         </div>
 
         <div className={styles.content}>
-          {notice && (
-            <div
-              className={`${styles.notice} ${
-                notice.kind === "success" ? styles.noticeSuccess : styles.noticeError
-              }`}
-              role="status"
-            >
-              {notice.text}
-            </div>
-          )}
-
           {activeTab === "general" && (
           <>
           {/* iSHARE connection */}
@@ -582,23 +1009,6 @@ const Settings: NextPage = () => {
                 </span>
               </div>
             </div>
-
-            {testResult && (
-              <div
-                className={`${styles.notice} ${
-                  testResult.ok ? styles.noticeSuccess : styles.noticeError
-                }`}
-                role="status"
-              >
-                {testResult.ok
-                  ? t("settings.connection.testOk", {
-                      version: testResult.version || version || "",
-                    })
-                  : t("settings.connection.testFailed", {
-                      error: testResult.error || "",
-                    })}
-              </div>
-            )}
 
             <div className={styles.fieldRow}>
               <div className={styles.formGroup}>
@@ -802,46 +1212,431 @@ const Settings: NextPage = () => {
 
           {/* Agreements */}
           <section className={styles.card}>
-            <h2 className={styles.cardTitle}>{t("settings.labels.agreements")}</h2>
-            {agreements.length > 0 && (
-              <ul className={styles.list}>
-                {agreements.map((item, idx) => (
-                  <li key={idx} className={styles.listItem}>
-                    <span className={styles.listItemText} title={item}>
-                      {item}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAgreement(idx)}
-                      className={styles.removeButton}
-                      aria-label={t("common.delete")}
-                    >
-                      &times;
-                    </button>
+            <h2 className={styles.cardTitle}>{t("settings.agreements.title")}</h2>
+            <p className={styles.helperText}>
+              {t("settings.agreements.description")}
+            </p>
+
+            {agreements.length > 0 ? (
+              <ul className={styles.agreementList}>
+                {agreements.map((a) => (
+                  <li key={a.id} className={styles.agreementItem}>
+                    <div className={styles.agreementMain}>
+                      <span className={styles.agreementName}>{a.title}</span>
+                      <div className={styles.agreementMeta}>
+                        <span className={styles.sourceBadge}>
+                          {a.source === "builtin"
+                            ? t("settings.agreements.sourceBuiltin")
+                            : a.source === "file"
+                            ? t("settings.agreements.sourceFile")
+                            : a.source === "url"
+                            ? t("settings.agreements.sourceUrl")
+                            : t("settings.agreements.sourceLabel")}
+                        </span>
+                        <span className={styles.typeBadge}>
+                          {agreementTypeLabel(a.type)}
+                        </span>
+                        {a.version && (
+                          <span className={styles.versionBadge}>
+                            {t("settings.agreements.version")} {a.version}
+                          </span>
+                        )}
+                        {a.source === "url" &&
+                          a.auth &&
+                          a.auth.method !== "none" && (
+                            <span className={styles.protectedBadge}>
+                              {t("settings.agreements.protected", {
+                                method: t(
+                                  `settings.agreements.auth.${a.auth.method}`
+                                ),
+                              })}
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                    <div className={styles.agreementActions}>
+                      {a.hasDocument && (
+                        <a
+                          className={styles.agreementOpen}
+                          href={api.agreementDocumentUrl(a.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {t("settings.agreements.open")} ↗
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAgreement(a.id)}
+                        className={styles.removeButton}
+                        aria-label={t("settings.agreements.remove")}
+                      >
+                        &times;
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
+            ) : (
+              <p className={styles.helperText}>
+                {t("settings.agreements.empty")}
+              </p>
             )}
-            <div className={styles.agreementInputWrapper}>
-              <input
-                type="text"
-                id="agreements"
-                value={newAgreement}
-                onChange={(e) => setNewAgreement(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddAgreement();
-                  }
-                }}
-                className={styles.input}
-              />
+
+            {/* Add panel: upload a PDF or link a (optionally protected) URL. */}
+            <div className={styles.agreementAdd}>
+              <h3 className={styles.agreementAddTitle}>
+                {t("settings.agreements.addTitle")}
+              </h3>
+              <div className={styles.modeToggle}>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${
+                    agMode === "file" ? styles.modeButtonActive : ""
+                  }`}
+                  onClick={() => setAgMode("file")}
+                >
+                  {t("settings.agreements.modeFile")}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${
+                    agMode === "url" ? styles.modeButtonActive : ""
+                  }`}
+                  onClick={() => setAgMode("url")}
+                >
+                  {t("settings.agreements.modeUrl")}
+                </button>
+              </div>
+
+              <div className={styles.fieldRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    {t("settings.agreements.titleLabel")}
+                  </label>
+                  <input
+                    className={styles.input}
+                    value={agTitle}
+                    onChange={(e) => setAgTitle(e.target.value)}
+                    placeholder={t("settings.agreements.titlePlaceholder")}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    {t("settings.agreements.version")}
+                  </label>
+                  <input
+                    className={styles.input}
+                    value={agVersion}
+                    onChange={(e) => setAgVersion(e.target.value)}
+                    placeholder={t("settings.agreements.versionPlaceholder")}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    {t("settings.agreements.typeLabel")}
+                  </label>
+                  <select
+                    className={styles.input}
+                    value={agType}
+                    onChange={(e) =>
+                      setAgType(e.target.value as AgreementClaimType)
+                    }
+                  >
+                    {agreementTypeOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {agreementTypeLabel(opt)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {agMode === "file" ? (
+                <div className={styles.formGroup}>
+                  <label className={styles.label}>
+                    {t("settings.agreements.fileLabel")}
+                  </label>
+                  <div className={styles.uploadRow}>
+                    <UploadField
+                      accept="application/pdf,.pdf"
+                      label={t("settings.agreements.choosePdf")}
+                      onChange={(e) => setAgFile(e.target.files?.[0] ?? null)}
+                      inputRef={agFileRef}
+                    />
+                    {agFile && (
+                      <span className={styles.uploadedName}>{agFile.name}</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>
+                      {t("settings.agreements.urlLabel")}
+                    </label>
+                    <input
+                      className={styles.input}
+                      value={agUrl}
+                      onChange={(e) => setAgUrl(e.target.value)}
+                      placeholder={t("settings.agreements.urlPlaceholder")}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>
+                      {t("settings.agreements.auth.method")}
+                    </label>
+                    <select
+                      className={styles.input}
+                      value={agAuth.method}
+                      onChange={(e) =>
+                        setAgAuth({
+                          method: e.target.value as AgreementAuthMethod,
+                          headers: [],
+                        })
+                      }
+                    >
+                      <option value="none">
+                        {t("settings.agreements.auth.none")}
+                      </option>
+                      <option value="basic">
+                        {t("settings.agreements.auth.basic")}
+                      </option>
+                      <option value="bearer">
+                        {t("settings.agreements.auth.bearer")}
+                      </option>
+                      <option value="oauth2">
+                        {t("settings.agreements.auth.oauth2")}
+                      </option>
+                      <option value="custom">
+                        {t("settings.agreements.auth.custom")}
+                      </option>
+                    </select>
+                  </div>
+
+                  {agAuth.method === "basic" && (
+                    <div className={styles.fieldRow}>
+                      <div className={styles.formGroup}>
+                        <label className={styles.label}>
+                          {t("settings.agreements.auth.username")}
+                        </label>
+                        <input
+                          className={styles.input}
+                          value={agAuth.username || ""}
+                          onChange={(e) =>
+                            setAgAuth((a) => ({ ...a, username: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label className={styles.label}>
+                          {t("settings.agreements.auth.password")}
+                        </label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          className={styles.input}
+                          value={agAuth.password || ""}
+                          onChange={(e) =>
+                            setAgAuth((a) => ({ ...a, password: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {agAuth.method === "bearer" && (
+                    <>
+                      <div className={styles.formGroup}>
+                        <label className={styles.label}>
+                          {t("settings.agreements.auth.token")}
+                        </label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          className={styles.input}
+                          value={agAuth.token || ""}
+                          onChange={(e) =>
+                            setAgAuth((a) => ({ ...a, token: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className={styles.fieldRow}>
+                        <div className={styles.formGroup}>
+                          <label className={styles.label}>
+                            {t("settings.agreements.auth.headerName")}
+                          </label>
+                          <input
+                            className={styles.input}
+                            value={agAuth.headerName || ""}
+                            onChange={(e) =>
+                              setAgAuth((a) => ({
+                                ...a,
+                                headerName: e.target.value,
+                              }))
+                            }
+                            placeholder={t(
+                              "settings.agreements.auth.headerNamePlaceholder"
+                            )}
+                          />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label className={styles.label}>
+                            {t("settings.agreements.auth.scheme")}
+                          </label>
+                          <input
+                            className={styles.input}
+                            value={agAuth.scheme || ""}
+                            onChange={(e) =>
+                              setAgAuth((a) => ({ ...a, scheme: e.target.value }))
+                            }
+                            placeholder={t(
+                              "settings.agreements.auth.schemePlaceholder"
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {agAuth.method === "oauth2" && (
+                    <>
+                      <div className={styles.formGroup}>
+                        <label className={styles.label}>
+                          {t("settings.agreements.auth.tokenUrl")}
+                        </label>
+                        <input
+                          className={styles.input}
+                          value={agAuth.tokenUrl || ""}
+                          onChange={(e) =>
+                            setAgAuth((a) => ({ ...a, tokenUrl: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className={styles.fieldRow}>
+                        <div className={styles.formGroup}>
+                          <label className={styles.label}>
+                            {t("settings.agreements.auth.clientId")}
+                          </label>
+                          <input
+                            className={styles.input}
+                            value={agAuth.clientId || ""}
+                            onChange={(e) =>
+                              setAgAuth((a) => ({
+                                ...a,
+                                clientId: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label className={styles.label}>
+                            {t("settings.agreements.auth.clientSecret")}
+                          </label>
+                          <input
+                            type="password"
+                            autoComplete="new-password"
+                            className={styles.input}
+                            value={agAuth.clientSecret || ""}
+                            onChange={(e) =>
+                              setAgAuth((a) => ({
+                                ...a,
+                                clientSecret: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label className={styles.label}>
+                          {t("settings.agreements.auth.scope")}
+                        </label>
+                        <input
+                          className={styles.input}
+                          value={agAuth.scope || ""}
+                          onChange={(e) =>
+                            setAgAuth((a) => ({ ...a, scope: e.target.value }))
+                          }
+                          placeholder={t("settings.agreements.auth.scopePlaceholder")}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {agAuth.method === "custom" && (
+                    <div className={styles.formGroup}>
+                      {agAuth.headers.map((h, i) => (
+                        <div key={i} className={styles.headerRow}>
+                          <input
+                            className={styles.input}
+                            value={h.name}
+                            placeholder={t("settings.agreements.auth.headerName")}
+                            onChange={(e) =>
+                              updateAuthHeader(i, { name: e.target.value })
+                            }
+                          />
+                          <input
+                            className={styles.input}
+                            type={h.secret ? "password" : "text"}
+                            autoComplete="new-password"
+                            value={h.value}
+                            placeholder={t("settings.agreements.auth.headerValue")}
+                            onChange={(e) =>
+                              updateAuthHeader(i, { value: e.target.value })
+                            }
+                          />
+                          <label className={styles.headerSecret}>
+                            <input
+                              type="checkbox"
+                              checked={h.secret}
+                              onChange={(e) =>
+                                updateAuthHeader(i, { secret: e.target.checked })
+                              }
+                            />
+                            {t("settings.agreements.auth.secret")}
+                          </label>
+                          <button
+                            type="button"
+                            className={styles.removeButton}
+                            onClick={() => removeAuthHeader(i)}
+                            aria-label={t("settings.agreements.remove")}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className={styles.linkButton}
+                        onClick={addAuthHeader}
+                      >
+                        + {t("settings.agreements.auth.addHeader")}
+                      </button>
+                    </div>
+                  )}
+
+                  {agAuth.method !== "none" && (
+                    <p className={styles.helperText}>
+                      {t("settings.agreements.auth.keptHint")}
+                    </p>
+                  )}
+                </>
+              )}
+
               <button
                 type="button"
-                onClick={handleAddAgreement}
                 className={styles.addButton}
+                disabled={agBusy}
+                onClick={
+                  agMode === "file"
+                    ? handleAddAgreementFile
+                    : handleAddAgreementUrl
+                }
               >
-                {t("settings.actions.add")}
+                {agBusy
+                  ? t("settings.agreements.adding")
+                  : t("settings.agreements.add")}
               </button>
             </div>
           </section>
@@ -853,54 +1648,74 @@ const Settings: NextPage = () => {
             {/* Logo & favicon */}
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>{t("settings.theme.logo")}</h2>
-              <div className={styles.formGroup}>
+              <div className={styles.mediaField}>
                 <label htmlFor="image" className={styles.label}>
                   {t("settings.labels.headerImage")}
                 </label>
                 <p className={styles.helperText}>{t("settings.theme.logoHint")}</p>
-                <div className={styles.logoRow}>
-                  {imagePreview && (
-                    <div className={styles.imagePreview}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={imagePreview}
-                        alt={t("settings.labels.headerImage")}
-                        className={styles.previewImg}
-                      />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    id="image"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className={styles.fileInput}
-                  />
+                <div className={styles.mediaRow}>
+                  <div
+                    className={`${styles.mediaPreview} ${
+                      imagePreview ? "" : styles.mediaPreviewEmpty
+                    }`}
+                  >
+                    {imagePreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={imagePreview} alt={t("settings.labels.headerImage")} />
+                    ) : (
+                      <ImagePlaceholderIcon />
+                    )}
+                  </div>
+                  <div className={styles.mediaControls}>
+                    <UploadField
+                      id="image"
+                      accept="image/png,image/jpeg,image/svg+xml"
+                      label={
+                        imagePreview
+                          ? t("settings.actions.modifyImage")
+                          : t("settings.actions.upload")
+                      }
+                      onChange={handleImageChange}
+                    />
+                    <p className={styles.mediaHint}>
+                      {t("settings.theme.logoConstraints")}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className={styles.formGroup}>
+              <div className={styles.mediaField}>
                 <label htmlFor="favicon" className={styles.label}>
                   {t("settings.theme.favicon")}
                 </label>
                 <p className={styles.helperText}>{t("settings.theme.faviconHint")}</p>
-                <div className={styles.logoRow}>
-                  {faviconPreview && (
-                    <div className={styles.faviconPreview}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={faviconPreview}
-                        alt={t("settings.theme.favicon")}
-                        className={styles.previewImg}
-                      />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    id="favicon"
-                    accept=".ico,.png,.svg,image/png,image/svg+xml,image/x-icon"
-                    onChange={handleFaviconChange}
-                    className={styles.fileInput}
-                  />
+                <div className={styles.mediaRow}>
+                  <div
+                    className={`${styles.mediaPreview} ${
+                      faviconPreview ? "" : styles.mediaPreviewEmpty
+                    }`}
+                  >
+                    {faviconPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={faviconPreview} alt={t("settings.theme.favicon")} />
+                    ) : (
+                      <ImagePlaceholderIcon />
+                    )}
+                  </div>
+                  <div className={styles.mediaControls}>
+                    <UploadField
+                      id="favicon"
+                      accept=".ico,.png,.svg,image/png,image/svg+xml,image/x-icon"
+                      label={
+                        faviconPreview
+                          ? t("settings.actions.modifyIcon")
+                          : t("settings.actions.uploadIcon")
+                      }
+                      onChange={handleFaviconChange}
+                    />
+                    <p className={styles.mediaHint}>
+                      {t("settings.theme.faviconConstraints")}
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
@@ -909,13 +1724,6 @@ const Settings: NextPage = () => {
             <section className={styles.card}>
               <div className={styles.cardHeader}>
                 <h2 className={styles.cardTitle}>{t("settings.theme.title")}</h2>
-                <button
-                  type="button"
-                  className={styles.ghostButton}
-                  onClick={handleResetTheme}
-                >
-                  {t("settings.theme.actions.reset")}
-                </button>
               </div>
               <p className={styles.cardHint}>{t("settings.theme.description")}</p>
 
@@ -969,6 +1777,24 @@ const Settings: NextPage = () => {
                     })}
                   </span>
                   <div className={styles.themeLibraryButtons}>
+                    <label className={`${styles.ghostButton} ${styles.iconButton}`}>
+                      <UploadIcon />
+                      {t("settings.theme.library.import")}
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        className={styles.uploadInput}
+                        onChange={handleImportTheme}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className={`${styles.ghostButton} ${styles.iconButton}`}
+                      onClick={handleExportTheme}
+                    >
+                      <DownloadIcon />
+                      {t("settings.theme.library.export")}
+                    </button>
                     <button
                       type="button"
                       className={styles.ghostButton}
@@ -1001,11 +1827,21 @@ const Settings: NextPage = () => {
                 </div>
               </div>
 
-              {/* Typography */}
+              {/* Typography — with the editor-wide "reset to brand defaults". */}
               <div className={styles.colorGroup}>
-                <h3 className={styles.colorGroupTitle}>
-                  {t("settings.theme.groups.typography")}
-                </h3>
+                <div className={styles.colorGroupHeader}>
+                  <h3 className={styles.colorGroupTitle}>
+                    {t("settings.theme.groups.typography")}
+                  </h3>
+                  <button
+                    type="button"
+                    className={`${styles.ghostButton} ${styles.iconButton}`}
+                    onClick={handleResetTheme}
+                  >
+                    <RotateIcon />
+                    {t("settings.theme.actions.reset")}
+                  </button>
+                </div>
                 <div className={styles.colorGrid}>
                   <div className={styles.colorField}>
                     <label htmlFor="font-heading" className={styles.colorLabel}>

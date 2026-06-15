@@ -79,6 +79,18 @@
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* A ghost button that carries a leading icon (import / export / reset). */
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.iconButton .uploadIcon {
+  width: 0.9rem;
+  height: 0.9rem;
 }
 
 .cardTitle {
@@ -255,43 +267,119 @@
   font-size: 0.9rem;
 }
 
-.logoRow {
+/* Styled file-picker button (replaces the native file input). Outlined pill in
+   the portal's button shape, with an upload icon; the native input is hidden
+   but kept clickable/focusable via the wrapping label. */
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--button-primary, #0066ee);
+  color: var(--button-primary, #0066ee);
+  background: #fff;
+  border-radius: var(--button-border-radius, 40px);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.uploadButton:hover {
+  background: color-mix(in srgb, var(--button-primary, #0066ee) 8%, #fff);
+}
+.uploadButton:focus-within {
+  outline: 2px solid var(--button-primary, #0066ee);
+  outline-offset: 2px;
+}
+.uploadIcon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+/* Visually-hidden native input (still focusable + label-triggerable). */
+.uploadInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.uploadedName {
+  font-size: 0.85rem;
+  color: #4b5563;
+  word-break: break-all;
+}
+
+/* Logo & favicon share one consistent media-upload row, so both fields align
+   identically whether or not an image is set: [preview] [button + constraints]. */
+.mediaField {
+  margin-bottom: 1.5rem;
+}
+.mediaField:last-child {
+  margin-bottom: 0;
+}
+.mediaField .label {
+  margin-bottom: 0.35rem;
+}
+.mediaRow {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  margin-top: 0.75rem;
 }
-
-.imagePreview {
+.mediaPreview {
+  flex: 0 0 auto;
   width: 64px;
   height: 64px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #eef0f2;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
   background: #f8f9fa;
-  flex: 0 0 auto;
-}
-/* Smaller, contained preview for the favicon (icons are tiny + usually square). */
-.faviconPreview {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  border: 1px solid #eef0f2;
-  background: #f8f9fa;
-  flex: 0 0 auto;
-  padding: 4px;
+  padding: 6px;
+  box-sizing: border-box;
+  color: #9ca3af;
 }
-.faviconPreview img {
-  width: 100%;
-  height: 100%;
+/* Dashed outline when nothing is uploaded yet, so the slot still reads as a
+   media placeholder and the row doesn't jump once an image is added. */
+.mediaPreviewEmpty {
+  border-style: dashed;
+}
+.mediaPreview img {
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
-}
-.previewImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   display: block;
+}
+.mediaPlaceholderIcon {
+  width: 26px;
+  height: 26px;
+}
+.mediaControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.mediaHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
 }
 
 .checkboxLabel {
@@ -356,34 +444,163 @@
 }
 .addButton {
   flex: 0 0 auto;
+  margin-top: 0.85rem;
   background-color: var(--button-primary, #0066ee);
   color: #fff;
   border: none;
-  padding: 0 1.1rem;
+  padding: 0.6rem 1.1rem;
   border-radius: 8px;
   font-size: 0.9rem;
   cursor: pointer;
 }
-.addButton:hover {
+.addButton:hover:not(:disabled) {
   background-color: var(--button-primary-hover, #006699);
 }
+.addButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-/* ---- Inline notice (replaces alert()) ---- */
-.notice {
-  padding: 0.7rem 1rem;
+/* ---- Agreements (structured list + add panel) ---- */
+.agreementList {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.agreementItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: #f8f9fa;
+  border: 1px solid #eef0f2;
   border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
 }
-.noticeSuccess {
-  background: #e6f4ea;
-  color: #1e7e34;
-  border: 1px solid #b7dfc2;
+.agreementMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
-.noticeError {
-  background: #fbe9e7;
-  color: #d32f2f;
-  border: 1px solid #f3c0ba;
+.agreementName {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agreementMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.sourceBadge,
+.versionBadge,
+.protectedBadge,
+.typeBadge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.typeBadge {
+  background: color-mix(in srgb, #6d28d9 12%, #fff);
+  color: #6d28d9;
+}
+.sourceBadge {
+  background: color-mix(in srgb, var(--button-primary, #0066ee) 12%, #fff);
+  color: var(--button-primary, #0066ee);
+}
+.versionBadge {
+  background: #eef0f2;
+  color: #4b5563;
+}
+.protectedBadge {
+  background: #fef3c7;
+  color: #92400e;
+}
+.agreementActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.agreementOpen {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--button-primary, #0066ee);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.agreementOpen:hover {
+  text-decoration: underline;
+}
+
+.agreementAdd {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eef0f2;
+}
+.agreementAddTitle {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  color: #374151;
+}
+.modeToggle {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+  background: #f1f3f5;
+  border-radius: 9px;
+  padding: 0.25rem;
+}
+.modeButton {
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.modeButtonActive {
+  background: #fff;
+  color: var(--button-primary, #0066ee);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.headerRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.headerSecret {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--button-primary, #0066ee);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.linkButton:hover {
+  text-decoration: underline;
 }
 
 /* ---- Tabs ---- */
@@ -416,6 +633,19 @@
 /* ---- Theme: colour editor ---- */
 .colorGroup {
   margin-bottom: 1.25rem;
+}
+/* Group header that pairs the section title with a trailing action (the
+   editor-wide "reset to brand defaults" sits beside Typography). */
+.colorGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.colorGroupHeader .colorGroupTitle {
+  margin-bottom: 0;
 }
 .colorGroupTitle {
   font-size: 0.75rem;

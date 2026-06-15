@@ -3,6 +3,7 @@ import "styles/globals.css"
 import Layout from "components/layout/Layout"
 import { LanguageProvider } from "../context/LanguageContext"
 import { SettingsProvider } from "../context/SettingsContext"
+import { ToastProvider } from "../context/ToastContext"
 import { KeycloakProvider } from "@react-keycloak/web"
 import Keycloak from "keycloak-js"
 import useKeycloakInitConfig from "../hooks/useKeycloakInitConfig"
@@ -118,9 +119,11 @@ function MyApp({ Component, pageProps }: AppProps) {
         <LanguageProvider>
           <SettingsProvider>
             <ThemeWrapper>
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
+              <ToastProvider>
+                <Layout>
+                  <Component {...pageProps} />
+                </Layout>
+              </ToastProvider>
             </ThemeWrapper>
           </SettingsProvider>
         </LanguageProvider>

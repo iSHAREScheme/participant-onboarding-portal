@@ -69,12 +69,27 @@ func GroupPartiesRequests(server *s.Server, group fiber.Router, config *config.C
 func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.Config) {
 	handler := handlers.NewHandlerSettings(server, config)
 
+	// Full settings (incl. satellite connection config, registrar/dataspace IDs,
+	// theme library) require authentication — see the auth middleware allowlist.
 	group.Get("/settings", handler.GetSettings)
+	// Public branding + content subset for the landing page and app-wide theming.
+	group.Get("/settings/public", handler.GetPublicSettings)
 	group.Post("/settings", middlewares.RequireAdminRole(), handler.UpdateSettings)
 	group.Post("/settings/logo", middlewares.RequireAdminRole(), handler.UploadLogo)
 	group.Get("/settings/logo", handler.GetLogo)
 	group.Post("/settings/favicon", middlewares.RequireAdminRole(), handler.UploadFavicon)
 	group.Get("/settings/favicon", handler.GetFavicon)
+
+	// Onboarding agreements. Reads are public (the onboarding flow lists and
+	// downloads the documents); mutations are admin-only. Protected-URL
+	// credentials are encrypted at rest and redacted on read.
+	agreements := handlers.NewHandlerAgreements(server, config)
+	group.Get("/settings/agreements", agreements.ListAgreements)
+	group.Get("/settings/agreements/:id/document", agreements.DownloadAgreementDocument)
+	group.Post("/settings/agreements/file", middlewares.RequireAdminRole(), agreements.UploadAgreementFile)
+	group.Post("/settings/agreements/url", middlewares.RequireAdminRole(), agreements.AddAgreementURL)
+	group.Put("/settings/agreements/:id", middlewares.RequireAdminRole(), agreements.UpdateAgreement)
+	group.Delete("/settings/agreements/:id", middlewares.RequireAdminRole(), agreements.DeleteAgreement)
 }
 
 func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.Config) {

@@ -15,6 +15,7 @@ import (
 	"onboardingportal/integrations/satellite"
 	"onboardingportal/models"
 	"onboardingportal/server"
+	"onboardingportal/server/handlers"
 	"onboardingportal/server/routes"
 )
 
@@ -36,6 +37,12 @@ func main() {
 	var settings models.Settings
 	if server.DB.First(&settings).Error == nil {
 		config.OverlaySatelliteSettings(&settings)
+	}
+
+	// Seed the bundled iSHARE agreements (Terms of Use + Accession Agreement) once,
+	// so a fresh deployment ships with them prefilled and removable.
+	if err := handlers.SeedBuiltinAgreements(server.DB); err != nil {
+		log.Printf("warning: failed to seed built-in agreements: %v", err)
 	}
 
 	// Auto-detect the connected iSHARE framework version and select the latest

@@ -7,7 +7,7 @@ import OnboardingStatus from "../components/OnboardingStatus";
 import { useKeycloak } from "@react-keycloak/web";
 import { useHydrated } from "../hooks/useHydrated";
 
-import API from 'api/client'
+import API, { AgreementView } from 'api/client'
 import { getPublicEnv } from "config/publicEnv"
 import { sanitizeRichText } from "util/sanitizeHtml"
 
@@ -15,14 +15,14 @@ interface SettingsResponse {
   description?: string;
   registrarId?: string;
   dataspaceId?: string;
-  agreements?: string[];
+  agreements?: AgreementView[];
 }
 
 
 const Home: NextPage = () => {
   const [description, setDescription] = useState("Loading...");
   const { t } = useLanguage();
-  const [agreements, setAgreements] = useState<string[]>([]);
+  const [agreements, setAgreements] = useState<AgreementView[]>([]);
   const { proposalData, loading: proposalLoading } = useUserProposal();
   const [keycloak] = useKeycloak();
   // false on the server + first client render, true after hydration — gates the
@@ -39,7 +39,7 @@ const Home: NextPage = () => {
           throw new Error(t("settings.messages.backendNotConfigured"));
         }
 
-        const response = await Api.fetchSettings()
+        const response = await Api.fetchPublicSettings()
 
         const data: SettingsResponse = await response.data;
         setDescription(data.description ?? "");
@@ -115,11 +115,23 @@ const Home: NextPage = () => {
               </p>
 
               <ul className={styles.agreementList}>
-                {agreements.map((url, index) => (
-                  <li key={index}>
-                    <a href={url} target="_blank" rel="noopener noreferrer">
-                      {t(`home.agreement${index + 1}`, `Agreement ${index + 1}`)}
-                    </a>
+                {agreements.map((a) => (
+                  <li key={a.id}>
+                    {a.hasDocument ? (
+                      <a
+                        href={Api.agreementDocumentUrl(a.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {a.title}
+                        {a.version ? ` (${a.version})` : ""}
+                      </a>
+                    ) : (
+                      <span>
+                        {a.title}
+                        {a.version ? ` (${a.version})` : ""}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

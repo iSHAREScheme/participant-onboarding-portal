@@ -51,6 +51,85 @@ export interface ProposalData {
 }
 
 // ---------------------------------------------------------------------------
+// Onboarding agreements
+// ---------------------------------------------------------------------------
+
+export type AgreementAuthMethod = "none" | "basic" | "bearer" | "oauth2" | "custom"
+
+export interface AgreementHeaderInput {
+  name: string
+  value?: string
+  secret?: boolean
+}
+
+// Sent to the backend when adding/updating a URL agreement. Secret fields
+// (password, token, clientSecret, secret header values) may be left blank on
+// update to keep the value already stored.
+export interface AgreementAuthInput {
+  method: AgreementAuthMethod
+  username?: string
+  password?: string
+  headerName?: string
+  scheme?: string
+  token?: string
+  tokenUrl?: string
+  clientId?: string
+  clientSecret?: string
+  scope?: string
+  headers?: AgreementHeaderInput[]
+}
+
+// The claim/agreement a document backs. v3: framework/dataspace agreement claims;
+// v2: Terms of Use / Accession agreement.
+export type AgreementClaimType =
+  | "frameworkAgreement"
+  | "dataspaceAgreement"
+  | "TermsOfUse"
+  | "AccessionAgreement"
+
+export interface AgreementUrlInput {
+  title: string
+  version?: string
+  type?: AgreementClaimType
+  url: string
+  auth?: AgreementAuthInput
+}
+
+// Redacted views returned by the backend — secrets are replaced by "*Set" flags.
+export interface AgreementHeaderView {
+  name: string
+  value?: string
+  secret: boolean
+  valueSet: boolean
+}
+
+export interface AgreementAuthView {
+  method: AgreementAuthMethod
+  username?: string
+  passwordSet: boolean
+  headerName?: string
+  scheme?: string
+  tokenSet: boolean
+  tokenUrl?: string
+  clientId?: string
+  clientSecretSet: boolean
+  scope?: string
+  headers?: AgreementHeaderView[]
+}
+
+export interface AgreementView {
+  id: string
+  title: string
+  version: string
+  source: "builtin" | "file" | "url" | "label"
+  type: AgreementClaimType
+  removable: boolean
+  hasDocument: boolean
+  url?: string
+  auth?: AgreementAuthView
+}
+
+// ---------------------------------------------------------------------------
 // iSHARE v3 claim-based participant model
 // Mirrors the schemas in the v3 OpenAPI spec:
 // https://raw.githubusercontent.com/iSHAREScheme/openapi/v3.0/ishare_openapi_spec.yaml
@@ -64,6 +143,7 @@ export type ClaimType =
   | "frameworkCompliance"
   | "authRegistry"
   | "frameworkAgreement"
+  | "dataspaceAgreement"
   | "frameworkRole"
   | "x509Certificate"
   | "dataspaceMembership"
@@ -247,12 +327,47 @@ export class API {
     return this.client.get(`/party/proposals`)
   }
 
+  // Full settings (satellite config, registrar/dataspace IDs, theme library).
+  // Requires authentication — use from admin/onboarding contexts only.
   fetchSettings () {
     return this.client.get(`/settings`)
   }
 
+  // Public branding + content subset (description, theme, logo/favicon paths,
+  // agreements). Safe to call unauthenticated (landing page, app-wide theming).
+  fetchPublicSettings () {
+    return this.client.get(`/settings/public`)
+  }
+
   patchSettings (settings: Record<string, any>) {
     return this.client.post(`/settings`, settings)
+  }
+
+  // --- Onboarding agreements -------------------------------------------------
+  // Redacted list of configured agreements (credentials never leave the backend).
+  listAgreements () {
+    return this.client.get(`/settings/agreements`)
+  }
+  // Admin: upload a PDF agreement. FormData fields: file, title, version.
+  uploadAgreementFile (form: FormData) {
+    return this.client.post(`/settings/agreements/file`, form)
+  }
+  // Admin: add a URL-backed agreement with optional fetch authentication.
+  addAgreementUrl (body: AgreementUrlInput) {
+    return this.client.post(`/settings/agreements/url`, body)
+  }
+  // Admin: edit an agreement's metadata / URL / auth. Blank secret fields keep
+  // the value already stored.
+  updateAgreement (id: string, body: AgreementUrlInput) {
+    return this.client.put(`/settings/agreements/${encodeURIComponent(id)}`, body)
+  }
+  // Admin: remove an agreement (and its uploaded file, if any).
+  deleteAgreement (id: string) {
+    return this.client.delete(`/settings/agreements/${encodeURIComponent(id)}`)
+  }
+  // Href-safe public URL to view/download an agreement document via the proxy.
+  agreementDocumentUrl (id: string) {
+    return `/api/backend/settings/agreements/${encodeURIComponent(id)}/document`
   }
 
   fetchRegistry () {

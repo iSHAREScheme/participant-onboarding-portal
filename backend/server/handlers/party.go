@@ -1270,11 +1270,6 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 		aliases = []string{satellite.BuildEoriAlias(eori)}
 	}
 
-	verificationHash, err := h.agreementVerificationHash(proposal)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
-	}
-
 	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
 	endDate := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
 
@@ -1282,6 +1277,37 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 	if agreementID == "" {
 		// Deterministic fallback when the deployment hasn't pinned an id.
 		agreementID = h.Config.FrameworkId + "-tou"
+	}
+
+	// Resolve a verificationHash per agreement type from the configured
+	// agreements: each claim carries the SHA-256 of the actual document the party
+	// agreed to. URL-sourced/unavailable documents fall back to the signed-artifact
+	// (or eHerkenning consent) hash so completion never hard-fails on hashing.
+	var settings models.Settings
+	h.Server.DB.First(&settings)
+	configuredAgreements := decodeAgreements(settings.Agreements)
+	signedHash, _ := h.agreementVerificationHash(proposal)
+
+	frameworkHash := signedHash
+	if fa := findAgreementByType(configuredAgreements, "frameworkAgreement"); fa != nil {
+		if docHash, ok := agreementDocumentHash(*fa); ok {
+			frameworkHash = docHash
+		}
+	}
+
+	includeDataspace := false
+	dataspaceHash := ""
+	dataspaceTitle := strings.TrimSpace(h.Config.DataspaceTitle)
+	if da := findAgreementByType(configuredAgreements, "dataspaceAgreement"); da != nil {
+		includeDataspace = true
+		if strings.TrimSpace(da.Title) != "" {
+			dataspaceTitle = da.Title
+		}
+		if docHash, ok := agreementDocumentHash(*da); ok {
+			dataspaceHash = docHash
+		} else {
+			dataspaceHash = signedHash
+		}
 	}
 
 	claims, err := satellite.BuildV3OnboardingClaims(proposal, satellite.V3OnboardingClaimConfig{
@@ -1294,9 +1320,16 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 		Loa:                h.Config.FrameworkRoleLoa,
 		LegalAdherence:     h.Config.FrameworkRoleLegalAdherence,
 		CompliancyVerified: h.Config.FrameworkRoleCompliancy,
-		VerificationHash:   verificationHash,
+		VerificationHash:   frameworkHash,
 		StartDate:          startDate,
 		EndDate:            endDate,
+
+		IncludeDataspaceAgreement: includeDataspace,
+		DataspaceID:               h.Config.DataspaceId,
+		DataspaceAgreementType:    "DataspaceAgreement",
+		DataspaceAgreementID:      h.Config.FrameworkId + "-dsa",
+		DataspaceAgreementTitle:   dataspaceTitle,
+		DataspaceVerificationHash: dataspaceHash,
 	})
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusUnprocessableEntity, "Cannot complete onboarding: "+err.Error())

@@ -21,9 +21,18 @@ type V3OnboardingClaimConfig struct {
 	Loa                string
 	LegalAdherence     string
 	CompliancyVerified string
-	VerificationHash   string // SHA-256 hex of the signed agreement artifact
+	VerificationHash   string // SHA-256 hex of the framework agreement document
 	StartDate          string
 	EndDate            string
+
+	// Optional dataspaceAgreement claim. Built only when IncludeDataspaceAgreement
+	// is true AND DataspaceID is set (the claim requires a dataspaceId per spec).
+	IncludeDataspaceAgreement bool
+	DataspaceID               string
+	DataspaceAgreementType    string
+	DataspaceAgreementID      string
+	DataspaceAgreementTitle   string
+	DataspaceVerificationHash string // SHA-256 hex of the dataspace agreement document
 }
 
 // BuildV3OnboardingClaims assembles the minimum valid v3 claim set the satellite
@@ -79,6 +88,25 @@ func BuildV3OnboardingClaims(proposal *models.Proposal, cfg V3OnboardingClaimCon
 		agreement["verificationHash"] = cfg.VerificationHash
 	}
 	claims = append(claims, agreement)
+
+	// 2b) dataspaceAgreement — optional; mirrors frameworkAgreement but is scoped
+	// to a dataspace (dataspaceId instead of frameworkId). Only added when a
+	// dataspace agreement is configured and a dataspace id is available.
+	if cfg.IncludeDataspaceAgreement && strings.TrimSpace(cfg.DataspaceID) != "" {
+		dsAgreement := map[string]interface{}{
+			"type":          "dataspaceAgreement",
+			"registrarId":   cfg.RegistrarID,
+			"status":        "active",
+			"dataspaceId":   cfg.DataspaceID,
+			"agreementType": cfg.DataspaceAgreementType,
+			"agreementId":   cfg.DataspaceAgreementID,
+			"title":         cfg.DataspaceAgreementTitle,
+		}
+		if cfg.DataspaceVerificationHash != "" {
+			dsAgreement["verificationHash"] = cfg.DataspaceVerificationHash
+		}
+		claims = append(claims, dsAgreement)
+	}
 
 	// 3) frameworkRole — the party's role within the framework.
 	claims = append(claims, map[string]interface{}{

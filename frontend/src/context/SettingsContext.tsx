@@ -30,7 +30,9 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
 // for every visitor, returning the logo URL to display (or null). Kept free of React
 // state so it can be shared by both the mount effect and updateLogo.
 async function fetchAndApplySettings(): Promise<string | null> {
-  const response = await fetch("/api/backend/settings");
+  // Public subset only — this runs for every visitor (incl. unauthenticated),
+  // so it must not hit the authenticated full-settings endpoint.
+  const response = await fetch("/api/backend/settings/public");
   const data = await response.json();
   // Apply the deployment's saved colour + font overrides for every visitor.
   // Until this resolves, the brand defaults from variables.css :root are shown.

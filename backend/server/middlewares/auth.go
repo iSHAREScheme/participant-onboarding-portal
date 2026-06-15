@@ -114,7 +114,16 @@ func Auth(cfg OIDCConfig) (fiber.Handler, error) {
 
 		if method == fiber.MethodGet || method == fiber.MethodHead {
 			switch path {
-			case "/settings", "/settings/logo", "/registry":
+			// "/settings" is intentionally NOT public — it carries the satellite
+			// connection config + registrar/dataspace IDs. The landing page and
+			// app-wide theming use the curated "/settings/public" subset instead.
+			case "/settings/public", "/settings/logo", "/settings/favicon", "/settings/agreements", "/registry":
+				return c.Next()
+			}
+			// Public agreement document downloads (/settings/agreements/<id>/document).
+			// These are loaded as raw <a href>/<link> GETs that carry no bearer
+			// token; the documents are not confidential (every applicant signs them).
+			if strings.HasPrefix(path, "/settings/agreements/") && strings.HasSuffix(path, "/document") {
 				return c.Next()
 			}
 		}
