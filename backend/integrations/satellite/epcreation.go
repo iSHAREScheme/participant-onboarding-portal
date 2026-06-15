@@ -191,15 +191,6 @@ func BuildEpCreation201RequestFromProposal(proposal *models.Proposal, partyID st
 			StartDate: startDate,
 			EndDate:   endDate,
 		},
-		AuthRegistries: []epCreationAuthRegistry{
-			{
-				AuthRegisteryId:   proposal.AuthRegistry,
-				AuthRegisteryName: proposal.AuthRegistryName,
-				AuthRegisteryUrl:  authRegistryURL,
-				DataSpaceId:       stringPtr(dataspaceId),
-				DataSpaceTitle:    stringPtr(dataspaceTitle),
-			},
-		},
 		AdditionalInfo: buildAdditionalInfo201FromProposal(proposal),
 		Spor: epCreationSpor{
 			SignedRequest: signedRequest,
@@ -207,6 +198,7 @@ func BuildEpCreation201RequestFromProposal(proposal *models.Proposal, partyID st
 		Roles:      buildDefaultRoles(startDate, endDate),
 		Agreements: agreements,
 	}
+	payload.AuthRegistries = buildAuthRegistriesFromProposal(proposal, registrarId, authRegistryURL, dataspaceId, dataspaceTitle)
 	return payload
 }
 
@@ -222,15 +214,6 @@ func BuildEpCreation211RequestFromProposal(proposal *models.Proposal, partyDID s
 			StartDate: startDate,
 			EndDate:   endDate,
 		},
-		AuthRegistries: []epCreationAuthRegistry{
-			{
-				AuthRegisteryId:   proposal.AuthRegistry,
-				AuthRegisteryName: proposal.AuthRegistryName,
-				AuthRegisteryUrl:  authRegistryURL,
-				DataSpaceId:       stringPtr(dataspaceId),
-				DataSpaceTitle:    stringPtr(dataspaceTitle),
-			},
-		},
 		AdditionalInfo: buildAdditionalInfo211FromProposal(proposal),
 		Spor: epCreationSpor{
 			SignedRequest: signedRequest,
@@ -238,7 +221,24 @@ func BuildEpCreation211RequestFromProposal(proposal *models.Proposal, partyDID s
 		Roles:      buildDefaultRoles(startDate, endDate),
 		Agreements: agreements,
 	}
+	payload.AuthRegistries = buildAuthRegistriesFromProposal(proposal, registrarId, authRegistryURL, dataspaceId, dataspaceTitle)
 	return payload
+}
+
+func buildAuthRegistriesFromProposal(proposal *models.Proposal, registrarId string, authRegistryURL string, dataspaceId string, dataspaceTitle string) []epCreationAuthRegistry {
+	authRegistryId := strings.TrimSpace(proposal.AuthRegistry)
+	if authRegistryId == "" || authRegistryId == strings.TrimSpace(registrarId) {
+		return nil
+	}
+	return []epCreationAuthRegistry{
+		{
+			AuthRegisteryId:   authRegistryId,
+			AuthRegisteryName: strings.TrimSpace(proposal.AuthRegistryName),
+			AuthRegisteryUrl:  strings.TrimSpace(authRegistryURL),
+			DataSpaceId:       stringPtr(strings.TrimSpace(dataspaceId)),
+			DataSpaceTitle:    stringPtr(strings.TrimSpace(dataspaceTitle)),
+		},
+	}
 }
 
 func BuildAgreements201FromFiles(files []AgreementFile, metadata []AgreementTemplate, dataspaceId string, dataspaceTitle string, signDate string, expiryDate string) []epCreationAgreement201 {
