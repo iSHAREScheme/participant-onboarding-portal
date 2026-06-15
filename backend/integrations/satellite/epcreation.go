@@ -68,7 +68,7 @@ type epCreationAgreement201 struct {
 	Status             string  `json:"status"`
 	SignDate           string  `json:"sign_date"`
 	ExpiryDate         string  `json:"expiry_date"`
-	HashFile           string  `json:"hash_file"`
+	AgreementFile      string  `json:"agreement_file"`
 	Framework          string  `json:"framework"`
 	DataSpaceId        *string `json:"dataspace_id,omitempty"`
 	DataSpaceTitle     *string `json:"dataspace_title,omitempty"`
@@ -259,7 +259,7 @@ func BuildAgreements201FromFiles(files []AgreementFile, metadata []AgreementTemp
 			Status:             "Accepted",
 			SignDate:           signDate,
 			ExpiryDate:         expiryDate,
-			HashFile:           agreement.Hash,
+			AgreementFile:      agreement.FileBase64,
 			Framework:          "iSHARE",
 			DataSpaceId:        stringPtr(dataspaceId),
 			DataSpaceTitle:     stringPtr(dataspaceTitle),
@@ -369,7 +369,7 @@ func buildAgreements201FromRequest(request *requests.PartyCreateRequest) []epCre
 			Status:             agreement.Status,
 			SignDate:           agreement.SignDate,
 			ExpiryDate:         agreement.ExpiryDate,
-			HashFile:           agreement.HashFile,
+			AgreementFile:      agreement.AgreementFile,
 			Framework:          agreement.Framework,
 			DataSpaceId:        agreement.DataSpaceId,
 			DataSpaceTitle:     agreement.DataSpaceTitle,
