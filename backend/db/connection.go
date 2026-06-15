@@ -74,6 +74,7 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		"satellite_base_url", "satellite_iss", "satellite_aud", "satellite_version",
 		"satellite_ep_creation_endpoint", "satellite_parties_endpoint",
 		"satellite_token_endpoint", "satellite_token_scope", "dataspace_title",
+		"auth_registry_id", "auth_registry_name", "auth_registry_url",
 	} {
 		if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, col) {
 			if err := db.Exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT").Error; err != nil {
@@ -86,6 +87,12 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 	// so existing rows get their built-ins seeded once on the next startup).
 	if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, "agreements_initialized") {
 		if err := db.Exec("ALTER TABLE settings ADD COLUMN agreements_initialized BOOLEAN DEFAULT 0").Error; err != nil {
+			return nil, err
+		}
+	}
+
+	if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, "prefill_auth_registry") {
+		if err := db.Exec("ALTER TABLE settings ADD COLUMN prefill_auth_registry BOOLEAN DEFAULT 0").Error; err != nil {
 			return nil, err
 		}
 	}

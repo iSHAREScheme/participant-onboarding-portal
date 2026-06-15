@@ -619,6 +619,12 @@ export default {
       dataspaceSelect: "Dataspace",
       dataspacePlaceholder: "Kies een dataspace…",
       dataspacesEmpty: "Geen dataspaces gevonden in het register.",
+      prefillAuthRegistry: "Autorisatieregister vooraf invullen",
+      prefillAuthRegistryHint: "Maakt het gekozen autorisatieregister statisch tijdens onboarding, zodat aanvragers er geen hoeven te kiezen.",
+      authRegistrySelect: "Autorisatieregister",
+      authRegistryPlaceholder: "Kies een autorisatieregister…",
+      authRegistriesEmpty: "Geen autorisatieregisters gevonden in het register.",
+      authRegistryUrl: "URL autorisatieregister",
       credentialsNote: "Het clientcertificaat en de privésleutel worden via deploy-omgevingsvariabelen geconfigureerd en zijn hier nooit bewerkbaar."
     },
     labels: {
@@ -645,6 +651,7 @@ export default {
       protected: "Beveiligd · {{method}}",
       open: "Openen",
       remove: "Verwijderen",
+      removeTitle: "Overeenkomst verwijderen",
       removeConfirm: "Weet u zeker dat u deze overeenkomst wilt verwijderen?",
       minimumWarning: "Gebruikers kunnen de onboarding niet voltooien met minder dan 2 overeenkomsten geconfigureerd.",
       typeLabel: "Type",

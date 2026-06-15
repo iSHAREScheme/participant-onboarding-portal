@@ -341,12 +341,12 @@ func (h *HandlerParty) CreateParties(c *fiber.Ctx) error {
 	return responses.MessageResponse(c, fiber.StatusOK, "Your request is successfully accepted. Verification process started.")
 }
 
-// postV3Party obtains a satellite owner access token, builds the v3.0 party
-// payload and POSTs it to the satellite's register-new-party (/parties) endpoint.
+// postPartyPayload obtains a satellite owner access token and POSTs a party
+// payload to the satellite's parties endpoint.
 // It returns the HTTP status and raw response body so callers can surface the
 // satellite's own error message. Reused by both the admin create-party endpoint
 // and the onboarding completion flow.
-func (h *HandlerParty) postV3Party(request *requests.PartyV3CreateRequest, partyDID string, aliases []string) (int, []byte, error) {
+func (h *HandlerParty) postPartyPayload(payload interface{}) (int, []byte, error) {
 	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to create satellite owner access token: %w", err)
@@ -358,13 +358,12 @@ func (h *HandlerParty) postV3Party(request *requests.PartyV3CreateRequest, party
 		return 0, nil, fmt.Errorf("failed to get satellite access token: %w", err)
 	}
 
-	payload := satellite.BuildEpCreation30RequestFromRequest(request, partyDID, aliases, h.Config.RegistrarId)
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to prepare request payload: %w", err)
 	}
 
-	partiesURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatellitePartiesEndpoint)
+	partiesURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.partiesEndpointForVersion())
 	req, err := http.NewRequest("POST", partiesURL, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to create request to satellite: %w", err)
@@ -386,6 +385,22 @@ func (h *HandlerParty) postV3Party(request *requests.PartyV3CreateRequest, party
 		log.Printf("satellite: parties status=%d body=%s", res.StatusCode, string(body))
 	}
 	return res.StatusCode, body, nil
+}
+
+func (h *HandlerParty) postV3Party(request *requests.PartyV3CreateRequest, partyDID string, aliases []string) (int, []byte, error) {
+	payload := satellite.BuildEpCreation30RequestFromRequest(request, partyDID, aliases, h.Config.RegistrarId)
+	return h.postPartyPayload(payload)
+}
+
+func (h *HandlerParty) partiesEndpointForVersion() string {
+	endpoint := strings.TrimSpace(h.Config.SatellitePartiesEndpoint)
+	if isSatelliteVersion22(h.Config.SatelliteVersion) && (endpoint == "" || endpoint == "/parties") {
+		return "/v2.2/parties"
+	}
+	if endpoint == "" {
+		return "/parties"
+	}
+	return endpoint
 }
 
 func truncateForLog(b []byte) string {
@@ -1090,6 +1105,9 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
 		return h.completeProposalV3(c, &proposal, registrarId)
 	}
+	if isSatelliteVersion22(h.Config.SatelliteVersion) {
+		return h.completeProposalV22(c, &proposal, registrarId)
+	}
 
 	flavor := epCreationFlavorFromVersion(h.Config.SatelliteVersion)
 
@@ -1149,9 +1167,6 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	}
 
 	authRegistryURL := proposal.AuthRegistryUrl
-	if authRegistryURL == "" {
-		authRegistryURL = "https://ar.isharetest.net"
-	}
 
 	var payload interface{}
 	if flavor.UseDidIdentifiers {
@@ -1254,6 +1269,91 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
 	}
 
+	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
+}
+
+func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Proposal, registrarId string) error {
+	normalizedPartyID := normalizePartyID(proposal.PartyId)
+	if normalizedPartyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
+	}
+	partyDID := satellite.BuildDidFromPartyID(normalizedPartyID)
+	aliases := []string{satellite.BuildEoriAlias(normalizedPartyID)}
+
+	startDate := time.Now().Format("2006-01-02T15:04:05.000Z")
+	endDate := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+
+	agreementTemplates := []satellite.AgreementTemplate{
+		{Type: "TermsOfUse", Title: "ToU-iSHARE"},
+		{Type: "AccessionAgreement", Title: "iSHARE-AA"},
+	}
+
+	var agreementFiles []satellite.AgreementFile
+	if proposal.SignedVia == "eherkenning" {
+		record := buildEherkenningConsentRecord(proposal)
+		hash := md5.Sum(record)
+		consent := satellite.AgreementFile{
+			Hash:       fmt.Sprintf("%x", hash),
+			FileBase64: base64.StdEncoding.EncodeToString(record),
+		}
+		for range agreementTemplates {
+			agreementFiles = append(agreementFiles, consent)
+		}
+	} else {
+		if len(proposal.SignedAgreementPaths) == 0 {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Signed agreements are required to complete proposal")
+		}
+		for _, path := range proposal.SignedAgreementPaths {
+			fileContent, err := os.ReadFile(path)
+			if err != nil {
+				return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to read agreement file")
+			}
+			hash := md5.Sum(fileContent)
+			agreementFiles = append(agreementFiles, satellite.AgreementFile{
+				Hash:       fmt.Sprintf("%x", hash),
+				FileBase64: base64.StdEncoding.EncodeToString(fileContent),
+			})
+		}
+	}
+
+	var settings models.Settings
+	settingsResult := h.Server.DB.First(&settings)
+	dataspaceId := h.Config.DataspaceId
+	dataspaceTitle := h.Config.DataspaceTitle
+	if settingsResult.Error == nil {
+		if strings.TrimSpace(settings.DataspaceId) != "" {
+			dataspaceId = settings.DataspaceId
+		}
+		if strings.TrimSpace(settings.DataspaceTitle) != "" {
+			dataspaceTitle = settings.DataspaceTitle
+		}
+	}
+
+	authRegistryURL := proposal.AuthRegistryUrl
+
+	agreements := satellite.BuildAgreements22FromFiles(agreementFiles, agreementTemplates, dataspaceId, dataspaceTitle, startDate, endDate)
+	payload, err := satellite.BuildParty22RequestFromProposal(proposal, partyDID, aliases, registrarId, authRegistryURL, dataspaceId, dataspaceTitle, agreements, startDate, endDate)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusUnprocessableEntity, "Cannot complete onboarding: "+err.Error())
+	}
+
+	status, body, err := h.postPartyPayload(payload)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to create party: "+err.Error())
+	}
+	if status != http.StatusOK && status != http.StatusCreated {
+		msg := extractSatelliteError(body)
+		if msg == "" {
+			msg = fmt.Sprintf("Satellite rejected the party registration (status %d)", status)
+		}
+		log.Printf("satellite: parties rejected status=%d detail=%s", status, msg)
+		return responses.ErrorResponse(c, status, msg)
+	}
+
+	proposal.Status = "completed"
+	if err := h.Server.DB.Save(proposal).Error; err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
+	}
 	return responses.MessageResponse(c, fiber.StatusOK, "Proposal successfully completed")
 }
 
@@ -1407,6 +1507,11 @@ func epCreationFlavorFromVersion(raw string) epCreationFlavor {
 		return epCreationFlavor{UseDidIdentifiers: true}
 	}
 	return epCreationFlavor{UseDidIdentifiers: false}
+}
+
+func isSatelliteVersion22(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	return strings.HasPrefix(trimmed, "2.2")
 }
 
 // deriveV3Identity turns the portal-supplied party id into a did:ishare id and

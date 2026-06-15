@@ -123,8 +123,6 @@ func (config *Config) LoadEnvironment() error {
 	config.SatelliteIss = os.Getenv("SATELLITE_ISS")
 	config.SatelliteAud = os.Getenv("SATELLITE_AUD")
 	config.RegistrarId = os.Getenv("REGISTRAR_ID")
-	config.DataspaceId = os.Getenv("DATASPACE_ID")
-	config.DataspaceTitle = os.Getenv("DATASPACE_TITLE")
 
 	// v3.0 claim defaults. This portal targets the iSHARE Framework + iSHARE
 	// Participant Registry, so every value defaults to the iSHARE conventions and

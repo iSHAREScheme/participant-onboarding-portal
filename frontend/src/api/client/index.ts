@@ -374,6 +374,10 @@ export class API {
     return this.client.get(`/registry`)
   }
 
+  fetchAuthRegistries () {
+    return this.fetchRegistry()
+  }
+
   // Effective iSHARE framework version the backend operates against (auto-detected
   // at startup or the SATELLITE_VERSION fallback): { version, claimModel }.
   fetchSatelliteVersion () {

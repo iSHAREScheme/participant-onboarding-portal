@@ -4,6 +4,7 @@ import Layout from "components/layout/Layout"
 import { LanguageProvider } from "../context/LanguageContext"
 import { SettingsProvider } from "../context/SettingsContext"
 import { ToastProvider } from "../context/ToastContext"
+import { ConfirmProvider } from "../context/ConfirmContext"
 import { KeycloakProvider } from "@react-keycloak/web"
 import Keycloak from "keycloak-js"
 import useKeycloakInitConfig from "../hooks/useKeycloakInitConfig"
@@ -120,9 +121,11 @@ function MyApp({ Component, pageProps }: AppProps) {
           <SettingsProvider>
             <ThemeWrapper>
               <ToastProvider>
-                <Layout>
-                  <Component {...pageProps} />
-                </Layout>
+                <ConfirmProvider>
+                  <Layout>
+                    <Component {...pageProps} />
+                  </Layout>
+                </ConfirmProvider>
               </ToastProvider>
             </ThemeWrapper>
           </SettingsProvider>

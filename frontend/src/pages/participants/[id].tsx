@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
+import { Skeleton } from "components";
 import API from "api/client";
 import { cacheParticipants, getCachedParticipant } from "util/participantCache";
 import { useLanguage } from "../../context/LanguageContext";
@@ -564,7 +565,46 @@ const ParticipantDetail: NextPage = () => {
         </div>
 
         {isLoading && (
-          <div className={styles.loading}>{t("participants.detail.loading")}</div>
+          <div aria-busy="true">
+            <div className={styles.titleRow}>
+              <div className={styles.titleBlock}>
+                <Skeleton width={240} height={26} radius={6} />
+                <Skeleton
+                  width={300}
+                  height={14}
+                  radius={6}
+                  style={{ marginTop: 8 }}
+                />
+              </div>
+              <Skeleton width={96} height={28} radius={8} />
+            </div>
+            <div className={styles.body}>
+              {Array.from({ length: 2 }).map((_, s) => (
+                <section className={styles.section} key={`sk-sec-${s}`}>
+                  <Skeleton
+                    width={150}
+                    height={16}
+                    radius={6}
+                    style={{ marginBottom: 12 }}
+                  />
+                  <div className={styles.cards}>
+                    {Array.from({ length: 2 }).map((_, c) => (
+                      <div className={styles.claimCard} key={`sk-card-${s}-${c}`}>
+                        <div className={styles.grid}>
+                          {Array.from({ length: 4 }).map((_, r) => (
+                            <div className={styles.row} key={`sk-row-${r}`}>
+                              <Skeleton width="38%" height={13} />
+                              <Skeleton width="52%" height={13} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
         )}
         {!isLoading && errorKey && (
           <div className={styles.error}>{t(errorKey)}</div>

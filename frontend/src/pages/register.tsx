@@ -278,6 +278,8 @@ const SuccessScreen = () => {
 type RegistryParty = {
   party_id: string;
   name: string;
+  url?: string;
+  capabilities_url?: string;
 };
 
 
@@ -370,10 +372,8 @@ const Register: NextPage = () => {
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
   const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
-  const staticParty = parseBoolEnv(env.NEXT_PUBLIC_STATIC_PARTY)
   const autoAcceptProposal = parseBoolEnv(env.NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL)
   const skipRoleStep = parseBoolEnv(env.NEXT_PUBLIC_SKIP_ROLES)
-  const skipSettings = parseBoolEnv(env.NEXT_PUBLIC_SKIP_SETTINGS)
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const eherkenningAlias =
@@ -387,14 +387,10 @@ const Register: NextPage = () => {
     keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
   )
 
-  const steps = alwaysM2M ? (staticParty ? StepsV3 : StepsV2) : StepsV1
+  const steps = alwaysM2M ? StepsV2 : StepsV1
   const activeRoles = env.NEXT_PUBLIC_ACTIVE_ROLES
     ? env.NEXT_PUBLIC_ACTIVE_ROLES.split(",").map((t) => t.trim()).filter(Boolean)
     : ["dataowner", "dataconsumer", "dataprovider"]
-  const defaultPartyId = env.NEXT_PUBLIC_PARTY_ID || ""
-  const defaultPartyName = env.NEXT_PUBLIC_PARTY_NAME || ""
-  const defaultPartyUrl = env.NEXT_PUBLIC_PARTY_REGISTER_URL || ""
-  const defaultPartyCapabilitiesUrl = env.NEXT_PUBLIC_PARTY_CAPABILITIES_URL || ""
   const defaultRoleValue = env.NEXT_PUBLIC_DEFAULT_ROLE
   const defaultRoles = useMemo(
     () => ({
@@ -406,7 +402,6 @@ const Register: NextPage = () => {
   )
 
   const firstInteractiveStep = skipRoleStep ? (steps.role ?? 0) + 1 : (steps.role ?? 0)
-  const useStaticParty = staticParty
   const useAutoAcceptProposal = autoAcceptProposal
   const registerStateKey = useMemo(() => {
     const rawSub = keycloak?.tokenParsed?.sub
@@ -828,6 +823,7 @@ const Register: NextPage = () => {
 
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
+  const [isStaticAuthRegistry, setIsStaticAuthRegistry] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [certificatePreview, setCertificatePreview] = useState<CertificateFields | null>(null)
   const [uploadError, setUploadError] = useState<string>("")
@@ -972,30 +968,6 @@ const Register: NextPage = () => {
     hasSuccessfulEherkenningLink,
   ])
 
-  useEffect(() => {
-    if (!useStaticParty) return;
-
-    if (!defaultPartyId || !defaultPartyName) {
-      console.warn('env.STATIC_PARTY was set but missing PARTY_ID/PARTY_NAME')
-      return
-    }
-
-    // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
-    queueMicrotask(() => {
-      setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
-      setFormData((prev) => ({
-        ...prev,
-        association: {
-          ...prev.association,
-          authRegistry: defaultPartyId,
-          authRegistryName: defaultPartyName,
-          authRegistryUrl: defaultPartyUrl || prev.association?.authRegistryUrl,
-          // capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association?.capabilitiesUrl,
-        },
-      }))
-    })
-  }, [useStaticParty, defaultPartyId, defaultPartyName, defaultPartyUrl])
-
   const validateStep = async (step: number, data: FormData): Promise<boolean> => {
 
     switch (step) {
@@ -1054,17 +1026,14 @@ const Register: NextPage = () => {
       // }
 
       case steps.association: // Association
-        if (!data.association.authRegistry || !data.association.authRegistryUrl) {
-          setValidationError("register.validation.associationRequired");
-          return false;
-        } else if (
+        if (
           !hideCapabilitiesUrlField &&
           data.association.capabilitiesUrl &&
           !urlRegex.test(data.association.capabilitiesUrl)
         ) {
           setValidationError("register.validation.invalidCapabilitiesUrl");
           return false;
-        } else if (!urlRegex.test(data.association.authRegistryUrl)) {
+        } else if (data.association.authRegistryUrl && !urlRegex.test(data.association.authRegistryUrl)) {
           setValidationError("register.validation.invalidRegistryUrl");
           return false;
         } else if (
@@ -1108,8 +1077,6 @@ const Register: NextPage = () => {
 
   const fetchSettings = async () => {
     try {
-      if (skipSettings) return
-
       if (!baseUrl)
         throw new Error("Backend URL not configured")
 
@@ -1123,6 +1090,21 @@ const Register: NextPage = () => {
       setAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
       )
+      const hasStaticAuthRegistry =
+        Boolean(settingsData.prefillAuthRegistry) && Boolean(settingsData.authRegistryId)
+      setIsStaticAuthRegistry(hasStaticAuthRegistry)
+      setIsSingleAssociation(hasStaticAuthRegistry)
+      if (hasStaticAuthRegistry) {
+        setFormData((prev) => ({
+          ...prev,
+          association: {
+            ...prev.association,
+            authRegistry: settingsData.authRegistryId || "",
+            authRegistryName: settingsData.authRegistryName || "",
+            authRegistryUrl: settingsData.authRegistryUrl || "",
+          },
+        }))
+      }
 
     } catch (e) {
       console.error("Error fetching settings data:", e)
@@ -1131,8 +1113,6 @@ const Register: NextPage = () => {
   }
 
   const fetchRegistry = async () => {
-    if (useStaticParty) return
-
     try {
       if (!baseUrl)
         throw new Error("Backend URL not configured")
@@ -1143,39 +1123,19 @@ const Register: NextPage = () => {
       const data = response.data
       const parties = data.parties_info?.data || []
 
-      const partiesInfo = parties?.map((party) => ({
+      const partiesInfo: RegistryParty[] = parties?.map((party) => ({
         party_id: party.party_id,
         name: party.party_name,
+        url: party.url,
+        capabilities_url: party.capabilities_url,
       }))
 
-      const fallbackPartyId = defaultPartyId || 'EORI.NL123456789'
-      const fallbackPartyName = defaultPartyName || 'example.party'
-
-      if (!partiesInfo?.length)
-        (fallbackPartyId && fallbackPartyName)
-          ? partiesInfo.push({ party_id: `${fallbackPartyId}`, name: `${fallbackPartyName}` })
-          : console.warn('No parties found in registry, and no PARTY_ID/NAME env vars set')
-
       setRegistryParties(partiesInfo)
-      if (partiesInfo.length === 1) {
-        const singleParty = partiesInfo[0];
-        setFormData((prev) => ({
-          ...prev,
-          association: {
-            ...prev.association,
-            authRegistry: singleParty.party_id,
-            authRegistryName: singleParty.name,
-            authRegistryUrl: defaultPartyUrl || prev.association.authRegistryUrl,
-            capabilitiesUrl: defaultPartyCapabilitiesUrl || prev.association.capabilitiesUrl,
-          },
-        }));
-        setIsSingleAssociation(true);
-      }
+      setIsSingleAssociation((prev) => (isStaticAuthRegistry ? true : prev));
 
-      return registryParties
+      return partiesInfo
     } catch (e) {
-      // always set the default
-      setRegistryParties([{ party_id: `${defaultPartyId}`, name: `${defaultPartyName}` }])
+      setRegistryParties([])
 
       if (e instanceof AxiosError && e.status === 404) {
         return
@@ -1358,7 +1318,7 @@ const Register: NextPage = () => {
       // fetch registry data. if there is only one registry, set isSingleAssociation to true and prefill
       const registries = await fetchRegistry()
 
-      if (registries?.length === 1) {
+      if (!isStaticAuthRegistry && registries?.length === 1) {
         setIsSingleAssociation(true)
 
         const [registry] = registries
@@ -2029,6 +1989,15 @@ const Register: NextPage = () => {
 
   // Add handler for registry selection
   const handleRegistrySelection = (registryId: string) => {
+    if (isStaticAuthRegistry) return;
+
+    if (!registryId) {
+      handleInputChange("association", "authRegistry", "");
+      handleInputChange("association", "authRegistryName", "");
+      handleInputChange("association", "authRegistryUrl", "");
+      return;
+    }
+
     const selectedRegistry = registryParties.find(
       (party) => party.party_id === registryId
     );
@@ -2359,7 +2328,6 @@ const Register: NextPage = () => {
                 <div className={styles.formSection}>
                   <div className={styles.inputGroup}>
                     <FormInput
-                      disabled={useStaticParty}
                       label={t("register.idCheck.partyId")}
                       id="partyId"
                       name="partyId"
@@ -2375,7 +2343,6 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
-                      disabled={useStaticParty}
                       label={t("register.idCheck.partyName")}
                       id="partyName"
                       name="partyName"
@@ -2494,9 +2461,18 @@ const Register: NextPage = () => {
                   className={styles.select}
                   disabled={isSingleAssociation}
                 >
-                  <option value="" disabled>
+                  <option value="">
                     {t("register.association.selectRegistry")}
                   </option>
+                  {isStaticAuthRegistry &&
+                    formData.association.authRegistry &&
+                    !registryParties.some(
+                      (party) => party.party_id === formData.association.authRegistry
+                    ) && (
+                      <option value={formData.association.authRegistry}>
+                        {formData.association.authRegistry}
+                      </option>
+                    )}
                   {registryParties.map((party) => (
                     <option key={party.party_id} value={party.party_id}>
                       {party.party_id}
@@ -2539,7 +2515,6 @@ const Register: NextPage = () => {
                       e.target.value
                     )
                   }
-                  required
                 />
                 <span className={styles.infoIcon} title="Information">
                   ⓘ

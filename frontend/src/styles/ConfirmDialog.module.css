@@ -1,0 +1,109 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: overlayIn 0.15s ease;
+}
+
+.dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  width: 100%;
+  max-width: 420px;
+  padding: 1.3rem 1.4rem 1.15rem;
+  animation: dialogIn 0.18s cubic-bezier(0.21, 1.02, 0.73, 1);
+}
+
+.title {
+  margin: 0 0 0.45rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-secondary, #013a57);
+}
+
+.message {
+  margin: 0 0 1.3rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #4b5563;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cancel,
+.confirm {
+  border-radius: 8px;
+  padding: 0.5rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cancel {
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  color: #374151;
+}
+.cancel:hover {
+  background: #f3f4f6;
+}
+
+.confirm {
+  border: none;
+  background: var(--button-primary, #0066ee);
+  color: #fff;
+}
+.confirm:hover {
+  background: var(--button-primary-hover, #006699);
+}
+.confirm:focus-visible {
+  outline: 2px solid var(--button-primary, #0066ee);
+  outline-offset: 2px;
+}
+
+/* Destructive actions (e.g. delete) get a red confirm button. */
+.danger {
+  background: #d32f2f;
+}
+.danger:hover {
+  background: #b71c1c;
+}
+.danger:focus-visible {
+  outline-color: #d32f2f;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .dialog {
+    animation-duration: 0.01ms;
+  }
+}

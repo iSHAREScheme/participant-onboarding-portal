@@ -622,6 +622,12 @@ export default {
       dataspaceSelect: "Dataspace",
       dataspacePlaceholder: "Select a dataspace…",
       dataspacesEmpty: "No dataspaces found in the registry.",
+      prefillAuthRegistry: "Prefill authorisation registry",
+      prefillAuthRegistryHint: "Makes the selected authorisation registry static during onboarding so applicants do not need to pick one.",
+      authRegistrySelect: "Authorisation registry",
+      authRegistryPlaceholder: "Select an authorisation registry…",
+      authRegistriesEmpty: "No authorisation registries found in the registry.",
+      authRegistryUrl: "Authorisation registry URL",
       credentialsNote: "The client certificate and private key are configured via deployment environment variables and are never editable here."
     },
     labels: {
@@ -648,6 +654,7 @@ export default {
       protected: "Protected · {{method}}",
       open: "Open",
       remove: "Remove",
+      removeTitle: "Delete agreement",
       removeConfirm: "Are you sure you want to delete this agreement?",
       minimumWarning: "Users are unable to finish onboarding with less than 2 agreements configured.",
       typeLabel: "Type",

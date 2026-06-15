@@ -127,6 +127,61 @@ type epCreation211Request struct {
 	Roles          []epCreationRole             `json:"roles,omitempty"`
 }
 
+type partyCreate22Request struct {
+	ID             string                       `json:"id"`
+	AlsoKnownAs    []string                     `json:"alsoKnownAs,omitempty"`
+	SchemaVersion  string                       `json:"schemaVersion"`
+	PartyName      string                       `json:"party_name"`
+	CapabilityUrl  *string                      `json:"capability_url,omitempty"`
+	RegistrarId    string                       `json:"registrar_id"`
+	Adherence      epCreationAdherence          `json:"adherence"`
+	AdditionalInfo *epCreationAdditionalInfo201 `json:"additional_info,omitempty"`
+	Agreements     []epCreationAgreement22      `json:"agreements,omitempty"`
+	Certificates   []partyCertificate22         `json:"certificates,omitempty"`
+	Spor           *epCreationSpor              `json:"spor,omitempty"`
+	Roles          []partyRole22                `json:"roles,omitempty"`
+	AuthRegs       []partyAuthRegistry22        `json:"auth_registries,omitempty"`
+}
+
+type epCreationAgreement22 struct {
+	Type               string `json:"type"`
+	Title              string `json:"title"`
+	Status             string `json:"status"`
+	SignDate           string `json:"sign_date"`
+	ExpiryDate         string `json:"expiry_date"`
+	AgreementFile      string `json:"agreement_file,omitempty"`
+	HashFile           string `json:"hash_file,omitempty"`
+	Framework          string `json:"framework"`
+	DataSpaceId        string `json:"dataspace_id"`
+	DataSpaceTitle     string `json:"dataspace_title"`
+	CompliancyVerified string `json:"compliancy_verified"`
+}
+
+type partyCertificate22 struct {
+	SubjectName     string `json:"subject_name"`
+	CertificateType string `json:"certificate_type"`
+	EnabledFrom     string `json:"enabled_from"`
+	X5C             string `json:"x5c"`
+	X5T             string `json:"x5t#s256"`
+}
+
+type partyRole22 struct {
+	Role               string `json:"role"`
+	StartDate          string `json:"start_date"`
+	EndDate            string `json:"end_date"`
+	Loa                string `json:"loa"`
+	CompliancyVerified bool   `json:"compliancy_verified"`
+	LegalAdherence     bool   `json:"legal_adherence"`
+}
+
+type partyAuthRegistry22 struct {
+	Name          string `json:"name"`
+	ID            string `json:"id"`
+	URL           string `json:"url"`
+	DataSpaceId   string `json:"dataspace_id"`
+	DataSpaceName string `json:"dataspace_name"`
+}
+
 func BuildDidFromPartyID(partyID string) string {
 	return "did:ishare:" + partyID
 }
@@ -225,6 +280,50 @@ func BuildEpCreation211RequestFromProposal(proposal *models.Proposal, partyDID s
 	return payload
 }
 
+func BuildParty22RequestFromProposal(proposal *models.Proposal, partyDID string, aliases []string, registrarId string, authRegistryURL string, dataspaceId string, dataspaceTitle string, agreements []epCreationAgreement22, startDate string, endDate string) (partyCreate22Request, error) {
+	payload := partyCreate22Request{
+		ID:            partyDID,
+		AlsoKnownAs:   aliases,
+		SchemaVersion: "v2.2",
+		PartyName:     proposal.PartyName,
+		CapabilityUrl: stringPtr(proposal.CapabilitiesUrl),
+		RegistrarId:   registrarId,
+		Adherence: epCreationAdherence{
+			Status:    "Active",
+			StartDate: startDate,
+			EndDate:   endDate,
+		},
+		AdditionalInfo: buildAdditionalInfo201FromProposal(proposal),
+		Roles:          buildDefaultRoles22(startDate, endDate),
+		Agreements:     agreements,
+	}
+
+	if strings.TrimSpace(proposal.CertX5c) != "" {
+		subjectName, err := subjectNameFromX5C(proposal.CertX5c)
+		if err != nil {
+			return partyCreate22Request{}, fmt.Errorf("invalid eIDAS certificate payload: %w", err)
+		}
+		payload.Certificates = []partyCertificate22{
+			{
+				SubjectName:     subjectName,
+				CertificateType: "eSEAL",
+				EnabledFrom:     startDate,
+				X5C:             strings.TrimSpace(proposal.CertX5c),
+				X5T:             strings.TrimSpace(proposal.CertX5tS256),
+			},
+		}
+	} else if strings.TrimSpace(proposal.IdpAssertion) != "" {
+		payload.Spor = &epCreationSpor{
+			SignedRequest: strings.TrimSpace(proposal.IdpAssertion),
+		}
+	} else {
+		return partyCreate22Request{}, fmt.Errorf("no identity proof captured for this proposal (eIDAS certificate or eHerkenning assertion); it is required to create a v2.2 party")
+	}
+
+	payload.AuthRegs = buildAuthRegistries22FromProposal(proposal, registrarId, authRegistryURL, dataspaceId, dataspaceTitle)
+	return payload, nil
+}
+
 func buildAuthRegistriesFromProposal(proposal *models.Proposal, registrarId string, authRegistryURL string, dataspaceId string, dataspaceTitle string) []epCreationAuthRegistry {
 	authRegistryId := strings.TrimSpace(proposal.AuthRegistry)
 	if authRegistryId == "" || authRegistryId == strings.TrimSpace(registrarId) {
@@ -237,6 +336,22 @@ func buildAuthRegistriesFromProposal(proposal *models.Proposal, registrarId stri
 			AuthRegisteryUrl:  strings.TrimSpace(authRegistryURL),
 			DataSpaceId:       stringPtr(strings.TrimSpace(dataspaceId)),
 			DataSpaceTitle:    stringPtr(strings.TrimSpace(dataspaceTitle)),
+		},
+	}
+}
+
+func buildAuthRegistries22FromProposal(proposal *models.Proposal, registrarId string, authRegistryURL string, dataspaceId string, dataspaceTitle string) []partyAuthRegistry22 {
+	authRegistryId := strings.TrimSpace(proposal.AuthRegistry)
+	if authRegistryId == "" || authRegistryId == strings.TrimSpace(registrarId) {
+		return nil
+	}
+	return []partyAuthRegistry22{
+		{
+			ID:            authRegistryId,
+			Name:          strings.TrimSpace(proposal.AuthRegistryName),
+			URL:           strings.TrimSpace(authRegistryURL),
+			DataSpaceId:   strings.TrimSpace(dataspaceId),
+			DataSpaceName: strings.TrimSpace(dataspaceTitle),
 		},
 	}
 }
@@ -292,6 +407,34 @@ func BuildAgreements211FromFiles(files []AgreementFile, metadata []AgreementTemp
 			Framework:          "iSHARE",
 			DataSpaceId:        stringPtr(dataspaceId),
 			DataSpaceTitle:     stringPtr(dataspaceTitle),
+			CompliancyVerified: "no",
+		})
+	}
+	return agreements
+}
+
+func BuildAgreements22FromFiles(files []AgreementFile, metadata []AgreementTemplate, dataspaceId string, dataspaceTitle string, signDate string, expiryDate string) []epCreationAgreement22 {
+	if len(files) == 0 {
+		return nil
+	}
+	agreements := make([]epCreationAgreement22, 0, len(files))
+	for idx, agreement := range files {
+		agreementType := "Agreement"
+		agreementTitle := fmt.Sprintf("Agreement-%d", idx+1)
+		if idx < len(metadata) {
+			agreementType = metadata[idx].Type
+			agreementTitle = metadata[idx].Title
+		}
+		agreements = append(agreements, epCreationAgreement22{
+			Type:               agreementType,
+			Title:              agreementTitle,
+			Status:             "Accepted",
+			SignDate:           signDate,
+			ExpiryDate:         expiryDate,
+			AgreementFile:      agreement.FileBase64,
+			Framework:          "iSHARE",
+			DataSpaceId:        strings.TrimSpace(dataspaceId),
+			DataSpaceTitle:     strings.TrimSpace(dataspaceTitle),
 			CompliancyVerified: "no",
 		})
 	}
@@ -455,6 +598,19 @@ func buildDefaultRoles(startDate string, endDate string) []epCreationRole {
 			Loa:                stringPtr(loa),
 			CompliancyVerified: stringPtr(compliancyVerified),
 			LegalAdherence:     stringPtr(legalAdherence),
+		},
+	}
+}
+
+func buildDefaultRoles22(startDate string, endDate string) []partyRole22 {
+	return []partyRole22{
+		{
+			Role:               "EntitledParty",
+			StartDate:          startDate,
+			EndDate:            endDate,
+			Loa:                "Substantial",
+			CompliancyVerified: true,
+			LegalAdherence:     true,
 		},
 	}
 }

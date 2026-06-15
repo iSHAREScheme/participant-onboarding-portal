@@ -1,16 +1,16 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/datatypes"
+	"log"
 	"onboardingportal/config"
 	"onboardingportal/models"
 	"onboardingportal/responses"
 	s "onboardingportal/server"
-	"github.com/gofiber/fiber/v2"
-	"gorm.io/datatypes"
-	"encoding/json"
 	"os"
-	"log"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -43,15 +43,16 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 	if result.Error != nil {
 		// If no settings found, return empty description
 		return c.JSON(fiber.Map{
-			"description": "",
-			"registrarId": os.Getenv("SATELLITE_ISS"),
-			"dataspaceId": "",
-			"agreements":  []string{},
-			"logoPath":    "",
-			"faviconPath": "",
-			"theme":       nil,
-			"themes":      nil,
-			"activeTheme": "",
+			"description":         "",
+			"registrarId":         os.Getenv("SATELLITE_ISS"),
+			"dataspaceId":         "",
+			"prefillAuthRegistry": false,
+			"agreements":          []string{},
+			"logoPath":            "",
+			"faviconPath":         "",
+			"theme":               nil,
+			"themes":              nil,
+			"activeTheme":         "",
 		})
 	}
 
@@ -115,9 +116,13 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	// body are updated. This lets the Theme tab save just `theme` without wiping
 	// description/registrarId/etc, and vice-versa for the General tab.
 	var input struct {
-		Description *string         `json:"description"`
-		RegistrarId *string         `json:"registrarId"`
-		DataspaceId *string         `json:"dataspaceId"`
+		Description         *string `json:"description"`
+		RegistrarId         *string `json:"registrarId"`
+		DataspaceId         *string `json:"dataspaceId"`
+		PrefillAuthRegistry *bool   `json:"prefillAuthRegistry"`
+		AuthRegistryId      *string `json:"authRegistryId"`
+		AuthRegistryName    *string `json:"authRegistryName"`
+		AuthRegistryUrl     *string `json:"authRegistryUrl"`
 		// Agreements are intentionally NOT handled here — they are managed through
 		// the dedicated /settings/agreements endpoints (which validate files,
 		// fetch URLs and redact/encrypt credentials). Ignoring any `agreements`
@@ -153,6 +158,18 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.DataspaceId != nil {
 		settings.DataspaceId = *input.DataspaceId
+	}
+	if input.PrefillAuthRegistry != nil {
+		settings.PrefillAuthRegistry = *input.PrefillAuthRegistry
+	}
+	if input.AuthRegistryId != nil {
+		settings.AuthRegistryId = strings.TrimSpace(*input.AuthRegistryId)
+	}
+	if input.AuthRegistryName != nil {
+		settings.AuthRegistryName = strings.TrimSpace(*input.AuthRegistryName)
+	}
+	if input.AuthRegistryUrl != nil {
+		settings.AuthRegistryUrl = strings.TrimSpace(*input.AuthRegistryUrl)
 	}
 	if len(input.Theme) > 0 {
 		settings.Theme = datatypes.JSON(input.Theme)

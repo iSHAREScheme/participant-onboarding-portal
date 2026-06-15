@@ -5,6 +5,7 @@ import AdminRoute from "components/AdminRoute";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettings } from "../context/SettingsContext";
 import { useToast } from "../context/ToastContext";
+import { useConfirm } from "../context/ConfirmContext";
 import API, {
   AgreementView,
   AgreementAuthMethod,
@@ -41,6 +42,31 @@ const RichTextEditor = dynamic(() => import("components/RichTextEditor"), {
 
 type ConnStatus = "checking" | "connected" | "disconnected";
 type TabKey = "general" | "theme";
+type RegistryOption = { id: string; name?: string; url?: string };
+
+function extractRegistryOptions(payload: any): RegistryOption[] {
+  const info = payload?.parties_info || payload?.partiesInfo || payload;
+  const data = Array.isArray(info?.data)
+    ? info.data
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
+
+  return data
+    .map((item: any) => ({
+      id: String(item?.party_id || item?.partyId || item?.id || "").trim(),
+      name: String(item?.party_name || item?.partyName || item?.name || "").trim(),
+      url: String(
+        item?.authRegistryUrl ||
+        item?.authorizationRegistryUrl ||
+        item?.capability_url ||
+        item?.capabilityUrl ||
+        item?.url ||
+        ""
+      ).trim(),
+    }))
+    .filter((item: RegistryOption) => item.id);
+}
 
 // Draft state for the "add URL agreement" auth form. Secret fields are plain
 // strings here; they are sent to the backend (which encrypts them) and never
@@ -221,6 +247,9 @@ const Settings: NextPage = () => {
   // Registry
   const [registrarId, setRegistrarId] = useState("");
   const [dataspaceId, setDataspaceId] = useState("");
+  const [authRegistryId, setAuthRegistryId] = useState("");
+  const [authRegistryName, setAuthRegistryName] = useState("");
+  const [authRegistryUrl, setAuthRegistryUrl] = useState("");
   const [hideCapabilitiesUrl, setHideCapabilitiesUrl] = useState(false);
   // Agreements (structured: built-in / uploaded PDF / URL with optional fetch auth)
   const [agreements, setAgreements] = useState<AgreementView[]>([]);
@@ -286,9 +315,12 @@ const Settings: NextPage = () => {
   const [dataspaces, setDataspaces] = useState<
     Array<{ id: string; title?: string }>
   >([]);
+  const [authRegistries, setAuthRegistries] = useState<RegistryOption[]>([]);
+  const [prefillAuthRegistry, setPrefillAuthRegistry] = useState(false);
   // Save / upload feedback
   const [isSaving, setIsSaving] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   // Thin wrapper so existing call sites stay unchanged; action feedback now
   // shows as a transient toast instead of an inline banner that shifts the page.
@@ -307,6 +339,10 @@ const Settings: NextPage = () => {
       setDescription(data.description || "");
       setRegistrarId(data.registrarId || "");
       setDataspaceId(data.dataspaceId || "");
+      setPrefillAuthRegistry(Boolean(data.prefillAuthRegistry));
+      setAuthRegistryId(data.authRegistryId || "");
+      setAuthRegistryName(data.authRegistryName || "");
+      setAuthRegistryUrl(data.authRegistryUrl || "");
       setAgreements(Array.isArray(data.agreements) ? data.agreements : []);
       setHideCapabilitiesUrl(Boolean(data.hideCapabilitiesUrl));
       // Seed the theme editor from saved overrides, falling back to brand.
@@ -370,9 +406,11 @@ const Settings: NextPage = () => {
       setVersion("");
     }
     try {
-      await api.fetchRegistry();
+      const arRes = await api.fetchAuthRegistries();
+      setAuthRegistries(extractRegistryOptions(arRes.data));
       setConnStatus("connected");
     } catch (e) {
+      setAuthRegistries([]);
       setConnStatus("disconnected");
     }
     // Load the registry's dataspaces for the selector (tolerant of failure).
@@ -608,7 +646,14 @@ const Settings: NextPage = () => {
   };
 
   const handleRemoveAgreement = async (id: string) => {
-    if (!window.confirm(t("settings.agreements.removeConfirm"))) return;
+    const confirmed = await confirm({
+      title: t("settings.agreements.removeTitle"),
+      message: t("settings.agreements.removeConfirm"),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await api.deleteAgreement(id);
       flash("success", t("settings.agreements.messages.removed"));
@@ -645,6 +690,10 @@ const Settings: NextPage = () => {
         description: sanitizeRichText(description),
         registrarId,
         dataspaceId,
+        prefillAuthRegistry,
+        authRegistryId,
+        authRegistryName,
+        authRegistryUrl,
         hideCapabilitiesUrl,
         ...sat,
       });
@@ -1175,6 +1224,63 @@ const Settings: NextPage = () => {
                 ))}
               </select>
             </div>
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={prefillAuthRegistry}
+                  onChange={(e) => setPrefillAuthRegistry(e.target.checked)}
+                />
+                {t("settings.connection.prefillAuthRegistry")}
+              </label>
+              <p className={styles.helperText}>
+                {t("settings.connection.prefillAuthRegistryHint")}
+              </p>
+            </div>
+            {prefillAuthRegistry && (
+              <>
+                <div className={styles.formGroup}>
+                  <label htmlFor="authRegistrySelect" className={styles.label}>
+                    {t("settings.connection.authRegistrySelect")}
+                  </label>
+                  <select
+                    id="authRegistrySelect"
+                    className={styles.fontSelect}
+                    value={authRegistryId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const registry = authRegistries.find((item) => item.id === id);
+                      setAuthRegistryId(id);
+                      setAuthRegistryName(registry?.name || "");
+                      setAuthRegistryUrl(registry?.url || "");
+                    }}
+                  >
+                    <option value="">
+                      {authRegistries.length
+                        ? t("settings.connection.authRegistryPlaceholder")
+                        : t("settings.connection.authRegistriesEmpty")}
+                    </option>
+                    {authRegistries.map((registry) => (
+                      <option key={registry.id} value={registry.id}>
+                        {registry.name ? `${registry.name} (${registry.id})` : registry.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="authRegistryUrl" className={styles.label}>
+                    {t("settings.connection.authRegistryUrl")}
+                  </label>
+                  <input
+                    type="text"
+                    id="authRegistryUrl"
+                    value={authRegistryUrl}
+                    onChange={(e) => setAuthRegistryUrl(e.target.value)}
+                    className={styles.input}
+                  />
+                </div>
+              </>
+            )}
             <label className={styles.checkboxLabel}>
               <input
                 type="checkbox"

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import Pagination from "components/Pagination";
+import { Skeleton } from "components";
 import API from "api/client";
 import {
   cacheParticipants,
@@ -364,7 +365,30 @@ const Participants: NextPage = () => {
             available height (its clientHeight) even before the first row loads. */}
         <div ref={fitRef} className={styles.tableWrap}>
           {showInitialLoading && (
-            <div className={styles.loading}>{t("participants.loading")}</div>
+            <table className={styles.table} aria-busy="true">
+              <thead>
+                <tr>
+                  <th>{t("participants.table.partyId")}</th>
+                  <th>{t("participants.table.name")}</th>
+                  <th>{t("participants.table.roles")}</th>
+                  <th>{t("participants.table.status")}</th>
+                  <th>{t("participants.table.startDate")}</th>
+                  <th>{t("participants.table.endDate")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: Math.max(pageSize ?? 0, 8) }).map((_, i) => (
+                  <tr key={`sk-${i}`} aria-hidden="true">
+                    <td><Skeleton width="80%" /></td>
+                    <td><Skeleton width="60%" /></td>
+                    <td><Skeleton width={54} height={18} radius={9999} /></td>
+                    <td><Skeleton width={64} height={18} radius={9999} /></td>
+                    <td><Skeleton width={72} /></td>
+                    <td><Skeleton width={72} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
           {errorKey && <div className={styles.error}>{t(errorKey)}</div>}
 

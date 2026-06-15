@@ -97,3 +97,75 @@ func TestBuildV3OnboardingClaimsRejectsInvalidX5C(t *testing.T) {
 		t.Fatal("expected invalid x5c error")
 	}
 }
+
+func TestBuildParty22RequestUsesCertificateForEIDAS(t *testing.T) {
+	x5c, expectedSubject := testCertificateX5C(t, pkix.Name{
+		CommonName:   "Participant 2",
+		Organization: []string{"Example Organization"},
+		Country:      []string{"NL"},
+		SerialNumber: "12345678",
+	})
+
+	payload, err := BuildParty22RequestFromProposal(
+		&models.Proposal{
+			PartyName:   "Example Organization",
+			CertX5c:     x5c,
+			CertX5tS256: "thumbprint",
+		},
+		"did:ishare:EU.EORI.NL.NTRNL-KVK-12345678",
+		[]string{"eori:EU.EORI.NL.NTRNL-KVK-12345678"},
+		"did:ishare:NTRNL-KVK-10000001",
+		"",
+		"",
+		"",
+		nil,
+		"2026-01-01T00:00:00.000Z",
+		"2027-01-01T00:00:00.000Z",
+	)
+	if err != nil {
+		t.Fatalf("BuildParty22RequestFromProposal returned error: %v", err)
+	}
+
+	if payload.SchemaVersion != "v2.2" {
+		t.Fatalf("SchemaVersion = %q, want v2.2", payload.SchemaVersion)
+	}
+	if payload.Spor != nil {
+		t.Fatal("expected eIDAS payload not to populate spor")
+	}
+	if len(payload.Certificates) != 1 {
+		t.Fatalf("expected one certificate, got %d", len(payload.Certificates))
+	}
+	if got := payload.Certificates[0].SubjectName; got != expectedSubject {
+		t.Fatalf("certificate subject = %q, want %q", got, expectedSubject)
+	}
+	if got := payload.Certificates[0].X5C; got != x5c {
+		t.Fatal("certificate x5c was not preserved")
+	}
+}
+
+func TestBuildParty22RequestUsesIDPAssertionAsSporWhenCertificateAbsent(t *testing.T) {
+	payload, err := BuildParty22RequestFromProposal(
+		&models.Proposal{
+			PartyName:    "Example Organization",
+			IdpAssertion: "header.payload.signature",
+		},
+		"did:ishare:EU.EORI.NL.NTRNL-KVK-12345678",
+		nil,
+		"did:ishare:NTRNL-KVK-10000001",
+		"",
+		"",
+		"",
+		nil,
+		"2026-01-01T00:00:00.000Z",
+		"2027-01-01T00:00:00.000Z",
+	)
+	if err != nil {
+		t.Fatalf("BuildParty22RequestFromProposal returned error: %v", err)
+	}
+	if len(payload.Certificates) != 0 {
+		t.Fatalf("expected no certificates, got %d", len(payload.Certificates))
+	}
+	if payload.Spor == nil || payload.Spor.SignedRequest != "header.payload.signature" {
+		t.Fatalf("expected idp assertion in spor, got %#v", payload.Spor)
+	}
+}
