@@ -35,6 +35,13 @@ type Config struct {
 	OIDCDisable                 bool
 	SporSignedRequestPath       string
 	SporSignedRequestBase64     string
+	// VcIssuerBaseUrl is the base URL of the external iSHARE VC issuer the portal
+	// polls for credential offers (its ObP API, e.g. http://ishare-vc-issuer:8080).
+	// Empty = credential issuance is not configured and the dashboard says so.
+	VcIssuerBaseUrl string
+	// CorsAllowedOrigins is a comma-separated allow-list of browser origins
+	// permitted to call the API cross-origin. Empty = no CORS headers emitted.
+	CorsAllowedOrigins string
 
 	// Inbound API auth (JWT)
 	AuthPublicKeyPath string
@@ -183,6 +190,10 @@ func (config *Config) LoadEnvironment() error {
 		config.SporSignedRequestBase64 = base64.StdEncoding.EncodeToString(data)
 	}
 
+	// External iSHARE VC issuer (ObP polling API). Server-to-server base URL; the
+	// offer URIs it returns carry the issuer's own public base URL for wallets.
+	config.VcIssuerBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_ISSUER_BASE_URL")), "/")
+
 	// Inbound auth configuration
 	config.AuthPublicKeyPath = os.Getenv("AUTH_PUBLIC_KEY_PATH")
 	config.AuthIssuer = os.Getenv("AUTH_ISSUER")
@@ -225,6 +236,12 @@ func (config *Config) LoadEnvironment() error {
 	config.SatelliteDebug = os.Getenv("SATELLITE_DEBUG") == "true"
 	config.OIDCDisable = os.Getenv("OIDC_DISABLE") == "true"
 
+	// Browser origins allowed to call the API cross-origin (comma-separated).
+	// Empty = emit no CORS headers; the browser same-origin policy then blocks
+	// cross-origin reads. The app's own frontend reaches the API through a
+	// same-origin proxy, so this is only needed for extra trusted browser origins.
+	config.CorsAllowedOrigins = strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
+
 	return nil
 }
 
@@ -262,4 +279,5 @@ func (config *Config) OverlaySatelliteSettings(s *models.Settings) {
 	set(&config.RegistrarId, s.RegistrarId)
 	set(&config.DataspaceId, s.DataspaceId)
 	set(&config.DataspaceTitle, s.DataspaceTitle)
+	set(&config.VcIssuerBaseUrl, s.VcIssuerBaseUrl)
 }

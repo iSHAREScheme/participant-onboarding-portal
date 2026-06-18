@@ -8,6 +8,7 @@ import { useLanguage } from "../../context/LanguageContext"
 import { useSettings } from "../../context/SettingsContext"
 import { useTheme } from "../../hooks/useTheme"
 import LanguageSwitcher from "../LanguageSwitcher"
+import AdminTour, { ADMIN_TOUR_START_EVENT } from "../AdminTour"
 import { getPublicEnv } from "config/publicEnv"
 import { clearStoredKeycloakTokens } from "util/keycloakTokens"
 
@@ -17,12 +18,11 @@ const Header: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { t } = useLanguage()
-  const { logoUrl } = useSettings()
+  const { logoUrl, associationName: configuredAssociationName } = useSettings()
   const { keycloak } = useKeycloak()
   const { logo, tenantId } = useTheme()
 
   const env = getPublicEnv()
-  const defaultAssociationName = env.NEXT_PUBLIC_DEFAULT_ASSOCIATION_NAME || ''
   const idpOnly = env.NEXT_PUBLIC_IDP_ONLY === "true"
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const adminRoutesDisabled = env.NEXT_PUBLIC_DISABLE_ADMIN_ROUTES === "true"
@@ -39,9 +39,22 @@ const Header: React.FC = () => {
       ? keycloakIdp
       : undefined
 
-  const [associationName, setAssociationName] = useState(
-    tenantId && tenantId !== 'default' ? tenantId : defaultAssociationName
-  )
+  // Prefer the admin-configured association name (Settings → Onboarding); fall
+  // back to the theme tenant id when one is set.
+  const associationName =
+    configuredAssociationName ||
+    (tenantId && tenantId !== 'default' ? tenantId : '')
+
+  // A never-blank label for the account menu: prefer the username, then any name
+  // or email claim, falling back to a generic label so the top bar never renders
+  // empty (some brokered/admin tokens omit preferred_username).
+  const claims = (keycloak?.tokenParsed ?? {}) as Record<string, any>
+  const displayName =
+    claims.preferred_username ||
+    claims.name ||
+    [claims.given_name, claims.family_name].filter(Boolean).join(" ") ||
+    claims.email ||
+    "Account"
 
   // Highlight the nav item for the current route (and its sub-routes, e.g.
   // /participants/[id]); router.pathname updates on client-side navigation.
@@ -87,6 +100,13 @@ const Header: React.FC = () => {
     keycloak?.logout({
       redirectUri: window.location.origin
     });
+  };
+
+  // Replay the admin onboarding tour from the account menu.
+  const startTour = () => {
+    setShowDropdown(false)
+    setMobileNavOpen(false)
+    window.dispatchEvent(new Event(ADMIN_TOUR_START_EVENT))
   };
 
   return (
@@ -155,6 +175,7 @@ const Header: React.FC = () => {
               <li>
                 <Link
                   href="/admin"
+                  data-tour="proposals"
                   className={isActive("/admin") ? styles.active : ""}
                 >
                   {t("common.proposals")}
@@ -163,6 +184,7 @@ const Header: React.FC = () => {
               <li>
                 <Link
                   href="/participants"
+                  data-tour="participants"
                   className={isActive("/participants") ? styles.active : ""}
                 >
                   {t("common.participants")}
@@ -171,6 +193,7 @@ const Header: React.FC = () => {
               <li>
                 <Link
                   href="/users"
+                  data-tour="users"
                   className={isActive("/users") ? styles.active : ""}
                 >
                   {t("common.users")}
@@ -179,6 +202,7 @@ const Header: React.FC = () => {
               <li>
                 <Link
                   href="/settings"
+                  data-tour="settings"
                   className={isActive("/settings") ? styles.active : ""}
                 >
                   {t("common.settings")}
@@ -195,10 +219,13 @@ const Header: React.FC = () => {
               {keycloak?.authenticated && (
                 <div className={styles.drawerUser}>
                   <div className={styles.drawerUsername}>
-                    {keycloak.tokenParsed?.preferred_username}
+                    {displayName}
                   </div>
                   <button type="button" onClick={() => router.push("/profile")}>
                     {t("common.profile")}
+                  </button>
+                  <button type="button" onClick={() => router.push("/party")}>
+                    {t("common.myParty")}
                   </button>
                   <button
                     type="button"
@@ -206,6 +233,11 @@ const Header: React.FC = () => {
                   >
                     {t("common.organizationAccess")}
                   </button>
+                  {showAdminNav && (
+                    <button type="button" onClick={startTour}>
+                      {t("tour.replay")}
+                    </button>
+                  )}
                   <button type="button" onClick={handleLogout}>
                     {t("common.logout")}
                   </button>
@@ -229,7 +261,7 @@ const Header: React.FC = () => {
                   className={styles.username}
                   onClick={() => setShowDropdown(!showDropdown)}
                 >
-                  {keycloak.tokenParsed?.preferred_username}
+                  {displayName}
                 </div>
                 {showDropdown && (
                   <div className={styles.dropdownContent}>
@@ -244,11 +276,24 @@ const Header: React.FC = () => {
                     <button
                       onClick={() => {
                         setShowDropdown(false)
+                        router.push('/party')
+                      }}
+                    >
+                      <span>{t("common.myParty")}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDropdown(false)
                         router.push('/organization-access')
                       }}
                     >
                       <span>{t("common.organizationAccess")}</span>
                     </button>
+                    {showAdminNav && (
+                      <button onClick={startTour}>
+                        <span>{t("tour.replay")}</span>
+                      </button>
+                    )}
                     <button onClick={handleLogout}>
                       <span>{t("common.logout")}</span>
                     </button>
@@ -259,6 +304,7 @@ const Header: React.FC = () => {
           </div>
         </div>
       </div>
+      {showAdminNav && <AdminTour />}
     </header>
   );
 };

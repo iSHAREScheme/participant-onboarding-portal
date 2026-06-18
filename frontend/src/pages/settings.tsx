@@ -6,6 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useSettings } from "../context/SettingsContext";
 import { useToast } from "../context/ToastContext";
 import { useConfirm } from "../context/ConfirmContext";
+import AuthenticationSettings from "../components/AuthenticationSettings";
 import API, {
   AgreementView,
   AgreementAuthMethod,
@@ -41,7 +42,10 @@ const RichTextEditor = dynamic(() => import("components/RichTextEditor"), {
 });
 
 type ConnStatus = "checking" | "connected" | "disconnected";
-type TabKey = "general" | "theme";
+type TabKey = "general" | "onboarding" | "theme" | "authentication";
+
+// Roles that can be offered in the onboarding role step.
+const ALL_ROLES = ["dataconsumer", "dataowner", "dataprovider"] as const;
 type RegistryOption = { id: string; name?: string; url?: string };
 
 function extractRegistryOptions(payload: any): RegistryOption[] {
@@ -219,6 +223,24 @@ const RotateIcon = () => (
 const slugifyName = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "theme";
 
+// Floppy-disk glyph (lucide "save") for the compact save button.
+const SaveIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </svg>
+);
+
 const Settings: NextPage = () => {
   const { t } = useLanguage();
   const { updateLogo } = useSettings();
@@ -251,6 +273,13 @@ const Settings: NextPage = () => {
   const [authRegistryName, setAuthRegistryName] = useState("");
   const [authRegistryUrl, setAuthRegistryUrl] = useState("");
   const [hideCapabilitiesUrl, setHideCapabilitiesUrl] = useState(false);
+  // Onboarding flow (mirrors NEXT_PUBLIC_* envs; the saved setting wins, and the
+  // env default seeds the initial value so the admin sees the effective config).
+  const [defaultAssociationName, setDefaultAssociationName] = useState("");
+  const [skipRoles, setSkipRoles] = useState(false);
+  const [activeRoles, setActiveRoles] = useState<string[]>([]);
+  const [defaultRole, setDefaultRole] = useState("");
+  const [autoAcceptProposal, setAutoAcceptProposal] = useState(false);
   // Agreements (structured: built-in / uploaded PDF / URL with optional fetch auth)
   const [agreements, setAgreements] = useState<AgreementView[]>([]);
   const [agMode, setAgMode] = useState<"file" | "url">("file");
@@ -343,6 +372,19 @@ const Settings: NextPage = () => {
       setAuthRegistryId(data.authRegistryId || "");
       setAuthRegistryName(data.authRegistryName || "");
       setAuthRegistryUrl(data.authRegistryUrl || "");
+      // Onboarding-flow config from the saved settings (DB). These are managed
+      // here and stored server-side with no env fallback, so an unset value uses
+      // a sensible built-in default.
+      setDefaultAssociationName(data.defaultAssociationName || "");
+      setSkipRoles(data.skipRoles === "true");
+      setActiveRoles(
+        (data.activeRoles || ALL_ROLES.join(","))
+          .split(",")
+          .map((r: string) => r.trim())
+          .filter(Boolean)
+      );
+      setDefaultRole(data.defaultRole || "");
+      setAutoAcceptProposal(data.autoAcceptProposal === "true");
       setAgreements(Array.isArray(data.agreements) ? data.agreements : []);
       setHideCapabilitiesUrl(Boolean(data.hideCapabilitiesUrl));
       // Seed the theme editor from saved overrides, falling back to brand.
@@ -695,6 +737,11 @@ const Settings: NextPage = () => {
         authRegistryName,
         authRegistryUrl,
         hideCapabilitiesUrl,
+        defaultAssociationName,
+        skipRoles: skipRoles ? "true" : "false",
+        activeRoles: activeRoles.join(","),
+        defaultRole,
+        autoAcceptProposal: autoAcceptProposal ? "true" : "false",
         ...sat,
       });
       flash("success", t("settings.messages.saveSuccess"));
@@ -953,25 +1000,7 @@ const Settings: NextPage = () => {
   return (
     <AdminRoute fetchData={onAuthorized}>
       <div className={styles.container}>
-        <div className={styles.headerSection}>
-          <div>
-            <h1 className={styles.title}>{t("settings.title")}</h1>
-            <p className={styles.subtitle}>{t("settings.subtitle")}</p>
-          </div>
-          {activeTab !== "theme" && (
-            <button
-              className={styles.saveButton}
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving
-                ? t("settings.actions.saving")
-                : t("settings.actions.save")}
-            </button>
-          )}
-        </div>
-
-        <div className={styles.tabs} role="tablist">
+        <div className={styles.tabs} role="tablist" data-tour="settings-tabs">
           <button
             type="button"
             role="tab"
@@ -986,6 +1015,17 @@ const Settings: NextPage = () => {
           <button
             type="button"
             role="tab"
+            aria-selected={activeTab === "onboarding"}
+            className={`${styles.tab} ${
+              activeTab === "onboarding" ? styles.tabActive : ""
+            }`}
+            onClick={() => setActiveTab("onboarding")}
+          >
+            {t("settings.tabs.onboarding")}
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={activeTab === "theme"}
             className={`${styles.tab} ${
               activeTab === "theme" ? styles.tabActive : ""
@@ -994,9 +1034,41 @@ const Settings: NextPage = () => {
           >
             {t("settings.tabs.theme")}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "authentication"}
+            className={`${styles.tab} ${
+              activeTab === "authentication" ? styles.tabActive : ""
+            }`}
+            onClick={() => setActiveTab("authentication")}
+          >
+            {t("settings.tabs.authentication")}
+          </button>
+          {activeTab !== "theme" && activeTab !== "authentication" && (
+            <button
+              type="button"
+              className={styles.saveIconButton}
+              onClick={handleSave}
+              disabled={isSaving}
+              title={
+                isSaving
+                  ? t("settings.actions.saving")
+                  : t("settings.actions.save")
+              }
+              aria-label={
+                isSaving
+                  ? t("settings.actions.saving")
+                  : t("settings.actions.save")
+              }
+            >
+              <SaveIcon />
+            </button>
+          )}
         </div>
 
         <div className={styles.content}>
+          {activeTab === "authentication" && <AuthenticationSettings />}
           {activeTab === "general" && (
           <>
           {/* iSHARE connection */}
@@ -1197,6 +1269,123 @@ const Settings: NextPage = () => {
                 className={styles.input}
               />
             </div>
+            <p className={styles.helperText}>
+              {t("settings.connection.credentialsNote")}
+            </p>
+          </section>
+          </>
+          )}
+
+          {activeTab === "onboarding" && (
+          <>
+          {/* Onboarding flow */}
+          <section className={styles.card}>
+            <h2 className={styles.cardTitle}>{t("settings.onboarding.flowTitle")}</h2>
+            <p className={styles.cardHint}>{t("settings.onboarding.flowHint")}</p>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="assocName" className={styles.label}>
+                {t("settings.onboarding.associationName")}
+              </label>
+              <input
+                type="text"
+                id="assocName"
+                className={styles.input}
+                value={defaultAssociationName}
+                onChange={(e) => setDefaultAssociationName(e.target.value)}
+                placeholder={t("settings.onboarding.associationNamePlaceholder")}
+              />
+              <p className={styles.helperText}>
+                {t("settings.onboarding.associationNameHint")}
+              </p>
+            </div>
+
+            <div className={styles.formGroup}>
+              <span className={styles.label}>
+                {t("settings.onboarding.activeRoles")}
+              </span>
+              <p className={styles.helperText}>
+                {t("settings.onboarding.activeRolesHint")}
+              </p>
+              <div className={styles.roleChecks}>
+                {ALL_ROLES.map((r) => (
+                  <label key={r} className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={activeRoles.includes(r)}
+                      onChange={(e) =>
+                        setActiveRoles((prev) =>
+                          e.target.checked
+                            ? [...prev, r]
+                            : prev.filter((x) => x !== r)
+                        )
+                      }
+                    />
+                    {t(`settings.onboarding.roles.${r}`)}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label htmlFor="defaultRole" className={styles.label}>
+                {t("settings.onboarding.defaultRole")}
+              </label>
+              <select
+                id="defaultRole"
+                className={styles.fontSelect}
+                value={defaultRole}
+                onChange={(e) => setDefaultRole(e.target.value)}
+              >
+                <option value="">{t("settings.onboarding.defaultRoleNone")}</option>
+                {ALL_ROLES.filter((r) => activeRoles.includes(r)).map((r) => (
+                  <option key={r} value={r}>
+                    {t(`settings.onboarding.roles.${r}`)}
+                  </option>
+                ))}
+              </select>
+              <p className={styles.helperText}>
+                {t("settings.onboarding.defaultRoleHint")}
+              </p>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={skipRoles}
+                  onChange={(e) => setSkipRoles(e.target.checked)}
+                />
+                {t("settings.onboarding.skipRoles")}
+              </label>
+              <p className={styles.helperText}>
+                {t("settings.onboarding.skipRolesHint")}
+              </p>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={autoAcceptProposal}
+                  onChange={(e) => setAutoAcceptProposal(e.target.checked)}
+                />
+                {t("settings.onboarding.autoAccept")}
+              </label>
+              <p className={styles.helperText}>
+                {t("settings.onboarding.autoAcceptHint")}
+              </p>
+            </div>
+          </section>
+
+          {/* Dataspace & authorization */}
+          <section className={styles.card}>
+            <h2 className={styles.cardTitle}>
+              {t("settings.onboarding.dataspaceAuthTitle")}
+            </h2>
+            <p className={styles.cardHint}>
+              {t("settings.onboarding.dataspaceAuthHint")}
+            </p>
             <div className={styles.formGroup}>
               <label htmlFor="dataspaceSelect" className={styles.label}>
                 {t("settings.connection.dataspaceSelect")}
@@ -1291,10 +1480,6 @@ const Settings: NextPage = () => {
             </label>
             <p className={styles.helperText}>
               {t("settings.labels.hideCapabilitiesUrlHint")}
-            </p>
-
-            <p className={styles.helperText}>
-              {t("settings.connection.credentialsNote")}
             </p>
           </section>
 

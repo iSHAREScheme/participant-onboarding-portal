@@ -27,10 +27,14 @@
 .labelActive {
   top: 0;
   left: 8px;
+  transform: translateY(-50%);
   font-size: 16px;
   color: #013A57;
   font-weight: 400;
-  padding: 0 4px;
+  padding: 0 6px;
+  /* Opaque background matching the field fill cuts a clean notch in the border
+     so the floated label no longer sits across the top border line. */
+  background: var(--input-background, #fff);
 }
 
 .input {
@@ -44,6 +48,8 @@
   width: 100%;
   box-sizing: border-box;
   position: relative;
+  /* Explicit fill so the floated label's notch background matches the field. */
+  background: var(--input-background, #fff);
 }
 
 .input:focus~.label,

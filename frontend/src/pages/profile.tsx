@@ -3,6 +3,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "../styles/Profile.module.css";
 import ProtectedRoute from "components/ProtectedRoute";
+import API from "api/client";
 
 interface UserProfile {
   email: string;
@@ -24,17 +25,30 @@ const Profile: React.FC = () => {
   });
 
   const loadUserProfile = useCallback(async () => {
+    // Populate from the token claims first — this never fails and doesn't depend
+    // on the cross-origin Keycloak Account API (which can be CORS-blocked; that's
+    // the usual cause of "failed to load profile").
+    const claims = (keycloak.tokenParsed ||
+      keycloak.idTokenParsed ||
+      {}) as Record<string, any>;
+    setProfile({
+      email: claims.email || "",
+      firstName: claims.given_name || "",
+      lastName: claims.family_name || "",
+    });
+    // Best-effort enrichment from the Account API; keep the token values on failure
+    // instead of erroring the whole page.
     try {
-      const userProfile = await keycloak.loadUserProfile();
+      const p = await keycloak.loadUserProfile();
       setProfile({
-        email: userProfile.email || "",
-        firstName: userProfile.firstName || "",
-        lastName: userProfile.lastName || "",
+        email: p.email || claims.email || "",
+        firstName: p.firstName || claims.given_name || "",
+        lastName: p.lastName || claims.family_name || "",
       });
     } catch (err) {
-      setError(t("profile.errors.loadFailed"));
+      console.warn("Account API profile load failed; using token claims", err);
     }
-  }, [keycloak, t]);
+  }, [keycloak]);
 
   // Data is loaded by ProtectedRoute, which calls fetchData={loadUserProfile} once
   // the user is authenticated — so no separate mount effect is needed here.
@@ -44,34 +58,19 @@ const Profile: React.FC = () => {
     setError(null);
 
     try {
-      await keycloak.updateToken(30);
-      const response = await fetch(
-        `${keycloak.authServerUrl}/realms/${keycloak.realm}/account`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${keycloak.token}`,
-          },
-          body: JSON.stringify({
-            firstName: profile.firstName,
-            lastName: profile.lastName,
-            email: profile.email,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(t("profile.errors.updateFailed"));
-      }
-
+      // Routed through the backend admin API (the browser-side Keycloak Account
+      // API rejects the frontend client's token with 401). The backend updates
+      // the caller's own user, identified by the token subject.
+      const api = new API();
+      await api.updateMyProfile({
+        email: profile.email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+      });
       setIsEditing(false);
-      await loadUserProfile();
-    } catch (err) {
-      console.error("Error:", err);
-      setError(
-        err instanceof Error ? err.message : t("profile.errors.updateFailed")
-      );
+    } catch (err: any) {
+      console.error("Profile update failed:", err);
+      setError(err?.response?.data?.error || t("profile.errors.updateFailed"));
     }
   };
 
@@ -85,7 +84,18 @@ const Profile: React.FC = () => {
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.formGroup}>
             <label>{t("profile.labels.email")}</label>
-            <div className={styles.value}>{profile.email}</div>
+            {isEditing ? (
+              <input
+                type="email"
+                value={profile.email}
+                onChange={(e) =>
+                  setProfile({ ...profile, email: e.target.value })
+                }
+                required
+              />
+            ) : (
+              <div className={styles.value}>{profile.email}</div>
+            )}
           </div>
 
           <div className={styles.formGroup}>

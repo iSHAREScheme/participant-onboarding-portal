@@ -672,10 +672,23 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 			log.Printf("Failed to ensure uploads dir: %v", err)
 		}
-		cttProofFilePath = uploadDir + "/" + timestamp
+		// Random suffix so two proofs uploaded in the same second don't collide
+		// (one would otherwise silently overwrite the other).
+		cttProofFilePath = fmt.Sprintf("%s/ctt_%s_%s", uploadDir, timestamp, newAgreementID())
 		err := c.SaveFile(cttProofFile, cttProofFilePath)
 		if err != nil {
 			log.Printf("Failed to save CTT proof file: %v", err)
+		}
+	}
+
+	// The proposal owner is the authenticated user, never a client-supplied
+	// value: it gates who may later read/sign/complete the proposal (see
+	// callerMayActOnProposal). Fall back to the submitted value only when OIDC is
+	// disabled (local/dev), where there are no claims.
+	ownerUsername := strings.TrimSpace(proposalData.KeycloakUsername)
+	if !h.Config.OIDCDisable {
+		if kc := currentClaims(c); kc != nil && strings.TrimSpace(kc.PreferredUsername) != "" {
+			ownerUsername = strings.TrimSpace(kc.PreferredUsername)
 		}
 	}
 
@@ -709,7 +722,7 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 			return "pending"
 		}(),
 		CreatedAt:        time.Now(),
-		KeycloakUsername: proposalData.KeycloakUsername,
+		KeycloakUsername: ownerUsername,
 		CertSubjectName:  proposalData.IDCheck.CertSubjectName,
 		CertX5c:          proposalData.IDCheck.CertX5c,
 		CertX5tS256:      proposalData.IDCheck.CertX5tS256,
@@ -755,12 +768,57 @@ func (h *HandlerParty) GetProposals(c *fiber.Ctx) error {
 // @Success      200  {object}  models.Proposal
 // @Failure      404  {object}  map[string]string
 // @Router       /proposals/{id} [get]
+// isOnboardingAdmin reports whether the authenticated session carries the
+// onboarding-admin realm role — the same role RequireAdminRole enforces on the
+// admin-only routes.
+func isOnboardingAdmin(claims *middlewares.KeycloakClaims) bool {
+	if claims == nil {
+		return false
+	}
+	for _, r := range claims.RealmAccess.Roles {
+		if r == "onboarding-admin" {
+			return true
+		}
+	}
+	return false
+}
+
+// callerMayActOnProposal authorises access to a single proposal: the session
+// must either own it (its preferred_username equals the proposal's
+// keycloak_username) or hold the onboarding-admin role. The /party/proposals/*
+// routes are keyed by a path parameter rather than the caller's identity, so
+// without this check one authenticated applicant could read or mutate another
+// applicant's proposal. When OIDC is disabled (local/dev) there are no claims,
+// so the check is skipped — consistent with the rest of the handlers.
+func (h *HandlerParty) callerMayActOnProposal(c *fiber.Ctx, proposal *models.Proposal) bool {
+	if h.Config.OIDCDisable {
+		return true
+	}
+	claims := currentClaims(c)
+	if claims == nil {
+		return false
+	}
+	if isOnboardingAdmin(claims) {
+		return true
+	}
+	owner := strings.TrimSpace(proposal.KeycloakUsername)
+	return owner != "" && strings.EqualFold(strings.TrimSpace(claims.PreferredUsername), owner)
+}
+
 func (h *HandlerParty) GetProposalByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 
 	var proposal models.Proposal
 	result := h.Server.DB.First(&proposal, id)
 	if result.Error != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Proposal not found",
+		})
+	}
+
+	// Only the proposal owner or an onboarding admin may read it. Return 404
+	// (not 403) on denial so sequential proposal IDs can't be enumerated.
+	if !h.callerMayActOnProposal(c, &proposal) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Proposal not found",
 		})
@@ -787,6 +845,13 @@ func (h *HandlerParty) GetProposalByKeycloakUsername(c *fiber.Ctx) error {
 	var proposal models.Proposal
 	result := h.Server.DB.Where("keycloak_username = ?", keycloakUsername).First(&proposal)
 	if result.Error != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Proposal not found",
+		})
+	}
+
+	// Only the proposal owner or an onboarding admin may read it.
+	if !h.callerMayActOnProposal(c, &proposal) {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Proposal not found",
 		})
@@ -902,6 +967,13 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "Proposal not found")
 	}
 
+	// Only the proposal owner or an onboarding admin may sign it. Without this,
+	// any authenticated user could upload signed agreements to — or consent-sign
+	// via eHerkenning — another applicant's proposal.
+	if !h.callerMayActOnProposal(c, &proposal) {
+		return responses.ErrorResponse(c, fiber.StatusForbidden, "You are not allowed to sign this proposal")
+	}
+
 	// Parse the multipart form (fields and optional file uploads).
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -978,6 +1050,15 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "At least 2 signed agreements are required")
 	}
 
+	// Validate every upload really is a PDF (magic bytes), not just a .pdf-named
+	// file, before storing any. A signed agreement is later downloaded by an admin,
+	// so a non-PDF (HTML/script or malware) masquerading as one must be rejected.
+	for _, file := range files {
+		if !uploadedFileIsPDF(file) {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Each signed agreement must be a valid PDF")
+		}
+	}
+
 	var filePaths []string
 	// Ensure uploads directory exists (WORKDIR=/app ⇒ ./uploads == /app/uploads)
 	uploadDir := "./uploads"
@@ -985,11 +1066,13 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 		log.Printf("Failed to ensure uploads dir: %v", err)
 	}
 	for i, file := range files {
-		// Generate unique filename using timestamp and index
-		timestamp := time.Now().Format("20060102150405")
-		filepath := fmt.Sprintf("%s/%s_%d.pdf", uploadDir, timestamp, i)
+		// Unique, non-guessable filename. A second-granularity timestamp alone
+		// collides when two applicants sign within the same second — one file would
+		// silently overwrite the other (cross-applicant data mix-up) — so include a
+		// random id.
+		storedPath := fmt.Sprintf("%s/%s_%d_%s.pdf", uploadDir, time.Now().Format("20060102150405"), i, newAgreementID())
 
-		if err := c.SaveFile(file, filepath); err != nil {
+		if err := c.SaveFile(file, storedPath); err != nil {
 			// Clean up any files already saved
 			for _, path := range filePaths {
 				os.Remove(path)
@@ -997,7 +1080,7 @@ func (h *HandlerParty) SignProposal(c *fiber.Ctx) error {
 			log.Printf("Error saving agreement file: %s", err)
 			return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save file")
 		}
-		filePaths = append(filePaths, filepath)
+		filePaths = append(filePaths, storedPath)
 	}
 
 	// Update proposal with file paths
@@ -1057,6 +1140,12 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	result := h.Server.DB.First(&proposal, id)
 	if result.Error != nil {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "Proposal not found")
+	}
+
+	// Only the proposal owner or an onboarding admin may complete it and trigger
+	// party creation in the satellite.
+	if !h.callerMayActOnProposal(c, &proposal) {
+		return responses.ErrorResponse(c, fiber.StatusForbidden, "You are not allowed to complete this proposal")
 	}
 
 	// Verify that the proposal is in the correct state (should be signed)
@@ -1620,6 +1709,11 @@ func (h *HandlerParty) ModifyProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "Proposal not found")
 	}
 
+	// Only the proposal owner or an onboarding admin may modify it.
+	if !h.callerMayActOnProposal(c, &existingProposal) {
+		return responses.ErrorResponse(c, fiber.StatusForbidden, "You are not allowed to modify this proposal")
+	}
+
 	// Verify that the proposal is in rejected state
 	if existingProposal.Status != "rejected" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Only rejected proposals can be modified")
@@ -1646,11 +1740,10 @@ func (h *HandlerParty) ModifyProposal(c *fiber.Ctx) error {
 		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 			log.Printf("Failed to ensure uploads dir: %v", err)
 		}
-		// Generate unique filename using timestamp
-		timestamp := time.Now().Format("20060102150405")
-		filepath := fmt.Sprintf("%s/%s", uploadDir, timestamp)
+		// Unique filename: timestamp + random id so two proofs uploaded in the same
+		// second don't collide (one would otherwise silently overwrite the other).
 		cttProofFile := files[0]
-		cttProofFilePath = filepath
+		cttProofFilePath = fmt.Sprintf("%s/ctt_%s_%s", uploadDir, time.Now().Format("20060102150405"), newAgreementID())
 		err := c.SaveFile(cttProofFile, cttProofFilePath)
 		if err != nil {
 			log.Printf("Failed to save CTT proof file: %v", err)
@@ -1724,8 +1817,11 @@ func (h *HandlerParty) DownloadAgreement(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid agreement index")
 	}
 
-	// Set response headers
+	// Set response headers. attachment forces a download (never an inline render)
+	// and nosniff stops the browser MIME-guessing, so a stored file that isn't
+	// really a PDF can't be served as active content to the admin viewing it.
 	c.Set("Content-Type", "application/pdf")
+	c.Set("X-Content-Type-Options", "nosniff")
 	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=agreement-%s-%d.pdf", id, idx))
 
 	// Return the file

@@ -15,8 +15,8 @@
 
 .headerSection {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: flex-end;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
   flex: 0 0 auto;
@@ -58,7 +58,11 @@
 .content {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  /* Without this, overflow-y:auto makes overflow-x compute to auto too, so a
+     single slightly-wide child produces a horizontal scrollbar on mobile. */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -390,6 +394,13 @@
   font-size: 0.95rem;
   cursor: pointer;
 }
+/* Stacked role checkboxes in the onboarding-flow card. */
+.roleChecks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
 .helperText {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
@@ -623,6 +634,7 @@
 .tabs {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   border-bottom: 1px solid #eef0f2;
   margin-bottom: 1rem;
@@ -644,6 +656,34 @@
 .tabActive {
   color: var(--text-secondary, #61265e);
   border-bottom-color: var(--button-primary, #eb5e55);
+}
+
+/* Compact icon-only save button, sitting at the right end of the tabs row. */
+.saveIconButton {
+  margin-left: auto;
+  align-self: center;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: var(--button-primary, #eb5e55);
+  color: #fff;
+  cursor: pointer;
+}
+.saveIconButton:hover:not(:disabled) {
+  background: var(--button-primary-hover, #c84152);
+}
+.saveIconButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.saveIconButton svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* ---- Theme: colour editor ---- */
@@ -888,4 +928,156 @@
   .saveButton {
     width: 100%;
   }
+}
+
+/* ---- Authentication tab: identity-provider list + editor + SMTP ---- */
+.idpRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+.idpRow + .idpRow {
+  margin-top: 0.5rem;
+}
+.idpMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.idpName {
+  font-weight: 600;
+  color: var(--text-secondary, #013a57);
+  word-break: break-word;
+}
+.idpMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.idpAlias {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #6b7280;
+  word-break: break-all;
+}
+.idpActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+}
+.idpEditor {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+.configRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.editorActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+@media (max-width: 640px) {
+  .configRow {
+    grid-template-columns: 1fr;
+  }
+  .idpRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Consistent IdP meta pills (provider type + enabled/disabled status share one size). */
+.idpType,
+.idpStatusOn,
+.idpStatusOff {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.idpType {
+  background: #eef2f6;
+  color: #475569;
+}
+.idpStatusOn {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+.idpStatusOff {
+  background: #fbe9e7;
+  color: #d32f2f;
+}
+
+/* Matching Edit / Remove buttons on an IdP row. */
+.idpActionBtn {
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  color: #374151;
+  border-radius: 6px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.idpActionBtn:hover {
+  background: #f3f4f6;
+}
+.idpActionDanger {
+  color: #d32f2f;
+  border-color: #f1c4bf;
+}
+.idpActionDanger:hover {
+  background: #fbe9e7;
+}
+
+/* Mobile: the tab row wraps to multiple lines; keep tabs compact so they fit. */
+@media (max-width: 640px) {
+  .tab {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* IdP claim-mapper section inside the editor. */
+.mapperSection {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ececec;
+}
+.mapperRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f4f4f5;
+}
+.mapperRow > button {
+  margin-left: auto;
+}
+.mapperArrow {
+  color: #9ca3af;
+  font-weight: 600;
 }

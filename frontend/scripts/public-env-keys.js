@@ -8,11 +8,11 @@ module.exports = [
   'NEXT_PUBLIC_KEYCLOAK_IDP',
   'NEXT_PUBLIC_ALWAYS_M2M',
   'NEXT_PUBLIC_ALWAYS_EHERKENNING',
-  'NEXT_PUBLIC_DEFAULT_ASSOCIATION_NAME',
-  'NEXT_PUBLIC_SKIP_ROLES',
-  'NEXT_PUBLIC_ACTIVE_ROLES',
-  'NEXT_PUBLIC_DEFAULT_ROLE',
-  'NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL',
+  // NOTE: the onboarding-flow settings — association name, skip-roles, active
+  // roles, default role and auto-accept — are intentionally NOT published here.
+  // They are managed at runtime in the admin UI (Settings → Onboarding), stored
+  // in the database, and read by the client from /settings/public, so they are
+  // not duplicated into the public window.__ENV.
   'NEXT_PUBLIC_DISABLE_ADMIN_ROUTES',
   'NEXT_PUBLIC_NO_NOTIFY',
   // Backend var (shared via the root .env). Surfaced to the client so the UI can

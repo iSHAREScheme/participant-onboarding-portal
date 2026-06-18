@@ -24,6 +24,7 @@ export default {
     profile: "Profiel",
     participants: "Deelnemers",
     organizationAccess: "Organisatietoegang",
+    myParty: "Mijn partij",
     menu: "Menu"
   },
   organizationAccess: {
@@ -118,6 +119,7 @@ export default {
       fields: {
         partyId: "Party ID",
         name: "Naam",
+        alsoKnownAs: "Ook bekend als",
         registrarId: "Registrar ID",
         capabilityUrl: "Capability URL",
         schemaVersion: "Schemaversie",
@@ -161,6 +163,109 @@ export default {
         saved: "Opgeslagen.",
         saveError: "Kan wijzigingen niet opslaan.",
         claimsTitle: "Claims"
+      }
+    }
+  },
+  party: {
+    back: "Terug naar home",
+    admitted: "Toegelaten",
+    refresh: "Vernieuwen",
+    start: "Onboarding starten",
+    loadError: "Kan uw partijgegevens niet laden.",
+    none: {
+      title: "Nog geen onboarding",
+      message: "U bent nog niet met onboarding gestart. Zodra u een registratie indient en deze is goedgekeurd, verschijnen uw partijgegevens hier."
+    },
+    processing: {
+      title: "Onboarding in behandeling",
+      message: "Uw registratie wordt verwerkt. Uw partijgegevens verschijnen hier zodra uw organisatie is toegelaten tot het deelnemersregister."
+    },
+    rejected: {
+      title: "Registratie niet goedgekeurd",
+      message: "Uw registratie is niet goedgekeurd. Neem contact op met de vereniging voor meer informatie of start een nieuwe registratie."
+    },
+    welcome: {
+      title: "Onboarding voltooid, {{name}}!",
+      message: "Uw organisatie is toegelaten tot het deelnemersregister. Hieronder vindt u uw partijgegevens en de credentials die u kunt aanvragen."
+    },
+    credentials: {
+      title: "Credentials",
+      description: "Voeg de verifieerbare credentials van uw organisatie toe aan een wallet. Scan een QR-code met uw wallet-app, of open deze op dit apparaat.",
+      vcLabel: "Verifieerbare credential",
+      notConfigured: "Het uitgeven van credentials is nog niet geconfigureerd. Neem contact op met uw vereniging.",
+      empty: "Er zijn nog geen credentials beschikbaar voor uw partij.",
+      unavailable: "De credential-uitgever is tijdelijk niet beschikbaar. Probeer het zo meteen opnieuw.",
+      addToWallet: "Aan wallet toevoegen",
+      scanHint: "Scan met uw wallet-app",
+      copyOffer: "Offerlink kopiëren",
+      copied: "Gekopieerd",
+      refresh: "Offers vernieuwen",
+      refreshing: "Bezig met vernieuwen…",
+      retry: "Opnieuw proberen",
+      retrying: "Bezig met opnieuw proberen…",
+      checkAgain: "Opnieuw controleren",
+      checking: "Bezig met controleren…",
+      expires: "Offer verloopt {{when}}",
+      expired: "Deze offer is verlopen — vernieuw om een nieuwe te krijgen.",
+      preparing: {
+        title: "Uw credentials worden voorbereid…",
+        message: "Uw verifieerbare credentials worden uitgegeven. Dit kan na toelating even duren."
+      },
+      failed: {
+        title: "Uitgifte van credentials niet voltooid",
+        message: "Er is iets misgegaan bij het uitgeven van uw credentials. U kunt het opnieuw proberen."
+      },
+      types: {
+        PartyCredential: "Partij-credential",
+        iSHAREParticipantCredential: "iSHARE-deelnemerscredential",
+        DataspaceParticipantCredential: "Dataspace-deelnemerscredential"
+      }
+    }
+  },
+  tour: {
+    aria: "Rondleiding beheerportaal",
+    skip: "Overslaan",
+    back: "Vorige",
+    next: "Volgende",
+    done: "Afronden",
+    step: "Stap {{current}} van {{total}}",
+    replay: "Rondleiding starten",
+    steps: {
+      welcome: {
+        title: "Welkom in uw beheerportaal",
+        body: "We lopen de belangrijkste onderdelen langs en navigeren voor u tussen de pagina's. Overslaan kan altijd, en u start de rondleiding later opnieuw via uw accountmenu."
+      },
+      proposalsList: {
+        title: "Voorstellen",
+        body: "Elke onboarding-aanvraag met de bijbehorende status. Open er een om te beoordelen, goed- of af te keuren en de ondertekende overeenkomsten te downloaden."
+      },
+      proposalsCreate: {
+        title: "Partij registreren",
+        body: "Handmatig een deelnemer toevoegen? Start hier een nieuwe registratie."
+      },
+      participantsList: {
+        title: "Deelnemers",
+        body: "Organisaties die zijn toegelaten tot het register. Open er een voor de partijgegevens, rollen en claims."
+      },
+      participantsSearch: {
+        title: "Deelnemers zoeken",
+        body: "Zoek en filter de lijst om snel een organisatie te vinden."
+      },
+      usersList: {
+        title: "Gebruikers",
+        body: "De gebruikersaccounts van het portaal en de rollen die bepalen waartoe zij toegang hebben."
+      },
+      usersCreate: {
+        title: "Gebruiker toevoegen",
+        body: "Nodig een nieuwe portaalgebruiker uit en wijs hier een rol toe."
+      },
+      settingsTabs: {
+        title: "Instellingen",
+        body: "Branding en content, de onboarding-flow, het thema en authenticatie — identity providers, e-mail (SMTP) en de uitgever van verifieerbare credentials."
+      },
+      finish: {
+        title: "U bent klaar",
+        body: "Dat was de rondleiding. Start hem opnieuw via “Rondleiding starten” in uw accountmenu."
       }
     }
   },
@@ -710,7 +815,120 @@ export default {
     },
     tabs: {
       general: "Algemeen",
+      onboarding: "Onboarding",
+      authentication: "Authenticatie",
       theme: "Thema"
+    },
+    auth: {
+      loading: "Laden…",
+      save: "Opslaan",
+      saving: "Opslaan…",
+      cancel: "Annuleren",
+      secretKept: "•••••••• (laat leeg om te behouden)",
+      vcIssuer: {
+        title: "Uitgever van verifieerbare credentials",
+        hint: "De externe iSHARE VC-uitgever die het deelnemersdashboard pollt voor credential-offers. Laat leeg om de credentials-sectie uit te schakelen.",
+        urlLabel: "Basis-URL van de uitgever",
+        urlPlaceholder: "https://issuer.example.com",
+        urlHint: "Server-naar-server basis-URL van de poll-API van de uitgever. Overschrijft de VC_ISSUER_BASE_URL-omgevingswaarde. Een eventuele API-sleutel van de uitgever wordt uitsluitend via de omgeving geconfigureerd, nooit hier.",
+        saved: "Credential-uitgever opgeslagen",
+        saveFailed: "Kan de credential-uitgever niet opslaan"
+      },
+      idp: {
+        title: "Verbonden identity providers",
+        hint: "Identity providers die in dit realm zijn geconfigureerd. Voeg de brokers toe waarmee gebruikers kunnen inloggen, of bewerk/verwijder ze.",
+        add: "Identity provider toevoegen",
+        addTitle: "Nieuwe identity provider",
+        editTitle: "“{{alias}}” bewerken",
+        empty: "Nog geen identity providers geconfigureerd.",
+        loadError: "Kon identity providers niet laden.",
+        enabled: "Ingeschakeld",
+        disabled: "Uitgeschakeld",
+        edit: "Bewerken",
+        delete: "Verwijderen",
+        deleteTitle: "Identity provider verwijderen",
+        deleteConfirm: "De identity provider “{{alias}}” verwijderen? Gebruikers kunnen er dan niet meer mee inloggen.",
+        deleteConfirmLabel: "Verwijderen",
+        deleted: "Identity provider verwijderd",
+        deleteFailed: "Verwijderen van identity provider mislukt",
+        created: "Identity provider aangemaakt",
+        updated: "Identity provider bijgewerkt",
+        saveFailed: "Opslaan van identity provider mislukt",
+        aliasProviderRequired: "Alias en providertype zijn verplicht",
+        alias: "Alias",
+        displayName: "Weergavenaam",
+        providerId: "Providertype",
+        enabledLabel: "Ingeschakeld",
+        trustEmail: "E-mail vertrouwen",
+        config: "Configuratie",
+        configHint: "Providerinstellingen (bijv. clientId, clientSecret, authorizationUrl). Geheime waarden zijn verborgen — laat ze leeg om de opgeslagen waarde te behouden.",
+        configKey: "Sleutel",
+        configValue: "Waarde",
+        addField: "Veld toevoegen",
+        mappers: {
+          title: "Claim-mappings",
+          hint: "Koppel de claims van deze provider aan Keycloak-gebruikersattributen. Dit portaal leest legalSubjectId, kvkNumber, companyName en email uit het token.",
+          empty: "Nog geen claim-mappings.",
+          saveFirst: "Sla de identity provider eerst op en heropen deze om claim-mappings toe te voegen.",
+          claimPlaceholder: "Bronclaim (bijv. kvkNumber)",
+          attrPlaceholder: "Gebruikersattribuut (bijv. kvkNumber)",
+          add: "Mapping toevoegen",
+          remove: "Verwijderen",
+          preset: "Veelgebruikte iSHARE-claims koppelen",
+          required: "Voer zowel de bronclaim als het doelattribuut in",
+          addFailed: "Toevoegen van claim-mapping mislukt",
+          removeFailed: "Verwijderen van claim-mapping mislukt",
+          presetDone: "Veelgebruikte iSHARE-claims gekoppeld",
+          presetNone: "De veelgebruikte iSHARE-claims zijn al gekoppeld"
+        }
+      },
+      smtp: {
+        title: "E-mail (SMTP)",
+        hint: "De mailserver die Keycloak gebruikt voor accountmails (verificatie, wachtwoordherstel, uitnodigingen).",
+        host: "Host",
+        port: "Poort",
+        from: "Afzender",
+        fromDisplayName: "Weergavenaam afzender",
+        replyTo: "Antwoordadres",
+        ssl: "SSL gebruiken",
+        starttls: "StartTLS gebruiken",
+        auth: "Server vereist authenticatie",
+        user: "Gebruikersnaam",
+        password: "Wachtwoord",
+        saved: "SMTP-instellingen opgeslagen",
+        saveFailed: "Opslaan van SMTP-instellingen mislukt",
+        test: "Testmail versturen",
+        testing: "Versturen…",
+        testTo: "Test versturen naar",
+        testToPlaceholder: "jij@voorbeeld.nl",
+        testToHint: "We sturen een testbericht naar dit adres met de instellingen hierboven.",
+        recipientRequired: "Voer een ontvanger-e-mailadres in voor de test",
+        testOk: "Testmail verstuurd naar {{to}}",
+        testFailed: "SMTP-test mislukt"
+      }
+    },
+    onboarding: {
+      flowTitle: "Onboarding-flow",
+      flowHint: "Bepaal hoe aanmelders door de onboarding-wizard gaan.",
+      associationName: "Naam van de vereniging",
+      associationNamePlaceholder: "bijv. iSHARE Demo Association",
+      associationNameHint: "Wordt getoond in de portaalheader. Laat leeg voor de standaardwaarde.",
+      activeRoles: "Selecteerbare rollen",
+      activeRolesHint: "Welke rollen aanmelders tijdens de onboarding kunnen kiezen.",
+      roles: {
+        dataconsumer: "Dataconsument",
+        dataowner: "Data-eigenaar",
+        dataprovider: "Dataprovider"
+      },
+      defaultRole: "Standaardrol",
+      defaultRoleNone: "Geen standaard (aanmelder kiest)",
+      defaultRoleHint: "Selecteert deze rol vooraf in de rollenstap.",
+      skipRoles: "Sla de rolkeuzestap over",
+      skipRolesHint: "Verberg de rollenstap volledig (gebruik met een standaardrol).",
+      autoAccept: "Voorstellen automatisch accepteren",
+      autoAcceptHint: "Voltooi voorstellen automatisch bij indienen, zonder handmatige goedkeuring.",
+      dataspaceAuthTitle: "Dataspace & autorisatie",
+      dataspaceAuthHint: "De dataspace waaraan aanmelders deelnemen en het vooraf ingevulde autorisatieregister."
     },
     theme: {
       title: "Kleuren & lettertypen",
@@ -970,6 +1188,41 @@ export default {
       agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
       certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
       agreementReadError: "Kon het PDF-bestand niet lezen."
+    },
+    v2: {
+      sections: {
+        participant: "Deelnemergegevens",
+        certificate: "Certificaat",
+        authRegistries: "Autorisatieregisters",
+        additionalInfo: "Aanvullende deelnemergegevens",
+        agreements: "Overeenkomsten (minimaal 2)",
+        roles: "Rollen (minimaal 1)",
+        spor: "SPOR"
+      },
+      fields: {
+        dataspaceTitle: "Dataspace-titel",
+        logo: "Logo-URL",
+        companyPhone: "Telefoonnummer bedrijf",
+        tags: "Labels",
+        signDate: "Datum van ondertekening",
+        expiryDate: "Vervaldatum",
+        framework: "Framework",
+        contractFile: "Contractbestand",
+        role: "Rol",
+        signedRequest: "Ondertekend verzoek"
+      },
+      actions: {
+        addAuthRegistry: "Autorisatieregister toevoegen",
+        addAgreement: "Overeenkomst toevoegen",
+        addRole: "Rol toevoegen",
+        cancel: "Annuleren",
+        save: "Opslaan",
+        back: "Terug"
+      },
+      placeholders: {
+        partyId: "EU.EORI.NL000000000",
+        registrarId: "EU.EORI.NL000000000"
+      }
     }
   }
 };

@@ -188,9 +188,9 @@ const Admin: NextPage = () => {
     <AdminRoute fetchData={loadApplications}>
       <div className={styles.container}>
         <div className={styles.headerSection}>
-          <h1 className={styles.title}>{t('admin.title')}</h1>
           <button
             className={styles.createButton}
+            data-tour="proposals-create"
             onClick={() => router.push(PATH.SUBMIT)}
           >
             {t('admin.actions.createParty')}
@@ -199,7 +199,7 @@ const Admin: NextPage = () => {
 
         {/* The scroll container always renders so useFitRows can measure the real
             available height (its clientHeight) even before the first row loads. */}
-        <div ref={fitRef} className={styles.tableWrap}>
+        <div ref={fitRef} className={styles.tableWrap} data-tour="proposals-table">
           {isLoading && (
             <div className={styles.loading}>{t('common.loading')}</div>
           )}

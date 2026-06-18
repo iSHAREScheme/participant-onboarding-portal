@@ -33,6 +33,16 @@ type Settings struct {
 	// (empty means the iSHARE brand default). Its values are mirrored into Theme.
 	ActiveTheme string `json:"activeTheme"`
 
+	// Onboarding-flow configuration, admin-editable from the Onboarding settings
+	// tab. Each mirrors a NEXT_PUBLIC_* env var; an empty string means "not
+	// configured — fall back to the env default". Booleans are stored as the
+	// strings "true"/"false" (or "" when unset) so the env fallback is unambiguous.
+	DefaultAssociationName string `json:"defaultAssociationName"`
+	SkipRoles              string `json:"skipRoles"`
+	ActiveRoles            string `json:"activeRoles"`
+	DefaultRole            string `json:"defaultRole"`
+	AutoAcceptProposal     string `json:"autoAcceptProposal"`
+
 	// Satellite connection overrides (non-secret). Each is empty by default, in
 	// which case the matching deploy env var is used; a non-empty value overrides
 	// it. The client certificate + private key are NOT here — they stay env-only.
@@ -45,4 +55,9 @@ type Settings struct {
 	SatelliteTokenEndpoint      string `json:"satelliteTokenEndpoint"`
 	SatelliteTokenScope         string `json:"satelliteTokenScope"`
 	DataspaceTitle              string `json:"dataspaceTitle"`
+	// VcIssuerBaseUrl is the external iSHARE VC issuer the dashboard polls for
+	// credential offers. Non-secret URL, admin-editable; overrides the
+	// VC_ISSUER_BASE_URL env default when set. The issuer API key (if any) stays
+	// env-only and is never stored here.
+	VcIssuerBaseUrl string `json:"vcIssuerBaseUrl"`
 }

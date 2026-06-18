@@ -5,6 +5,8 @@ import * as Yup from "yup";
 import { FormInput, Button, FormSelect } from "components";
 import { useSubmitInfo } from "hooks";
 import { useLanguage } from "context/LanguageContext";
+import { useKeycloak } from "@react-keycloak/web";
+import { useRouter } from "next/router";
 import styles from "styles/Submit.module.css";
 import ProtectedRoute from "../components/ProtectedRoute";
 import SubmitClaimsForm from "../components/SubmitClaimsForm";
@@ -92,6 +94,19 @@ const validationSchema = Yup.object({
 
 const Submit: NextPage = () => {
   const { t } = useLanguage();
+  const { keycloak } = useKeycloak();
+  const router = useRouter();
+  // /submit registers a party directly in the satellite (POST /party, /parties —
+  // now admin-only on the backend). Keep non-admins out so they never reach a
+  // form the API will reject; the applicant onboarding flow lives at /register.
+  const isAdmin = Boolean(
+    keycloak?.authenticated &&
+    typeof keycloak.hasRealmRole === "function" &&
+    keycloak.hasRealmRole("onboarding-admin")
+  );
+  useEffect(() => {
+    if (keycloak?.authenticated && !isAdmin) router.replace("/");
+  }, [keycloak?.authenticated, isAdmin, router]);
   // The interface (v2 party form vs v3 claims form) must follow the satellite's
   // actual version. The backend auto-detects it — the same source the Settings
   // page shows — which can differ from the static client env. Seed from the env
@@ -270,6 +285,12 @@ const Submit: NextPage = () => {
     formik.setFieldValue("authregistries[0].authregistery_name", value);
   };
 
+  // Authenticated non-admins are redirected away by the effect above; render
+  // nothing meanwhile so the operator form never flashes for them.
+  if (keycloak?.authenticated && !isAdmin) {
+    return null;
+  }
+
   return (
     <ProtectedRoute fetchData={() => { }}>
       <div className={styles.container}>
@@ -279,14 +300,14 @@ const Submit: NextPage = () => {
         ) : (
         <form onSubmit={formik.handleSubmit}>
           <div className={styles.section}>
-            <h2 className={styles.sectionTitle}> Participant Details </h2>
+            <h2 className={styles.sectionTitle}>{t("submit.v2.sections.participant")}</h2>
             <div className={styles.formGrid}>
               <FormInput
-                label="Party IDS"
+                label={t("submit.identity.partyId")}
                 id="party_id"
                 name="party_id"
                 type="text"
-                placeholder="party id"
+                placeholder={t("submit.v2.placeholders.partyId")}
                 required
                 value={formik.values.party_id}
                 onChange={formik.handleChange}
@@ -295,10 +316,10 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Party Name"
+                label={t("submit.identity.partyName")}
                 id="party_name"
                 name="party_name"
-                placeholder="party name"
+                placeholder={t("submit.identity.partyNamePlaceholder")}
                 type="text"
                 required
                 value={formik.values.party_name}
@@ -310,11 +331,11 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Start Date"
+                label={t("submit.claim.startDate")}
                 id="adherence.start_date"
                 name="adherence.start_date"
                 type="text"
-                placeholder="start date"
+                placeholder={t("submit.placeholders.date")}
                 required
                 value={formik.values.adherence.start_date}
                 onChange={formik.handleChange}
@@ -325,11 +346,11 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="End Date"
+                label={t("submit.claim.endDate")}
                 id="adherence.end_date"
                 name="adherence.end_date"
                 type="text"
-                placeholder="end date"
+                placeholder={t("submit.placeholders.date")}
                 required
                 value={formik.values.adherence.end_date}
                 onChange={formik.handleChange}
@@ -340,17 +361,17 @@ const Submit: NextPage = () => {
                 }
               />
               <FormSelect
-                label="STATUS"
+                label={t("submit.claim.status")}
                 options={AdherenceStatusOptions}
                 value={formik.values.adherence.status}
                 onChange={handleAdherenceStatusChange}
                 required
               />
               <FormInput
-                label="Capability URL"
+                label={t("submit.claim.capabilityUrl")}
                 id="capability_url"
                 name="capability_url"
-                placeholder="Capabilities URL"
+                placeholder={t("submit.placeholders.url")}
                 type="text"
                 value={formik.values.capability_url}
                 onChange={formik.handleChange}
@@ -361,10 +382,10 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Registrar ID"
+                label={t("submit.claim.registrarId")}
                 id="registrar_id"
                 name="registrar_id"
-                placeholder="Registrar Satellite ID"
+                placeholder={t("submit.v2.placeholders.registrarId")}
                 type="text"
                 required
                 value={formik.values.registrar_id}
@@ -389,7 +410,7 @@ const Submit: NextPage = () => {
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}> Certificate </h2>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.certificate")}</h2>
             </div>
             <div
               className={`${styles.uploadContainer} ${
@@ -415,10 +436,10 @@ const Submit: NextPage = () => {
               />
               <div className={styles.uploadIcon}>🔒</div>
               <div className={styles.uploadText}>
-                Drag and drop your certificate here
+                {t("submit.upload.certText")}
               </div>
-              <div className={styles.orText}>or</div>
-              <div className={styles.browseButton}>Browse files</div>
+              <div className={styles.orText}>{t("submit.upload.or")}</div>
+              <div className={styles.browseButton}>{t("submit.upload.browse")}</div>
             </div>
             {certError && (
               <div className={styles.errorMessage}>{certError}</div>
@@ -441,10 +462,7 @@ const Submit: NextPage = () => {
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>
-                {" "}
-                Authorisation Registries{" "}
-              </h2>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.authRegistries")}</h2>
               {!showAuthRegistryForm && (
                 <Button
                   type="button"
@@ -452,7 +470,7 @@ const Submit: NextPage = () => {
                   icon={<div>+</div>}
                   onClick={handleAddAuthRegistry}
                 >
-                  Add Authorisation Registry
+                  {t("submit.v2.actions.addAuthRegistry")}
                 </Button>
               )}
               {showAuthRegistryForm && (
@@ -463,7 +481,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleCancelAuthRegistry}
                   >
-                    Cancel
+                    {t("submit.v2.actions.cancel")}
                   </Button>
                   <Button
                     type="button"
@@ -471,7 +489,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleAddAuthRegistry}
                   >
-                    Save
+                    {t("submit.v2.actions.save")}
                   </Button>
                 </div>
               )}
@@ -479,21 +497,21 @@ const Submit: NextPage = () => {
             {showAuthRegistryForm && (
               <div className={styles.formGrid}>
                 <FormSelect
-                  label="Authorisation Registry ID"
+                  label={t("submit.claim.authRegistryId")}
                   options={AuthorisationRegistryIDOptions}
                   value={formik.values.authregistries[0].authregistery_id}
                   onChange={handleAuthorisationRegistryIDChange}
                   required
                 />
                 <FormSelect
-                  label="Authorisation Registry Name"
+                  label={t("submit.claim.authRegistryName")}
                   options={AuthorisationRegistryNameOptions}
                   value={formik.values.authregistries[0].authregistery_name}
                   onChange={handleAuthorisationRegistryNameChange}
                   required
                 />
                 <FormInput
-                  label="Authregistery Registry URL"
+                  label={t("submit.claim.authRegistryUrl")}
                   id={`authregistries[0].authregistery_url`}
                   name={`authregistries[0].authregistery_url`}
                   type="text"
@@ -507,7 +525,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Dataspace ID"
+                  label={t("submit.claim.dataspaceId")}
                   id={`authregistries[0].dataspace_id`}
                   name={`authregistries[0].dataspace_id`}
                   type="text"
@@ -520,7 +538,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Dataspace Title"
+                  label={t("submit.v2.fields.dataspaceTitle")}
                   id={`authregistries[0].dataspace_title`}
                   name={`authregistries[0].dataspace_title`}
                   type="text"
@@ -538,14 +556,11 @@ const Submit: NextPage = () => {
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>
-                {" "}
-                Participant Additioanl Details{" "}
-              </h2>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.additionalInfo")}</h2>
             </div>
             <div className={styles.formGrid}>
               <FormInput
-                label="Description"
+                label={t("submit.claim.description")}
                 id="additional_info.description"
                 name="additional_info.description"
                 type="text"
@@ -558,7 +573,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Website"
+                label={t("submit.claim.website")}
                 id="additional_info.website"
                 name="additional_info.website"
                 type="text"
@@ -571,7 +586,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Logo URL"
+                label={t("submit.v2.fields.logo")}
                 id="additional_info.logo"
                 name="additional_info.logo"
                 type="text"
@@ -584,7 +599,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Company Email"
+                label={t("submit.claim.companyEmail")}
                 id="additional_info.company_email"
                 name="additional_info.company_email"
                 type="text"
@@ -597,7 +612,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Company Phone"
+                label={t("submit.v2.fields.companyPhone")}
                 id="additional_info.company_phone"
                 name="additional_info.company_phone"
                 type="text"
@@ -610,7 +625,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Tags"
+                label={t("submit.v2.fields.tags")}
                 id="additional_info.tags"
                 name="additional_info.tags"
                 type="text"
@@ -623,7 +638,7 @@ const Submit: NextPage = () => {
                 }
               />
               <FormInput
-                label="Publicly Publishable"
+                label={t("submit.claim.publiclyPublishable")}
                 id="additional_info.publicly_publishable"
                 name="additional_info.publicly_publishable"
                 type="text"
@@ -640,7 +655,7 @@ const Submit: NextPage = () => {
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}> Agreements (Minimum 2) </h2>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.agreements")}</h2>
               {!showAgreementForm && (
                 <Button
                   type="button"
@@ -649,7 +664,7 @@ const Submit: NextPage = () => {
                   className={styles.minButton}
                   onClick={handleAddAgreement}
                 >
-                  Add Agreements
+                  {t("submit.v2.actions.addAgreement")}
                 </Button>
               )}
               {showAgreementForm && (
@@ -660,7 +675,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleCancelAgreement}
                   >
-                    Cancel
+                    {t("submit.v2.actions.cancel")}
                   </Button>
                   <Button
                     type="button"
@@ -668,7 +683,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleSaveAgreement}
                   >
-                    Save
+                    {t("submit.v2.actions.save")}
                   </Button>
                 </div>
               )}
@@ -676,7 +691,7 @@ const Submit: NextPage = () => {
             {showAgreementForm && (
               <div className={styles.formGrid}>
                 <FormInput
-                  label="Type"
+                  label={t("submit.claim.agreementType")}
                   id={`agreements[0].type`}
                   name={`agreements[0].type`}
                   type="text"
@@ -690,7 +705,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Title"
+                  label={t("submit.claim.title")}
                   id={`agreements[0].title`}
                   name={`agreements[0].title`}
                   type="text"
@@ -704,7 +719,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Status"
+                  label={t("submit.claim.status")}
                   id={`agreements[0].status`}
                   name={`agreements[0].status`}
                   type="text"
@@ -718,7 +733,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Date of Signing"
+                  label={t("submit.v2.fields.signDate")}
                   id={`agreements[0].sign_date`}
                   name={`agreements[0].sign_date`}
                   type="text"
@@ -732,7 +747,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Date of Expiry"
+                  label={t("submit.v2.fields.expiryDate")}
                   id={`agreements[0].expiry_date`}
                   name={`agreements[0].expiry_date`}
                   type="text"
@@ -746,7 +761,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Framework"
+                  label={t("submit.v2.fields.framework")}
                   id={`agreements[0].framework`}
                   name={`agreements[0].framework`}
                   type="text"
@@ -760,7 +775,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Dataspace ID"
+                  label={t("submit.claim.dataspaceId")}
                   id={`agreements[0].dataspace_id`}
                   name={`agreements[0].dataspace_id`}
                   type="text"
@@ -773,7 +788,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Dataspace Title"
+                  label={t("submit.v2.fields.dataspaceTitle")}
                   id={`agreements[0].dataspace_title`}
                   name={`agreements[0].dataspace_title`}
                   type="text"
@@ -786,7 +801,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Contract File"
+                  label={t("submit.v2.fields.contractFile")}
                   id={`agreements[0].agreement_file`}
                   name={`agreements[0].agreement_file`}
                   type="text"
@@ -799,7 +814,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Complaiancy Verified"
+                  label={t("submit.claim.compliancyVerified")}
                   id={`agreements[0].complaiancy_verified`}
                   name={`agreements[0].complaiancy_verified`}
                   type="text"
@@ -825,7 +840,7 @@ const Submit: NextPage = () => {
           <div className={styles.section}>
             <div className={styles.sectionBar}></div>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}> Roles (Minimum 1) </h2>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.roles")}</h2>
               {!showRoleForm && (
                 <Button
                   type="button"
@@ -834,7 +849,7 @@ const Submit: NextPage = () => {
                   className={styles.minButton}
                   onClick={handleAddRole}
                 >
-                  Add Role
+                  {t("submit.v2.actions.addRole")}
                 </Button>
               )}
               {showRoleForm && (
@@ -845,7 +860,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleCancelRole}
                   >
-                    Cancel
+                    {t("submit.v2.actions.cancel")}
                   </Button>
                   <Button
                     type="button"
@@ -853,7 +868,7 @@ const Submit: NextPage = () => {
                     icon={<div>+</div>}
                     onClick={handleSaveRole}
                   >
-                    Save
+                    {t("submit.v2.actions.save")}
                   </Button>
                 </div>
               )}
@@ -861,7 +876,7 @@ const Submit: NextPage = () => {
             {showRoleForm && (
               <div className={styles.formGrid}>
                 <FormInput
-                  label="Role"
+                  label={t("submit.v2.fields.role")}
                   id={`roles[0].role`}
                   name={`roles[0].role`}
                   type="text"
@@ -874,7 +889,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Start Date"
+                  label={t("submit.claim.startDate")}
                   id={`roles[0].start_date`}
                   name={`roles[0].start_date`}
                   type="text"
@@ -887,7 +902,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="End Date"
+                  label={t("submit.claim.endDate")}
                   id={`roles[0].end_date`}
                   name={`roles[0].end_date`}
                   type="text"
@@ -900,7 +915,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Loa"
+                  label={t("submit.claim.loa")}
                   id={`roles[0].loa`}
                   name={`roles[0].loa`}
                   type="text"
@@ -913,7 +928,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Complaiancy Verified"
+                  label={t("submit.claim.compliancyVerified")}
                   id={`roles[0].complaiancy_verified`}
                   name={`roles[0].complaiancy_verified`}
                   type="text"
@@ -926,7 +941,7 @@ const Submit: NextPage = () => {
                   }
                 />
                 <FormInput
-                  label="Legal Adherence"
+                  label={t("submit.claim.legalAdherence")}
                   id={`roles[0].legal_adherence`}
                   name={`roles[0].legal_adherence`}
                   type="text"
@@ -941,39 +956,52 @@ const Submit: NextPage = () => {
               </div>
             )}
           </div>
-          <h2>Spor</h2>
-          <FormInput
-            label="Signed Request"
-            id="spor.signed_request"
-            name="spor.signed_request"
-            type="text"
-            value={formik.values.spor.signed_request}
-            onChange={formik.handleChange}
-            error={
-              formik.touched.spor?.signed_request
-                ? formik.touched.spor?.signed_request
-                : undefined
-            }
-          />
-          <br />
-          <br />
-          <br />
+          <div className={styles.section}>
+            <div className={styles.sectionBar}></div>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>{t("submit.v2.sections.spor")}</h2>
+            </div>
+            <div className={styles.formGrid}>
+              <FormInput
+                label={t("submit.v2.fields.signedRequest")}
+                id="spor.signed_request"
+                name="spor.signed_request"
+                type="text"
+                value={formik.values.spor.signed_request}
+                onChange={formik.handleChange}
+                error={
+                  formik.touched.spor?.signed_request
+                    ? formik.errors.spor?.signed_request
+                    : undefined
+                }
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className={styles.errorMessage}>
+              {t("submit.messages.submitError", {
+                message: String((error as any)?.message || ""),
+              })}
+            </div>
+          )}
+          {response && (
+            <div className={styles.uploadText}>
+              {t("submit.messages.submitSuccess")}
+            </div>
+          )}
+
           <div className={styles.buttonGroup}>
             <Button
               type="button"
               variant="secondary"
               icon={<div>+</div>}
-              onClick={() => { }}
+              onClick={() => router.push("/admin")}
             >
-              Back
+              {t("submit.v2.actions.back")}
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              icon={<div>+</div>}
-              onClick={() => { }}
-            >
-              Create
+            <Button type="submit" variant="primary" disabled={loading}>
+              {loading ? t("submit.actions.submitting") : t("submit.actions.create")}
             </Button>
           </div>
         </form>

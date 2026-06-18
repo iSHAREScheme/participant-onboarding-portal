@@ -1,0 +1,121 @@
+/* Full-screen layer above everything; captures clicks so the page behind the
+   tour can't be interacted with mid-step. */
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+}
+
+/* Centred-step backdrop (welcome / finish). */
+.dim {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 12, 27, 0.55);
+}
+
+/* Opaque cover shown while navigating to / waiting for the next step's target,
+   so the destination page assembling (route swap + data fetch) is never seen. */
+.cover {
+  position: fixed;
+  inset: 0;
+  background: #0a1622;
+}
+
+/* The "hole" over a highlighted element — a huge box-shadow dims everything
+   except the cut-out rectangle. */
+.spotlight {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(2, 12, 27, 0.55);
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  pointer-events: none;
+}
+
+.popover {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  padding: 1rem 1.1rem 0.9rem;
+  z-index: 1;
+}
+
+.popoverCentered {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.counter {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--primary-color, #61265e);
+  margin-bottom: 0.3rem;
+}
+
+.title {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  color: var(--text-secondary, #013a57);
+}
+
+.body {
+  margin: 0 0 0.9rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btnPrimary {
+  background: var(--button-primary, #0066ee);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 1rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.btnPrimary:hover {
+  background: var(--button-primary-hover, #006699);
+}
+
+.btnGhost {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.btnGhost:hover {
+  background: #f3f4f6;
+}
+
+.skip {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+.skip:hover {
+  text-decoration: underline;
+}

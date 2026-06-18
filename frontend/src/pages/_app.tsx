@@ -13,7 +13,8 @@ import { Poppins } from 'next/font/google'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import { getPublicEnv } from 'config/publicEnv'
-import { storeKeycloakTokens } from 'util/keycloakTokens'
+import { clearStoredKeycloakTokens } from 'util/keycloakTokens'
+import { setAccessTokenProvider } from 'util/authToken'
 import { clearStoredIdpActionState, setCompletedIdpAction } from 'util/idpActionState'
 import { setKeycloakUserInfo } from 'util/keycloakUserInfo'
 
@@ -79,6 +80,20 @@ function MyApp({ Component, pageProps }: AppProps) {
         }
       }
     }
+
+    // Tokens live only in memory. Purge any tokens persisted by older builds, and
+    // feed the live access token to the Axios client (refreshing near expiry).
+    clearStoredKeycloakTokens()
+    setAccessTokenProvider(async () => {
+      if (!instance.authenticated) return undefined
+      try {
+        await instance.updateToken(30)
+      } catch {
+        return undefined
+      }
+      return instance.token
+    })
+
     return instance
   }, [isBrowser, keycloakUrl, keycloakRealm, keycloakClientId])
   
@@ -113,9 +128,6 @@ function MyApp({ Component, pageProps }: AppProps) {
             const shouldRedirect = isAdmin ? !isOnAdminArea : !isOnUserArea
             if (shouldRedirect && path !== target) router.replace(target)
           }}}
-        onTokens={(tokens) => {
-          storeKeycloakTokens(tokens as Record<string, unknown>)
-        }}
       >
         <LanguageProvider>
           <SettingsProvider>

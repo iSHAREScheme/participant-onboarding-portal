@@ -1,6 +1,6 @@
 import Axios from "axios"
 import type { AxiosInstance } from "axios"
-import { getStoredAccessToken } from "util/keycloakTokens"
+import { getAccessToken } from "util/authToken"
 
 export interface ProposalData {
   roles: {
@@ -290,10 +290,12 @@ export class API {
     // proxy @pages/api/backend
     this.client = Axios.create({ baseURL: '/api/backend' })
 
-    // Attach current Keycloak token to every request (browser only)
-    this.client.interceptors.request.use((config) => {
+    // Attach the current in-memory Keycloak token to every request (browser
+    // only). The provider refreshes the token if it is near expiry; tokens are
+    // never read from web storage.
+    this.client.interceptors.request.use(async (config) => {
       if (typeof window !== 'undefined') {
-        const token = getStoredAccessToken()
+        const token = await getAccessToken()
         if (token) {
           config.headers = config.headers || {}
           // Forward user session token
@@ -370,6 +372,55 @@ export class API {
     return `/api/backend/settings/agreements/${encodeURIComponent(id)}/document`
   }
 
+  // --- Authentication: Keycloak identity providers + SMTP (admin only) -------
+  // The realm's configured IdPs (client secrets redacted): { idps: [...] }.
+  listIdps () {
+    return this.client.get(`/settings/idps`)
+  }
+  // A single IdP representation (secrets redacted): { idp: {...} }.
+  getIdp (alias: string) {
+    return this.client.get(`/settings/idps/${encodeURIComponent(alias)}`)
+  }
+  createIdp (body: Record<string, any>) {
+    return this.client.post(`/settings/idps`, body)
+  }
+  // Update an IdP. Blank secret fields keep the value already stored.
+  updateIdp (alias: string, body: Record<string, any>) {
+    return this.client.put(`/settings/idps/${encodeURIComponent(alias)}`, body)
+  }
+  deleteIdp (alias: string) {
+    return this.client.delete(`/settings/idps/${encodeURIComponent(alias)}`)
+  }
+  // Per-IdP claim mappers (external claim -> Keycloak user attribute).
+  listIdpMappers (alias: string) {
+    return this.client.get(`/settings/idps/${encodeURIComponent(alias)}/mappers`)
+  }
+  createIdpMapper (alias: string, body: { name?: string; claim: string; userAttribute: string }) {
+    return this.client.post(`/settings/idps/${encodeURIComponent(alias)}/mappers`, body)
+  }
+  deleteIdpMapper (alias: string, id: string) {
+    return this.client.delete(`/settings/idps/${encodeURIComponent(alias)}/mappers/${encodeURIComponent(id)}`)
+  }
+  // Realm SMTP settings (password redacted): { smtp: {...}, passwordSet }.
+  getSmtp () {
+    return this.client.get(`/settings/smtp`)
+  }
+  // Save SMTP settings. A blank password keeps the one already stored.
+  updateSmtp (body: Record<string, any>) {
+    return this.client.put(`/settings/smtp`, body)
+  }
+  // Send a real test email to the recipient in `body.to` using the saved settings.
+  testSmtp (body: Record<string, any>) {
+    return this.client.post(`/settings/smtp/test`, body)
+  }
+
+  // Update the current user's OWN Keycloak profile (email / name) via the backend
+  // admin API. The user is identified server-side from the token subject, so it
+  // can only ever change the caller's own account.
+  updateMyProfile (body: { email?: string; firstName?: string; lastName?: string }) {
+    return this.client.put(`/me/profile`, body)
+  }
+
   fetchRegistry () {
     return this.client.get(`/registry`)
   }
@@ -419,6 +470,33 @@ export class API {
     return this.client.get(`/registry/participants/detail`, {
       params: { eori: id },
     })
+  }
+
+  // The applicant's OWN registered party (scoped server-side to their proposal):
+  // { status, partyId, partyName, data }. `data` is null until admitted to the PR.
+  getMyParty () {
+    return this.client.get(`/registry/me/party`)
+  }
+
+  // Verifiable-credential offers for the caller's own party, polled from the
+  // external iSHARE VC issuer (the portal relays; it never signs). Returns
+  // { issuerConfigured, status: pending|processing|ready|failed|unavailable|none,
+  //   results: [{ credential_type, action, credential_offer_uri?, offer_expires_at? }],
+  //   generated_at?, error? }. Scoped server-side to the caller's proposal.
+  getMyCredentialOffers () {
+    return this.client.get(`/registry/me/credentials`)
+  }
+
+  // Ask the issuer to mint fresh offer URIs for already-issued credentials
+  // (used when offers have expired) without revoking or rebuilding them.
+  refreshMyCredentialOffers () {
+    return this.client.post(`/registry/me/credentials/refresh`)
+  }
+
+  // Re-trigger the issuer's reconcile for the caller's party (recovery when a
+  // previous poll ended in "failed").
+  reprocessMyCredentials () {
+    return this.client.post(`/registry/me/credentials/reprocess`)
   }
 
   // Admin-only party updates (proxied to the satellite).

@@ -117,7 +117,10 @@ func Auth(cfg OIDCConfig) (fiber.Handler, error) {
 			// "/settings" is intentionally NOT public — it carries the satellite
 			// connection config + registrar/dataspace IDs. The landing page and
 			// app-wide theming use the curated "/settings/public" subset instead.
-			case "/settings/public", "/settings/logo", "/settings/favicon", "/settings/agreements", "/registry":
+			// "/settings/agreements" (the full list with source URL + fetch-auth
+			// config) is also NOT public/admin-only; the landing uses the minimal
+			// agreements in "/settings/public" and the public /document downloads below.
+			case "/settings/public", "/settings/logo", "/settings/favicon", "/registry":
 				return c.Next()
 			}
 			// Public agreement document downloads (/settings/agreements/<id>/document).

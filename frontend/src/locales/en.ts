@@ -25,6 +25,7 @@ export default {
     profile: "Profile",
     participants: "Participants",
     organizationAccess: "Organization access",
+    myParty: "My party",
     menu: "Menu"
   },
   organizationAccess: {
@@ -119,6 +120,7 @@ export default {
       fields: {
         partyId: "Party ID",
         name: "Name",
+        alsoKnownAs: "Also known as",
         registrarId: "Registrar ID",
         capabilityUrl: "Capability URL",
         schemaVersion: "Schema version",
@@ -162,6 +164,109 @@ export default {
         saved: "Saved.",
         saveError: "Failed to save changes.",
         claimsTitle: "Claims"
+      }
+    }
+  },
+  party: {
+    back: "Back to home",
+    admitted: "Admitted",
+    refresh: "Refresh",
+    start: "Start onboarding",
+    loadError: "Failed to load your party details.",
+    none: {
+      title: "No onboarding yet",
+      message: "You have not started onboarding. Once you submit a registration and it is approved, your party details will appear here."
+    },
+    processing: {
+      title: "Onboarding in progress",
+      message: "Your registration is being processed. Your party details will appear here once your organisation has been admitted to the participant registry."
+    },
+    rejected: {
+      title: "Registration not approved",
+      message: "Your registration was not approved. Please contact the association for more information or start a new registration."
+    },
+    welcome: {
+      title: "Onboarding complete, {{name}}!",
+      message: "Your organisation has been admitted to the participant registry. Below is your party information and the credentials you can request."
+    },
+    credentials: {
+      title: "Credentials",
+      description: "Add your organisation's verifiable credentials to a wallet. Scan a QR code with your wallet app, or open it on this device.",
+      vcLabel: "Verifiable credential",
+      notConfigured: "Credential issuance is not configured yet. Please contact your association.",
+      empty: "No credentials are available for your party yet.",
+      unavailable: "The credential issuer is temporarily unavailable. Please try again in a moment.",
+      addToWallet: "Add to wallet",
+      scanHint: "Scan with your wallet app",
+      copyOffer: "Copy offer link",
+      copied: "Copied",
+      refresh: "Refresh offers",
+      refreshing: "Refreshing…",
+      retry: "Retry",
+      retrying: "Retrying…",
+      checkAgain: "Check again",
+      checking: "Checking…",
+      expires: "Offer expires {{when}}",
+      expired: "This offer has expired — refresh to get a new one.",
+      preparing: {
+        title: "Preparing your credentials…",
+        message: "Your verifiable credentials are being issued. This can take a moment after admission."
+      },
+      failed: {
+        title: "Credential issuance didn't complete",
+        message: "Something went wrong while issuing your credentials. You can retry."
+      },
+      types: {
+        PartyCredential: "Party credential",
+        iSHAREParticipantCredential: "iSHARE participant credential",
+        DataspaceParticipantCredential: "Dataspace participant credential"
+      }
+    }
+  },
+  tour: {
+    aria: "Admin portal tour",
+    skip: "Skip",
+    back: "Back",
+    next: "Next",
+    done: "Finish",
+    step: "Step {{current}} of {{total}}",
+    replay: "Take a tour",
+    steps: {
+      welcome: {
+        title: "Welcome to your admin portal",
+        body: "Let's walk through the main areas. We'll move between pages for you — skip anytime, and replay later from your account menu."
+      },
+      proposalsList: {
+        title: "Proposals",
+        body: "Every onboarding request and its status. Open one to review it, approve or reject, and download the signed agreements."
+      },
+      proposalsCreate: {
+        title: "Register a party",
+        body: "Need to add a participant manually? Start a new registration from here."
+      },
+      participantsList: {
+        title: "Participants",
+        body: "Organisations admitted to the registry. Open one to see its party details, roles and claims."
+      },
+      participantsSearch: {
+        title: "Find participants",
+        body: "Search and filter the list to quickly locate an organisation."
+      },
+      usersList: {
+        title: "Users",
+        body: "The portal's user accounts and the roles that control what they can access."
+      },
+      usersCreate: {
+        title: "Add a user",
+        body: "Invite a new portal user and assign their role here."
+      },
+      settingsTabs: {
+        title: "Settings",
+        body: "Branding and content, the onboarding flow, the theme, and authentication — identity providers, email (SMTP) and the verifiable-credential issuer."
+      },
+      finish: {
+        title: "You're all set",
+        body: "That's the tour. Replay it anytime via “Take a tour” in your account menu."
       }
     }
   },
@@ -713,7 +818,120 @@ export default {
     },
     tabs: {
       general: "General",
+      onboarding: "Onboarding",
+      authentication: "Authentication",
       theme: "Theme"
+    },
+    auth: {
+      loading: "Loading…",
+      save: "Save",
+      saving: "Saving…",
+      cancel: "Cancel",
+      secretKept: "•••••••• (leave blank to keep)",
+      vcIssuer: {
+        title: "Verifiable credential issuer",
+        hint: "The external iSHARE VC issuer the participant dashboard polls for credential offers. Leave blank to disable the credentials section.",
+        urlLabel: "Issuer base URL",
+        urlPlaceholder: "https://issuer.example.com",
+        urlHint: "Server-to-server base URL of the issuer's polling API. Overrides the VC_ISSUER_BASE_URL environment default. Any issuer API key is configured via environment only, never here.",
+        saved: "Credential issuer saved",
+        saveFailed: "Failed to save the credential issuer"
+      },
+      idp: {
+        title: "Connected identity providers",
+        hint: "Identity providers configured in this realm. Add, edit or remove the brokers users can sign in through.",
+        add: "Add identity provider",
+        addTitle: "New identity provider",
+        editTitle: "Edit “{{alias}}”",
+        empty: "No identity providers configured yet.",
+        loadError: "Could not load identity providers.",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        edit: "Edit",
+        delete: "Remove",
+        deleteTitle: "Remove identity provider",
+        deleteConfirm: "Remove the identity provider “{{alias}}”? Users will no longer be able to sign in through it.",
+        deleteConfirmLabel: "Remove",
+        deleted: "Identity provider removed",
+        deleteFailed: "Failed to remove identity provider",
+        created: "Identity provider created",
+        updated: "Identity provider updated",
+        saveFailed: "Failed to save identity provider",
+        aliasProviderRequired: "Alias and provider type are required",
+        alias: "Alias",
+        displayName: "Display name",
+        providerId: "Provider type",
+        enabledLabel: "Enabled",
+        trustEmail: "Trust email",
+        config: "Configuration",
+        configHint: "Provider settings (e.g. clientId, clientSecret, authorizationUrl). Secret values are hidden — leave them blank to keep the stored value.",
+        configKey: "Key",
+        configValue: "Value",
+        addField: "Add field",
+        mappers: {
+          title: "Claim mappings",
+          hint: "Map this provider's claims to Keycloak user attributes. This portal reads legalSubjectId, kvkNumber, companyName and email from the token.",
+          empty: "No claim mappings yet.",
+          saveFirst: "Save the identity provider first, then reopen it to add claim mappings.",
+          claimPlaceholder: "Source claim (e.g. kvkNumber)",
+          attrPlaceholder: "User attribute (e.g. kvkNumber)",
+          add: "Add mapping",
+          remove: "Remove",
+          preset: "Map common iSHARE claims",
+          required: "Enter both the source claim and the target attribute",
+          addFailed: "Failed to add claim mapping",
+          removeFailed: "Failed to remove claim mapping",
+          presetDone: "Mapped the common iSHARE claims",
+          presetNone: "The common iSHARE claims are already mapped"
+        }
+      },
+      smtp: {
+        title: "Email (SMTP)",
+        hint: "The mail server Keycloak uses to send account emails (verification, password reset, invitations).",
+        host: "Host",
+        port: "Port",
+        from: "From address",
+        fromDisplayName: "From display name",
+        replyTo: "Reply-to",
+        ssl: "Use SSL",
+        starttls: "Use StartTLS",
+        auth: "Server requires authentication",
+        user: "Username",
+        password: "Password",
+        saved: "SMTP settings saved",
+        saveFailed: "Failed to save SMTP settings",
+        test: "Send test email",
+        testing: "Sending…",
+        testTo: "Send test to",
+        testToPlaceholder: "you@example.com",
+        testToHint: "We'll send a test message to this address using the settings above.",
+        recipientRequired: "Enter a recipient email address for the test",
+        testOk: "Test email sent to {{to}}",
+        testFailed: "SMTP test failed"
+      }
+    },
+    onboarding: {
+      flowTitle: "Onboarding flow",
+      flowHint: "Control how applicants move through the onboarding wizard.",
+      associationName: "Association name",
+      associationNamePlaceholder: "e.g. iSHARE Demo Association",
+      associationNameHint: "Shown in the portal header. Leave empty to use the deployment default.",
+      activeRoles: "Selectable roles",
+      activeRolesHint: "Which roles applicants can choose during onboarding.",
+      roles: {
+        dataconsumer: "Data consumer",
+        dataowner: "Data owner",
+        dataprovider: "Data provider"
+      },
+      defaultRole: "Default role",
+      defaultRoleNone: "No default (let the applicant choose)",
+      defaultRoleHint: "Pre-selects this role on the role step.",
+      skipRoles: "Skip the role-selection step",
+      skipRolesHint: "Hide the role step entirely (use with a default role).",
+      autoAccept: "Auto-accept proposals",
+      autoAcceptHint: "Complete proposals automatically on submit, without manual admin approval.",
+      dataspaceAuthTitle: "Dataspace & authorization",
+      dataspaceAuthHint: "The dataspace applicants join and the authorization registry pre-filled for them."
     },
     theme: {
       title: "Colours & fonts",
@@ -973,6 +1191,41 @@ export default {
       agreementTooLarge: "PDF exceeds the 10 MB limit.",
       certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
       agreementReadError: "Could not read the PDF file."
+    },
+    v2: {
+      sections: {
+        participant: "Participant details",
+        certificate: "Certificate",
+        authRegistries: "Authorisation registries",
+        additionalInfo: "Participant additional details",
+        agreements: "Agreements (minimum 2)",
+        roles: "Roles (minimum 1)",
+        spor: "SPOR"
+      },
+      fields: {
+        dataspaceTitle: "Dataspace title",
+        logo: "Logo URL",
+        companyPhone: "Company phone",
+        tags: "Tags",
+        signDate: "Date of signing",
+        expiryDate: "Date of expiry",
+        framework: "Framework",
+        contractFile: "Contract file",
+        role: "Role",
+        signedRequest: "Signed request"
+      },
+      actions: {
+        addAuthRegistry: "Add authorisation registry",
+        addAgreement: "Add agreement",
+        addRole: "Add role",
+        cancel: "Cancel",
+        save: "Save",
+        back: "Back"
+      },
+      placeholders: {
+        partyId: "EU.EORI.NL000000000",
+        registrarId: "EU.EORI.NL000000000"
+      }
     }
   }
 };

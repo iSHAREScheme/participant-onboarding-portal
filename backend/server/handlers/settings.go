@@ -85,7 +85,7 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 			"logoPath":    "",
 			"faviconPath": "",
 			"activeTheme": "",
-			"agreements":  []agreementView{},
+			"agreements":  []publicAgreementView{},
 		})
 	}
 	// Deliberately a curated allowlist of public fields — never spread the whole
@@ -96,7 +96,14 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"logoPath":    settings.LogoPath,
 		"faviconPath": settings.FaviconPath,
 		"activeTheme": settings.ActiveTheme,
-		"agreements":  viewAgreements(decodeAgreements(settings.Agreements)),
+		"agreements":  publicViewAgreements(decodeAgreements(settings.Agreements)),
+		// Onboarding-flow config consumed by the public landing/header and the
+		// (authenticated) register flow.
+		"defaultAssociationName": settings.DefaultAssociationName,
+		"skipRoles":              settings.SkipRoles,
+		"activeRoles":            settings.ActiveRoles,
+		"defaultRole":            settings.DefaultRole,
+		"autoAcceptProposal":     settings.AutoAcceptProposal,
 	})
 }
 
@@ -141,6 +148,14 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		SatelliteTokenEndpoint      *string `json:"satelliteTokenEndpoint"`
 		SatelliteTokenScope         *string `json:"satelliteTokenScope"`
 		DataspaceTitle              *string `json:"dataspaceTitle"`
+		VcIssuerBaseUrl             *string `json:"vcIssuerBaseUrl"`
+
+		// Onboarding-flow configuration ("" = use the NEXT_PUBLIC_* env default).
+		DefaultAssociationName *string `json:"defaultAssociationName"`
+		SkipRoles              *string `json:"skipRoles"`
+		ActiveRoles            *string `json:"activeRoles"`
+		DefaultRole            *string `json:"defaultRole"`
+		AutoAcceptProposal     *string `json:"autoAcceptProposal"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -206,6 +221,24 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.DataspaceTitle != nil {
 		settings.DataspaceTitle = strings.TrimSpace(*input.DataspaceTitle)
+	}
+	if input.VcIssuerBaseUrl != nil {
+		settings.VcIssuerBaseUrl = strings.TrimSpace(*input.VcIssuerBaseUrl)
+	}
+	if input.DefaultAssociationName != nil {
+		settings.DefaultAssociationName = strings.TrimSpace(*input.DefaultAssociationName)
+	}
+	if input.SkipRoles != nil {
+		settings.SkipRoles = strings.TrimSpace(*input.SkipRoles)
+	}
+	if input.ActiveRoles != nil {
+		settings.ActiveRoles = strings.TrimSpace(*input.ActiveRoles)
+	}
+	if input.DefaultRole != nil {
+		settings.DefaultRole = strings.TrimSpace(*input.DefaultRole)
+	}
+	if input.AutoAcceptProposal != nil {
+		settings.AutoAcceptProposal = strings.TrimSpace(*input.AutoAcceptProposal)
 	}
 
 	if creating {

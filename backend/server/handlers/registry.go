@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"onboardingportal/config"
 	"onboardingportal/integrations/satellite"
+	"onboardingportal/models"
 	"onboardingportal/responses"
 	s "onboardingportal/server"
 	"strconv"
@@ -493,6 +494,47 @@ func (h *HandlerRegistry) GetParticipantDetail(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "participant not found")
 	}
 	return c.JSON(fiber.Map{"data": party})
+}
+
+// GetMyParty returns the authenticated applicant's OWN party as registered in the
+// Participant Registry. The party id is taken from the caller's proposal (looked
+// up by the token's username) — never from input — so it can only ever return the
+// caller's own party. `data` stays nil until the party is actually admitted to the
+// registry; `status` carries the proposal state so the UI can explain the wait.
+func (h *HandlerRegistry) GetMyParty(c *fiber.Ctx) error {
+	claims := currentClaims(c)
+	if claims == nil {
+		return responses.ErrorResponse(c, fiber.StatusUnauthorized, "Missing authentication claims")
+	}
+	username := strings.TrimSpace(claims.PreferredUsername)
+	if username == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Token has no username")
+	}
+
+	var proposal models.Proposal
+	if err := h.Server.DB.Where("keycloak_username = ?", username).First(&proposal).Error; err != nil {
+		return c.JSON(fiber.Map{"status": "none", "data": nil})
+	}
+
+	resp := fiber.Map{
+		"status":    proposal.Status,
+		"partyId":   proposal.PartyId,
+		"partyName": proposal.PartyName,
+		"data":      nil,
+	}
+	partyID := strings.TrimSpace(proposal.PartyId)
+	if partyID == "" {
+		return c.JSON(resp)
+	}
+
+	// The party is only present in the registry once it has been admitted.
+	party, err := h.fetchPartyByID(partyID)
+	if err != nil {
+		log.Printf("me/party: satellite lookup failed for %q: %v", partyID, err)
+		return c.JSON(resp)
+	}
+	resp["data"] = party
+	return c.JSON(resp)
 }
 
 // fetchPartyByID fetches a single party from the satellite by its id. The v3

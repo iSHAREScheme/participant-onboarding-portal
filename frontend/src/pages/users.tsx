@@ -298,9 +298,9 @@ const Users: NextPage = () => {
     <AdminRoute fetchData={fetchData}>
       <div className={styles.container}>
         <div className={styles.headerSection}>
-          <h1 className={styles.title}>{t("users.title")}</h1>
           <button
             className={styles.createButton}
+            data-tour="users-create"
             onClick={() => setIsDialogOpen(true)}
           >
             {t("users.actions.create")}
@@ -396,7 +396,7 @@ const Users: NextPage = () => {
 
         {/* The scroll container always renders so useFitRows can measure the real
             available height (its clientHeight) even before the first row loads. */}
-        <div ref={fitRef} className={styles.tableWrap}>
+        <div ref={fitRef} className={styles.tableWrap} data-tour="users-table">
           {isLoading && (
             <div className={styles.loading}>{t("users.loading")}</div>
           )}

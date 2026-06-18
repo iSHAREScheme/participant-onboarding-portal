@@ -219,6 +219,21 @@ const ParticipantDetail: NextPage = () => {
   const canEdit = version.startsWith("3") || version.startsWith("2.2");
   const partyName = party ? str(party.party_name ?? party.name) : "";
   const partyId = party ? str(party.party_id ?? party.id) : "";
+  // EORI/DID aliases (v3 `alsoKnownAs`; tolerate snake_case / aka). Drop blanks
+  // and the primary id so it isn't repeated as its own alias.
+  const aliases: string[] = asArray(
+    party?.alsoKnownAs ?? party?.also_known_as ?? party?.aka
+  )
+    .map(str)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((a) => a !== partyId);
+  // Registrar id: v3 keeps it per-claim, so fall back to the first claim's value.
+  const claimRegistrarId = Array.isArray(party?.claims)
+    ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
+    : "";
+  const registrarId = party ? str(party.registrar_id) || claimRegistrarId : "";
+  const capabilityUrl = party ? str(party.capability_url) : "";
 
   const f = (k: string) => t(`participants.detail.fields.${k}`);
   const sec = (k: string) => t(`participants.detail.sections.${k}`);
@@ -330,24 +345,8 @@ const ParticipantDetail: NextPage = () => {
   const renderClaimView = () => {
     if (!party) return null;
     const claims = deriveClaims(party);
-    // v3 stores registrarId per claim, not at the party root — surface the
-    // party's registrar in the identity section by falling back to the claims.
-    const claimRegistrar = Array.isArray(party.claims)
-      ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
-      : "";
-    const identityRegistrarId = str(party.registrar_id) || claimRegistrar;
     return (
       <>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{sec("identity")}</h2>
-          <div className={styles.grid}>
-            <Row label={f("partyId")}>{val(partyId)}</Row>
-            <Row label={f("name")}>{val(partyName)}</Row>
-            <Row label={f("registrarId")}>{val(identityRegistrarId)}</Row>
-            <Row label={f("schemaVersion")}>{version}</Row>
-          </div>
-        </section>
-
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{sec("claims")}</h2>
           <div className={styles.cards}>
@@ -400,18 +399,6 @@ const ParticipantDetail: NextPage = () => {
 
     return (
       <>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{sec("identity")}</h2>
-          <div className={styles.grid}>
-            <Row label={f("partyId")}>{val(partyId)}</Row>
-            <Row label={f("name")}>{val(partyName)}</Row>
-            <Row label={f("registrarId")}>{val(str(party.registrar_id))}</Row>
-            <Row label={f("capabilityUrl")}>
-              {renderLink(str(party.capability_url))}
-            </Row>
-          </div>
-        </section>
-
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{sec("adherence")}</h2>
           <div className={styles.grid}>
@@ -612,25 +599,61 @@ const ParticipantDetail: NextPage = () => {
 
         {!isLoading && !errorKey && party && (
           <>
-            <div className={styles.titleRow}>
-              <div className={styles.titleBlock}>
-                <h1 className={styles.title}>{partyName || partyId || "—"}</h1>
-                {partyId && <div className={styles.subtitle}>{partyId}</div>}
+            <header className={styles.summary}>
+              <div className={styles.summaryTop}>
+                <div className={styles.titleBlock}>
+                  <h1 className={styles.title}>{partyName || partyId || "—"}</h1>
+                  {partyId && <code className={styles.idValue}>{partyId}</code>}
+                </div>
+                <div className={styles.titleActions}>
+                  <span className={styles.schema}>
+                    {t("participants.detail.schemaLabel")}: {version}
+                  </span>
+                  {canEdit && !editing && (
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => setEditing(true)}
+                    >
+                      {t("participants.detail.edit.button")}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className={styles.titleActions}>
-                <span className={styles.schema}>
-                  {t("participants.detail.schemaLabel")}: {version}
-                </span>
-                {canEdit && !editing && (
-                  <button
-                    className={styles.editBtn}
-                    onClick={() => setEditing(true)}
-                  >
-                    {t("participants.detail.edit.button")}
-                  </button>
-                )}
-              </div>
-            </div>
+
+              {aliases.length > 0 && (
+                <div className={styles.akaRow}>
+                  <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
+                  <div className={styles.chips}>
+                    {aliases.map((a, i) => (
+                      <span className={styles.chip} key={i} title={a}>
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(registrarId || capabilityUrl) && (
+                <div className={styles.keyFacts}>
+                  {registrarId && (
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>{f("registrarId")}</span>
+                      <span className={styles.factValue}>{registrarId}</span>
+                    </div>
+                  )}
+                  {capabilityUrl && (
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>
+                        {f("capabilityUrl")}
+                      </span>
+                      <span className={styles.factValue}>
+                        {renderLink(capabilityUrl)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </header>
 
             {editing ? (
               <ParticipantEditForm
