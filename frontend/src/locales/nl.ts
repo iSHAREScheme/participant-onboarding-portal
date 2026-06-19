@@ -1,5 +1,5 @@
 
-export default {
+const nl = {
   common: {
     login: "Inloggen",
     logout: "Uitloggen",
@@ -17,6 +17,7 @@ export default {
     required: "Verplicht",
     edit: "Bewerken",
     delete: "Verwijderen",
+    restore: "Herstellen",
     cancel: "Annuleren",
     confirm: "Bevestigen",
     next: "Volgende",
@@ -1225,4 +1226,6 @@ export default {
       }
     }
   }
-};
+}
+
+export default nl

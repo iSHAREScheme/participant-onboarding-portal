@@ -2980,7 +2980,7 @@ const Register: NextPage = () => {
                                 }));
                               }}
                             >
-                              <img src="/icons/revert.svg" />
+                              <img src="/icons/revert.svg" alt={t("common.restore")} />
 
                             </button>
                             <button
@@ -2999,7 +2999,7 @@ const Register: NextPage = () => {
                                 }));
                               }}
                             >
-                              <img src="/icons/delete.svg" />
+                              <img src="/icons/delete.svg" alt={t("common.delete")} />
 
                             </button>
                           </div>

@@ -1,6 +1,6 @@
 import OnboardingStatus from "components/OnboardingStatus";
 
-export default {
+const en = {
   common: {
     login: "Login",
     logout: "Logout",
@@ -18,6 +18,7 @@ export default {
     required: "Required",
     edit: "Edit",
     delete: "Delete",
+    restore: "Restore",
     cancel: "Cancel",
     confirm: "Confirm",
     next: "Next",
@@ -1228,4 +1229,6 @@ export default {
       }
     }
   }
-};
+}
+
+export default en

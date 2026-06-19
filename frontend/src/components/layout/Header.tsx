@@ -252,7 +252,7 @@ const Header: React.FC = () => {
             {keycloak && !keycloak.authenticated && (
               <button onClick={handleLogin}>
                 <span>{t("common.login")}</span>
-                <img src="/resources/img/login.png" />
+                <img src="/resources/img/login.png" alt="" />
               </button>
             )}
             {keycloak && keycloak.authenticated && (
