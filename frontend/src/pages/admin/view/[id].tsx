@@ -37,7 +37,7 @@ const ViewApplication: NextPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { t } = useLanguage();
 
-  const Api = new API()
+  const [Api] = useState(() => new API())
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -61,7 +61,7 @@ const ViewApplication: NextPage = () => {
     };
 
     fetchProposal();
-  }, [id]);
+  }, [id, Api]);
 
   if (isLoading) {
     return <div>Loading...</div>;

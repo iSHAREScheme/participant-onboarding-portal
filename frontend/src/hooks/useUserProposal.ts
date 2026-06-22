@@ -29,7 +29,8 @@ export interface UserProposalData {
 }
 
 export const useUserProposal = () => {
-  const Api = new API()
+  // Stable client instance so it can be an effect dependency without re-running.
+  const [Api] = useState(() => new API())
   const { keycloak } = useKeycloak();
   const [proposalData, setProposalData] = useState<UserProposalData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +62,7 @@ export const useUserProposal = () => {
     }
 
     fetchProposalData()
-  }, [keycloak?.tokenParsed?.preferred_username])
+  }, [keycloak?.tokenParsed?.preferred_username, Api])
 
   return { proposalData, loading, error }
 };

@@ -781,7 +781,7 @@ const Register: NextPage = () => {
         },
       };
     }));
-  }, [currentStep, useAutoAcceptProposal]);
+  }, [currentStep, useAutoAcceptProposal, steps.confirm]);
 
 
   // useEffect(() => {

@@ -37,6 +37,11 @@ const ProtectedRoute = ({
       // console.log('Fetching data')
       fetchData()
     }
+    // `fetchData` is a caller-supplied callback (usually defined inline), so it
+    // must NOT be a dependency — it would make this auth-gate effect re-run on
+    // every parent render. The effect intentionally re-runs only when the
+    // resolved authentication state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keycloak.authenticated])
 
   return keycloak.authenticated ? (

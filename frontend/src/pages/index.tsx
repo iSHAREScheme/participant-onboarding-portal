@@ -31,7 +31,7 @@ const Home: NextPage = () => {
   // admin-authored HTML below (DOMPurify needs a DOM) so server/client markup matches.
   const mounted = useHydrated();
 
-  const Api = new API()
+  const [Api] = useState(() => new API())
 
   useEffect(() => {
     const fetchDescription = async () => {
@@ -54,7 +54,7 @@ const Home: NextPage = () => {
     };
 
     fetchDescription();
-  }, [t]);
+  }, [t, Api]);
 
   // Once admitted to the participant registry, the post-admission home is the
   // dashboard at /party (party overview + credentials). Send completed users there
