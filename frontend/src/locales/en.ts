@@ -417,6 +417,9 @@ const en = {
       url: "Webhook URL",
       eventFilter: "Event filter",
       eventFilterHint: "Leave empty for the default stream (party.created, party.updated). To also receive fine-grained events, list them comma-separated: claim.created, claim.updated, claim.revoked, party.revoked.",
+      secret: "Signing secret (optional)",
+      secretPlaceholder: "Leave blank to auto-generate",
+      secretHint: "Only set this when connecting an already-deployed issuer that has a fixed HMAC secret — paste that secret here. Leave blank and the registry generates one (shown once). Use “Rotate secret” to change it later.",
       replayProtection: "Replay protection (sign timestamp + body)",
       enabled: "Enabled",
       create: "Register subscriber",
@@ -433,6 +436,13 @@ const en = {
     secret: {
       heading: "Signing secret for {{name}} — shown once, copy it now",
       dismiss: "Dismiss"
+    },
+    status: {
+      notConfigured: "The participant registry admin API is not configured for this portal (PR_API_BASE_URL is unset). Ask an administrator to configure it.",
+      unauthorized: "The participant registry rejected your session — you're not authorized for its admin API. Try signing out and back in; if it persists, your account may lack the required role.",
+      unavailable: "The participant registry is temporarily unavailable — it may be starting up or restarting.",
+      error: "Something went wrong loading this data.",
+      retry: "Retry"
     },
     list: {
       heading: "Subscribers",

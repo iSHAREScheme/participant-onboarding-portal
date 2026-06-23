@@ -21,13 +21,27 @@ const str = (v: any): string => (v === undefined || v === null ? "" : String(v))
 const asList = <T,>(v: any, key: string): T[] =>
   Array.isArray(v) ? v : Array.isArray(v?.[key]) ? v[key] : [];
 
-type ListStatus = "loading" | "ok" | "unavailable" | "error";
+// Distinct load outcomes so the operator sees *why* a list is empty/failing —
+// the BFF (relayPRError) maps these faithfully: 501 = PR admin API not
+// configured, 401/403 = PR rejected the forwarded token, 502/503/504 (or no
+// response at all) = PR unavailable/restarting, anything else = generic error.
+type ListStatus = "loading" | "ok" | "notConfigured" | "unauthorized" | "unavailable" | "error";
 type Tab = "subscribers" | "deliveries";
+
+const classifyError = (e: any): ListStatus => {
+  const code = e?.response?.status;
+  if (!code) return "unavailable"; // network / BFF unreachable
+  if (code === 501) return "notConfigured";
+  if (code === 401 || code === 403) return "unauthorized";
+  if (code === 502 || code === 503 || code === 504) return "unavailable";
+  return "error";
+};
 
 const EMPTY_FORM = {
   name: "",
   url: "",
   eventFilter: "",
+  secret: "",
   replayProtection: false,
   enabled: true,
 };
@@ -64,11 +78,6 @@ const Subscribers: NextPage = () => {
   const [reemitPartyId, setReemitPartyId] = useState("");
   const [busyId, setBusyId] = useState<string>("");
 
-  const mapListStatus = (e: any): ListStatus => {
-    const code = e?.response?.status;
-    return code === 502 || code === 503 || code === 501 ? "unavailable" : "error";
-  };
-
   const loadSubs = useCallback(async () => {
     setSubStatus("loading");
     try {
@@ -80,7 +89,7 @@ const Subscribers: NextPage = () => {
       setSubs(asList<Row>(res?.data, "subscribers"));
       setSubStatus("ok");
     } catch (e: any) {
-      setSubStatus(mapListStatus(e));
+      setSubStatus(classifyError(e));
     }
   }, []);
 
@@ -99,7 +108,7 @@ const Subscribers: NextPage = () => {
       setDeliveries(asList<Row>(res?.data, "deliveries"));
       setDelStatus("ok");
     } catch (e: any) {
-      setDelStatus(mapListStatus(e));
+      setDelStatus(classifyError(e));
     }
   }, [filters]);
 
@@ -122,6 +131,7 @@ const Subscribers: NextPage = () => {
       name: str(row.name),
       url: str(row.url),
       eventFilter: str(row.eventFilter),
+      secret: "", // never populated on edit; the stored secret is not retrievable
       replayProtection: !!row.replayProtection,
       enabled: row.enabled !== false,
     });
@@ -163,18 +173,25 @@ const Subscribers: NextPage = () => {
           loadSubs();
         }
       } else {
-        const res = await api.createIssuerSubscriber({
+        const body: Record<string, any> = {
           name,
           url,
           eventFilter: form.eventFilter.trim(),
           replayProtection: form.replayProtection,
           enabled: form.enabled,
-        });
+        };
+        // If the operator pasted an existing secret (e.g. an already-deployed
+        // issuer's HMAC), register with it; otherwise the PR generates one.
+        const supplied = form.secret.trim();
+        if (supplied) body.secret = supplied;
+        const res = await api.createIssuerSubscriber(body);
         if (prFailed(res?.data)) {
           toast.error(prMessage(res?.data) || t("subscribers.form.error"));
         } else {
-          const newSecret = str(res?.data?.secret);
-          if (newSecret) setSecret({ name, value: newSecret });
+          // Only reveal a secret the PR generated; a supplied one is already known.
+          if (res?.data?.secretGenerated && str(res?.data?.secret)) {
+            setSecret({ name, value: str(res?.data?.secret) });
+          }
           toast.success(t("subscribers.form.created"));
           resetForm();
           loadSubs();
@@ -271,6 +288,33 @@ const Subscribers: NextPage = () => {
     return <span className={`${styles.badge} ${cls}`}>{status || "—"}</span>;
   };
 
+  // Renders a non-ok list state with a message specific to *why* it failed, and a
+  // retry where retrying can actually help (transient unavailability / generic
+  // errors). notConfigured/unauthorized are shown without retry — they need an
+  // operator/config change, not a refresh.
+  const failureView = (status: ListStatus, retry: () => void): ReactNode => {
+    const withRetry = (msgKey: string) => (
+      <div className={styles.error}>
+        {t(msgKey)}{" "}
+        <button type="button" className={styles.refreshBtn} onClick={retry}>
+          {t("subscribers.status.retry")}
+        </button>
+      </div>
+    );
+    switch (status) {
+      case "loading":
+        return <div className={styles.note}>{t("common.loading")}</div>;
+      case "notConfigured":
+        return <div className={styles.note}>{t("subscribers.status.notConfigured")}</div>;
+      case "unauthorized":
+        return <div className={styles.error}>{t("subscribers.status.unauthorized")}</div>;
+      case "unavailable":
+        return withRetry("subscribers.status.unavailable");
+      default:
+        return withRetry("subscribers.status.error");
+    }
+  };
+
   // Hidden / redirecting until co-deployment is confirmed.
   if (!prConfigured) {
     return (
@@ -296,9 +340,7 @@ const Subscribers: NextPage = () => {
 
   // ── Subscribers tab ───────────────────────────────────────────────────────
   let subList: ReactNode;
-  if (subStatus === "loading") subList = <div className={styles.note}>{t("common.loading")}</div>;
-  else if (subStatus === "unavailable") subList = <div className={styles.error}>{t("subscribers.list.unavailable")}</div>;
-  else if (subStatus === "error") subList = <div className={styles.error}>{t("subscribers.list.error")}</div>;
+  if (subStatus !== "ok") subList = failureView(subStatus, loadSubs);
   else if (subs.length === 0) subList = <div className={styles.note}>{t("subscribers.list.empty")}</div>;
   else
     subList = (
@@ -384,8 +426,20 @@ const Subscribers: NextPage = () => {
             value={form.eventFilter}
             onChange={(e) => set("eventFilter", e.target.value)}
           />
+          {!editingId && (
+            <FormInput
+              label={t("subscribers.form.secret")}
+              id="secret"
+              name="secret"
+              type="text"
+              placeholder={t("subscribers.form.secretPlaceholder")}
+              value={form.secret}
+              onChange={(e) => set("secret", e.target.value)}
+            />
+          )}
         </div>
         <p className={styles.hint}>{t("subscribers.form.eventFilterHint")}</p>
+        {!editingId && <p className={styles.hint}>{t("subscribers.form.secretHint")}</p>}
         <label className={styles.checkboxRow}>
           <input
             type="checkbox"
@@ -429,9 +483,7 @@ const Subscribers: NextPage = () => {
 
   // ── Deliveries tab ────────────────────────────────────────────────────────
   let delList: ReactNode;
-  if (delStatus === "loading") delList = <div className={styles.note}>{t("common.loading")}</div>;
-  else if (delStatus === "unavailable") delList = <div className={styles.error}>{t("subscribers.list.unavailable")}</div>;
-  else if (delStatus === "error") delList = <div className={styles.error}>{t("subscribers.deliveries.error")}</div>;
+  if (delStatus !== "ok") delList = failureView(delStatus, loadDeliveries);
   else if (deliveries.length === 0) delList = <div className={styles.note}>{t("subscribers.deliveries.empty")}</div>;
   else
     delList = (

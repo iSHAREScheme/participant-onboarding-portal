@@ -416,6 +416,9 @@ const nl = {
       url: "Webhook-URL",
       eventFilter: "Gebeurtenisfilter",
       eventFilterHint: "Laat leeg voor de standaardstroom (party.created, party.updated). Voor gedetailleerde gebeurtenissen, geef ze komma-gescheiden op: claim.created, claim.updated, claim.revoked, party.revoked.",
+      secret: "Ondertekeningssleutel (optioneel)",
+      secretPlaceholder: "Laat leeg om automatisch te genereren",
+      secretHint: "Stel dit alleen in bij het koppelen van een reeds uitgerolde issuer met een vaste HMAC-sleutel — plak die sleutel hier. Laat leeg en het register genereert er een (eenmalig getoond). Gebruik “Sleutel roteren” om hem later te wijzigen.",
       replayProtection: "Replay-bescherming (onderteken tijdstempel + body)",
       enabled: "Ingeschakeld",
       create: "Abonnee registreren",
@@ -432,6 +435,13 @@ const nl = {
     secret: {
       heading: "Ondertekeningssleutel voor {{name}} — eenmalig getoond, kopieer deze nu",
       dismiss: "Sluiten"
+    },
+    status: {
+      notConfigured: "De beheer-API van het deelnemersregister is niet geconfigureerd voor dit portaal (PR_API_BASE_URL ontbreekt). Vraag een beheerder dit te configureren.",
+      unauthorized: "Het deelnemersregister heeft je sessie geweigerd — je bent niet geautoriseerd voor de beheer-API. Log uit en weer in; blijft dit bestaan, dan mist je account mogelijk de vereiste rol.",
+      unavailable: "Het deelnemersregister is tijdelijk niet beschikbaar — het start mogelijk (opnieuw) op.",
+      error: "Er ging iets mis bij het laden van deze gegevens.",
+      retry: "Opnieuw proberen"
     },
     list: {
       heading: "Abonnees",
