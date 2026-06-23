@@ -1,0 +1,215 @@
+.container {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.5rem;
+  color: var(--text-secondary, #013a57);
+  margin: 0;
+}
+
+.description {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.refreshBtn {
+  background: var(--button-primary, #0066ee);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.refreshBtn:hover:not(:disabled) {
+  background: var(--button-primary-hover, #006699);
+}
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+/* Top summary strip: overall status / last execution / notifications. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 2rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.factLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: #9ca3af;
+}
+
+.factValue {
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.orgs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* One organisation (mspID) + its peers/explorer. */
+.orgCard {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid var(--button-primary, #0066ee);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0.7rem 1rem 0.85rem;
+}
+
+.orgHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.orgName {
+  font-weight: 600;
+  color: var(--text-secondary, #013a57);
+  word-break: break-all;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.table th {
+  text-align: left;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+.table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #f4f4f5;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.explorer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #f0f0f1;
+}
+.explorerLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: #9ca3af;
+}
+.explorerVal {
+  font-size: 0.88rem;
+  color: #1f2937;
+}
+
+/* Health pills — green / red / neutral. */
+.pill {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.healthy {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+.unhealthy {
+  background: #fbe9e7;
+  color: #d32f2f;
+}
+.neutral {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.note {
+  color: #4b5563;
+  background: #f6f6f7;
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #b91c1c;
+  background: #fbe9e7;
+  border: 1px solid #f3c9c2;
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 0.5rem 0.75rem;
+  }
+}

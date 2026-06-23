@@ -60,4 +60,8 @@ type Settings struct {
 	// VC_ISSUER_BASE_URL env default when set. The issuer API key (if any) stays
 	// env-only and is never stored here.
 	VcIssuerBaseUrl string `json:"vcIssuerBaseUrl"`
+	// PrApiBaseUrl is the Participant Registry admin API (SO.api) base URL the
+	// portal proxies admin actions to (forwarding the operator's token). Non-secret,
+	// admin-editable; overrides the PR_API_BASE_URL env default when set.
+	PrApiBaseUrl string `json:"prApiBaseUrl"`
 }

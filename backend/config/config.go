@@ -39,6 +39,11 @@ type Config struct {
 	// polls for credential offers (its ObP API, e.g. http://ishare-vc-issuer:8080).
 	// Empty = credential issuance is not configured and the dashboard says so.
 	VcIssuerBaseUrl string
+	// PrApiBaseUrl is the base URL of the Participant Registry admin API ("SO.api").
+	// It is reached server-to-server by forwarding the operator's OIDC bearer token
+	// (the same token the portal authenticated the admin with), so the PR must trust
+	// the portal's realm/issuer (scope so.api). Empty = PR-admin features disabled.
+	PrApiBaseUrl string
 	// CorsAllowedOrigins is a comma-separated allow-list of browser origins
 	// permitted to call the API cross-origin. Empty = no CORS headers emitted.
 	CorsAllowedOrigins string
@@ -194,6 +199,10 @@ func (config *Config) LoadEnvironment() error {
 	// offer URIs it returns carry the issuer's own public base URL for wallets.
 	config.VcIssuerBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_ISSUER_BASE_URL")), "/")
 
+	// Participant Registry admin API (SO.api). Server-to-server base URL; auth is
+	// the forwarded operator token, so no credential is configured here.
+	config.PrApiBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("PR_API_BASE_URL")), "/")
+
 	// Inbound auth configuration
 	config.AuthPublicKeyPath = os.Getenv("AUTH_PUBLIC_KEY_PATH")
 	config.AuthIssuer = os.Getenv("AUTH_ISSUER")
@@ -280,4 +289,5 @@ func (config *Config) OverlaySatelliteSettings(s *models.Settings) {
 	set(&config.DataspaceId, s.DataspaceId)
 	set(&config.DataspaceTitle, s.DataspaceTitle)
 	set(&config.VcIssuerBaseUrl, s.VcIssuerBaseUrl)
+	set(&config.PrApiBaseUrl, s.PrApiBaseUrl)
 }

@@ -499,6 +499,100 @@ export class API {
     return this.client.post(`/registry/me/credentials/reprocess`)
   }
 
+  // Participant Registry admin (co-deployed only): latest network/ledger health.
+  // The backend forwards the operator's token to the PR /api/* surface and relays
+  // the result; returns 501 when PR_API_BASE_URL is unset (standalone deployment).
+  getNetworkHealth () {
+    return this.client.get(`/pr/network-health`)
+  }
+
+  // PR admin: list revoke/transfer requests.
+  getRevokeRequests () {
+    return this.client.get(`/pr/revoke/requests`)
+  }
+
+  // PR admin: initiate a revoke (RevokeModel body). Returns the registry's
+  // FinalResponse ({ status, message }). Gated behind a confirmation in the UI.
+  initiateRevoke (body: Record<string, any>) {
+    return this.client.post(`/pr/revoke`, body)
+  }
+
+  // PR admin: list party-transfer requests.
+  getTransferRequests () {
+    return this.client.get(`/pr/transfer/requests`)
+  }
+
+  // PR admin: request transfer of a party to another registry (TransferModel
+  // body: { partyId, transferTo, … }). Returns the registry's FinalResponse.
+  createTransfer (body: Record<string, any>) {
+    return this.client.post(`/pr/transfer`, body)
+  }
+
+  // PR admin: list managed dataspaces with full records ({ count, data:[…] }).
+  // Distinct from the thin id+title list at /registry/dataspaces used for
+  // dropdowns — this is the management surface on the co-deployed /api/* layer.
+  getManagedDataspaces () {
+    return this.client.get(`/pr/dataspaces`)
+  }
+
+  // PR admin: fetch one dataspace's full record to populate the edit form.
+  getDataspaceDetail (id: string) {
+    return this.client.get(`/pr/dataspaces/detail`, { params: { id } })
+  }
+
+  // PR admin: create a dataspace (dataspace model body). Returns FinalResponse.
+  createDataspace (body: Record<string, any>) {
+    return this.client.post(`/pr/dataspaces`, body)
+  }
+
+  // PR admin: update an existing dataspace (identified by its dataspaceID).
+  updateDataspace (body: Record<string, any>) {
+    return this.client.put(`/pr/dataspaces`, body)
+  }
+
+  // PR admin: list trusted certificate authorities ({ count, data:[…] }).
+  getTrustedList () {
+    return this.client.get(`/pr/trusted`)
+  }
+
+  // PR admin: validate a certificate before adding it to the trusted list.
+  // `certificate` is the base64 of the certificate file; the registry returns
+  // { validity, errors, model:{ subject, certificateFingerprint, certificate, … } }
+  // used to populate the create form.
+  validateTrustedCert (certificate: string) {
+    return this.client.post(`/pr/trusted/validate`, { certificate })
+  }
+
+  // PR admin: add a trusted CA (validated certificate model). Returns FinalResponse.
+  createTrustedCA (body: Record<string, any>) {
+    return this.client.post(`/pr/trusted`, body)
+  }
+
+  // PR admin: update a trusted CA (status/type). Returns FinalResponse.
+  updateTrustedCA (body: Record<string, any>) {
+    return this.client.put(`/pr/trusted`, body)
+  }
+
+  // PR admin: remove a trusted CA (certificate model body). Returns FinalResponse.
+  deleteTrustedCA (body: Record<string, any>) {
+    return this.client.post(`/pr/trusted/delete`, body)
+  }
+
+  // PR admin: list scheduled jobs ({ count, data:[…] }).
+  getSchedulers () {
+    return this.client.get(`/pr/scheduler`)
+  }
+
+  // PR admin: create a scheduled job (scheduler config body). Returns FinalResponse.
+  createScheduler (body: Record<string, any>) {
+    return this.client.post(`/pr/scheduler`, body)
+  }
+
+  // PR admin: update a scheduled job (scheduler config body). Returns FinalResponse.
+  updateScheduler (body: Record<string, any>) {
+    return this.client.put(`/pr/scheduler`, body)
+  }
+
   // Admin-only party updates (proxied to the satellite).
   // v2.2: full replace via PUT /parties/{id}.
   updateParty (id: string, body: any) {

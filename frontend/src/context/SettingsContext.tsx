@@ -22,6 +22,13 @@ interface SettingsContextType {
   // Admin-configured association name (from public settings); "" = use the env/
   // tenant default. Shown in the header.
   associationName: string;
+  // True when the portal is co-deployed with a Participant Registry admin API
+  // (PR_API_BASE_URL set). Gates the registry-admin features (Network health, …)
+  // so they're hidden/unavailable in a standalone deployment.
+  prConfigured: boolean;
+  // False until the public settings have been fetched once (so callers don't act
+  // on the default `prConfigured: false` before it's known).
+  settingsLoaded: boolean;
   updateLogo: () => Promise<void>;
 }
 
@@ -35,6 +42,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
 async function fetchAndApplySettings(): Promise<{
   logoUrl: string | null;
   associationName: string;
+  prConfigured: boolean;
 }> {
   // Public subset only — this runs for every visitor (incl. unauthenticated),
   // so it must not hit the authenticated full-settings endpoint.
@@ -57,6 +65,7 @@ async function fetchAndApplySettings(): Promise<{
       typeof data?.defaultAssociationName === "string"
         ? data.defaultAssociationName
         : "",
+    prConfigured: data?.prConfigured === true,
   };
 }
 
@@ -65,15 +74,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [associationName, setAssociationName] = useState("");
+  const [prConfigured, setPrConfigured] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const updateLogo = async () => {
     try {
       const result = await fetchAndApplySettings();
       setLogoUrl(result.logoUrl);
       setAssociationName(result.associationName);
+      setPrConfigured(result.prConfigured);
     } catch (error) {
       console.error("Failed to fetch settings:", error);
       setLogoUrl(null);
+    } finally {
+      setSettingsLoaded(true);
     }
   };
 
@@ -87,10 +101,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
         if (active) {
           setLogoUrl(result.logoUrl);
           setAssociationName(result.associationName);
+          setPrConfigured(result.prConfigured);
         }
       } catch (error) {
         console.error("Failed to fetch settings:", error);
         if (active) setLogoUrl(null);
+      } finally {
+        if (active) setSettingsLoaded(true);
       }
     })();
     return () => {
@@ -99,7 +116,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ logoUrl, associationName, updateLogo }}>
+    <SettingsContext.Provider
+      value={{ logoUrl, associationName, prConfigured, settingsLoaded, updateLogo }}
+    >
       {children}
     </SettingsContext.Provider>
   );

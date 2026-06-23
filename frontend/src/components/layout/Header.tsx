@@ -18,7 +18,7 @@ const Header: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { t } = useLanguage()
-  const { logoUrl, associationName: configuredAssociationName } = useSettings()
+  const { logoUrl, associationName: configuredAssociationName, prConfigured } = useSettings()
   const { keycloak } = useKeycloak()
   const { logo, tenantId } = useTheme()
 
@@ -208,6 +208,58 @@ const Header: React.FC = () => {
                   {t("common.settings")}
                 </Link>
               </li>
+              {prConfigured && (
+                <>
+                  <li>
+                    <Link
+                      href="/network-health"
+                      className={isActive("/network-health") ? styles.active : ""}
+                    >
+                      {t("common.networkHealth")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/revoke"
+                      className={isActive("/revoke") ? styles.active : ""}
+                    >
+                      {t("common.revoke")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/transfer"
+                      className={isActive("/transfer") ? styles.active : ""}
+                    >
+                      {t("common.transfer")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/dataspaces"
+                      className={isActive("/dataspaces") ? styles.active : ""}
+                    >
+                      {t("common.dataspaces")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/trusted"
+                      className={isActive("/trusted") ? styles.active : ""}
+                    >
+                      {t("common.trustedList")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/scheduler"
+                      className={isActive("/scheduler") ? styles.active : ""}
+                    >
+                      {t("common.scheduler")}
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
             )}
             {/* On mobile these live in the drawer; on desktop they're hidden here

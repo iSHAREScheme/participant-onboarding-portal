@@ -27,6 +27,12 @@ const en = {
     participants: "Participants",
     organizationAccess: "Organization access",
     myParty: "My party",
+    networkHealth: "Network health",
+    revoke: "Revoke",
+    transfer: "Transfer",
+    dataspaces: "Dataspaces",
+    trustedList: "Trusted list",
+    scheduler: "Scheduler",
     menu: "Menu"
   },
   organizationAccess: {
@@ -270,6 +276,267 @@ const en = {
         body: "That's the tour. Replay it anytime via “Take a tour” in your account menu."
       }
     }
+  },
+  revoke: {
+    title: "Revoke",
+    description: "Revoke a party from the registry, or transfer it to another participant registry.",
+    form: {
+      heading: "Initiate revoke",
+      revokingOrg: "Revoking organisation",
+      orgPlaceholder: "Organisation id",
+      partyId: "Party ID",
+      type: "Action",
+      transferTo: "Transfer to party ID",
+      hint: "Provide the party (and/or organisation) to revoke. Transfers also need the destination party.",
+      submit: "Initiate revoke",
+      submitting: "Submitting…",
+      required: "Enter a party or organisation to revoke.",
+      success: "Revoke request submitted.",
+      error: "Failed to submit the revoke request."
+    },
+    types: {
+      revoke: "Revoke",
+      transfer: "Transfer"
+    },
+    confirm: {
+      title: "Revoke party",
+      message: "Revoke “{{target}}” from the registry? This cannot be undone.",
+      button: "Revoke"
+    },
+    list: {
+      heading: "Revoke requests",
+      refresh: "Refresh",
+      org: "Organisation",
+      party: "Party",
+      type: "Action",
+      status: "Status",
+      date: "Created",
+      empty: "No revoke requests.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load revoke requests."
+    }
+  },
+  transfer: {
+    title: "Transfer",
+    description: "Transfer a party's ownership to another participant registry.",
+    form: {
+      heading: "Request transfer",
+      partyId: "Party ID",
+      transferTo: "Transfer to registry",
+      transferToPlaceholder: "Destination registry id",
+      hint: "Provide the party to move and the participant registry it should be transferred to.",
+      submit: "Request transfer",
+      submitting: "Submitting…",
+      required: "Enter both the party and the destination registry.",
+      success: "Transfer request submitted.",
+      error: "Failed to submit the transfer request."
+    },
+    confirm: {
+      title: "Transfer party",
+      message: "Transfer “{{party}}” to “{{target}}”? The destination registry must approve the request.",
+      button: "Request transfer"
+    },
+    list: {
+      heading: "Transfer requests",
+      refresh: "Refresh",
+      party: "Party",
+      from: "From",
+      to: "To",
+      status: "Status",
+      date: "Requested",
+      empty: "No transfer requests.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load transfer requests."
+    }
+  },
+  dataspaces: {
+    title: "Dataspaces",
+    description: "Manage the dataspaces registered in the participant registry.",
+    form: {
+      createHeading: "Create dataspace",
+      editHeading: "Edit dataspace ({{id}})",
+      subject: "Name",
+      subjectPlaceholder: "Dataspace name",
+      dataspaceId: "Dataspace ID",
+      status: "Status",
+      country: "Country of registration",
+      countryPlaceholder: "e.g. Netherlands",
+      definitionUrl: "Definition URL",
+      website: "Website",
+      countriesOfOperation: "Countries of operation",
+      sectorIndustry: "Sector / industry",
+      tags: "Tags",
+      tagsPlaceholder: "Comma-separated tags",
+      specificAgreements: "Specific agreements",
+      listPlaceholder: "Comma-separated values",
+      listHint: "Countries of operation, sector/industry and specific agreements accept multiple comma-separated values.",
+      create: "Create dataspace",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      required: "A name and dataspace ID are required.",
+      created: "Dataspace created.",
+      updated: "Dataspace updated.",
+      loadError: "Failed to load the dataspace.",
+      error: "Failed to save the dataspace."
+    },
+    status: {
+      new: "New",
+      inProgress: "In progress",
+      active: "Active",
+      notActive: "Not active"
+    },
+    list: {
+      heading: "Dataspaces",
+      refresh: "Refresh",
+      subject: "Name",
+      id: "Dataspace ID",
+      status: "Status",
+      country: "Country",
+      actions: "Actions",
+      edit: "Edit",
+      empty: "No dataspaces.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load dataspaces."
+    }
+  },
+  trusted: {
+    title: "Trusted list",
+    description: "Manage the certificate authorities trusted by the participant registry.",
+    form: {
+      addHeading: "Add certificate authority",
+      editHeading: "Edit ({{subject}})",
+      certificate: "Certificate",
+      validating: "Validating certificate…",
+      valid: "Valid",
+      invalid: "Invalid",
+      subject: "Subject",
+      subjectPlaceholder: "Upload a certificate to populate",
+      fingerprint: "Fingerprint",
+      type: "Type",
+      status: "Status",
+      hint: "Upload a certificate (.cer, .crt, .der, .pem, .pfx, .key) to validate it, then choose a type before adding it.",
+      create: "Add to trusted list",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      badFile: "Invalid file type. Upload a certificate file.",
+      validateError: "Failed to validate the certificate.",
+      typeRequired: "Select a certificate type.",
+      certRequired: "Upload and validate a certificate first.",
+      created: "Certificate authority added.",
+      updated: "Certificate authority updated.",
+      deleted: "Certificate authority removed.",
+      error: "Failed to save the certificate authority.",
+      deleteError: "Failed to remove the certificate authority."
+    },
+    types: {
+      pkio: "PKIo",
+      ishareTest: "iSHARE Test",
+      eidas: "eIDAS"
+    },
+    statuses: {
+      granted: "Granted",
+      withdrawn: "Withdrawn",
+      supervisionCeased: "Supervision ceased",
+      underSupervision: "Under supervision"
+    },
+    confirm: {
+      title: "Remove certificate authority",
+      message: "Remove “{{target}}” from the trusted list? This cannot be undone.",
+      button: "Remove"
+    },
+    list: {
+      heading: "Trusted certificate authorities",
+      refresh: "Refresh",
+      subject: "Subject",
+      type: "Type",
+      validity: "Validity",
+      status: "Status",
+      actions: "Actions",
+      edit: "Edit",
+      delete: "Remove",
+      empty: "No trusted certificate authorities.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load the trusted list."
+    }
+  },
+  scheduler: {
+    title: "Scheduler",
+    description: "Schedule recurring participant-registry jobs, such as network health checks.",
+    form: {
+      createHeading: "Schedule a job",
+      editHeading: "Edit job ({{name}})",
+      type: "Job type",
+      typePlaceholder: "Select a job type",
+      process: "Process name",
+      processPlaceholder: "A name to identify this job",
+      frequency: "Frequency",
+      frequencyPlaceholder: "Select a frequency",
+      every: "Run every",
+      startDate: "Start date",
+      startTime: "Start time",
+      emails: "Notification emails",
+      emailsPlaceholder: "Comma-separated email addresses",
+      enable: "Enable this schedule",
+      hint: "Second/minute/hour frequencies run on the chosen interval; daily and weekly run once per period. Notifications are sent to the listed addresses.",
+      create: "Schedule job",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      required: "Job type, process name, frequency and at least one email are required.",
+      created: "Job scheduled.",
+      updated: "Schedule updated.",
+      error: "Failed to save the schedule."
+    },
+    types: {
+      networkHealth: "Network Health Check"
+    },
+    units: {
+      sec: "Second",
+      min: "Minute",
+      hr: "Hour"
+    },
+    frequency: {
+      every: "Every {{value}} {{unit}}",
+      daily: "Daily once",
+      weekly: "Weekly once"
+    },
+    list: {
+      heading: "Scheduled jobs",
+      refresh: "Refresh",
+      process: "Process",
+      type: "Type",
+      frequency: "Frequency",
+      enabled: "Enabled",
+      actions: "Actions",
+      edit: "Edit",
+      yes: "Yes",
+      no: "No",
+      empty: "No scheduled jobs.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load scheduled jobs."
+    }
+  },
+  networkHealth: {
+    title: "Network health",
+    description: "Live status of the participant registry's ledger network. Available when the portal is co-deployed with the registry.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    overall: "Overall status",
+    lastExecution: "Last execution",
+    notificationStatus: "Email notification status",
+    org: "Organisation",
+    health: "Health",
+    peers: "Peers",
+    peerName: "Peer",
+    blockNo: "Block no.",
+    status: "Status",
+    explorer: "Explorer",
+    notConfigured: "Network health is only available when the portal is co-deployed with the participant registry.",
+    unavailable: "The participant registry is currently unavailable. Please try again in a moment.",
+    loadError: "Failed to load network health.",
+    empty: "No organisation details were reported."
   },
   home: {
     title: "Onboarding",

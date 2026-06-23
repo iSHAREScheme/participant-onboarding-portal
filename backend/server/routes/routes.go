@@ -37,6 +37,11 @@ func ConfigureRoutes(server *s.Server, config *config.Config) {
 	// admin-gated — the target user is the token's own subject.
 	groupMe := server.App.Group("/me")
 	GroupMeRequests(server, groupMe, config)
+
+	// Participant Registry admin proxy (SO.api). Admin-gated; each endpoint
+	// forwards the operator's token through the single pr.Client.
+	groupPR := server.App.Group("/pr")
+	GroupPRRequests(server, groupPR, config)
 }
 
 func GroupPartyRequests(server *s.Server, group fiber.Router, config *config.Config) {
@@ -151,6 +156,39 @@ func GroupDelegationRequests(server *s.Server, group fiber.Router, config *confi
 	group.Get("/me", handler.GetOverview)
 	group.Post("/idp-connections", handler.CreateIdpConnection)
 	group.Post("/members", handler.CreateMember)
+}
+
+// GroupPRRequests mounts the Participant-Registry admin proxy. Every endpoint is
+// admin-gated and routes through HandlerPR + the single pr.Client (forwarding the
+// operator's token), so adding the remaining PR features — dataspace, revoke,
+// transfer, scheduler, network health, versions — is a uniform one-method change.
+func GroupPRRequests(server *s.Server, group fiber.Router, config *config.Config) {
+	handler := handlers.NewHandlerPR(server, config)
+	// Template (read-only) on the /api/* bearer surface: network/ledger health.
+	// The shape every PR-admin endpoint follows.
+	group.Get("/network-health", middlewares.RequireAdminRole(), handler.GetNetworkHealth)
+	// Revoke: list requests (read) + initiate (write/mutation template).
+	group.Get("/revoke/requests", middlewares.RequireAdminRole(), handler.GetRevokeList)
+	group.Post("/revoke", middlewares.RequireAdminRole(), handler.InitiateRevoke)
+	// Transfer a party's ownership to another registry: list (read) + request (write).
+	group.Get("/transfer/requests", middlewares.RequireAdminRole(), handler.GetTransferList)
+	group.Post("/transfer", middlewares.RequireAdminRole(), handler.CreateTransfer)
+	// Dataspace management: list (read) + detail (read) + create/edit (write).
+	group.Get("/dataspaces", middlewares.RequireAdminRole(), handler.GetDataspaceList)
+	group.Get("/dataspaces/detail", middlewares.RequireAdminRole(), handler.GetDataspaceDetail)
+	group.Post("/dataspaces", middlewares.RequireAdminRole(), handler.CreateDataspace)
+	group.Put("/dataspaces", middlewares.RequireAdminRole(), handler.EditDataspace)
+	// Trusted-list (certificate authorities): list (read) + validate/create/update/
+	// delete (write). Delete uses POST (the PR expects the model in the body).
+	group.Get("/trusted", middlewares.RequireAdminRole(), handler.GetTrustedList)
+	group.Post("/trusted/validate", middlewares.RequireAdminRole(), handler.ValidateTrustedCert)
+	group.Post("/trusted", middlewares.RequireAdminRole(), handler.CreateTrustedCA)
+	group.Put("/trusted", middlewares.RequireAdminRole(), handler.UpdateTrustedCA)
+	group.Post("/trusted/delete", middlewares.RequireAdminRole(), handler.DeleteTrustedCA)
+	// Scheduler: list (read) + create/edit (write). The PR exposes no delete.
+	group.Get("/scheduler", middlewares.RequireAdminRole(), handler.GetSchedulerList)
+	group.Post("/scheduler", middlewares.RequireAdminRole(), handler.CreateScheduler)
+	group.Put("/scheduler", middlewares.RequireAdminRole(), handler.EditScheduler)
 }
 
 func GroupMeRequests(server *s.Server, group fiber.Router, config *config.Config) {

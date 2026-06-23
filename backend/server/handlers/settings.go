@@ -78,14 +78,18 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 // @Router       /settings/public [get]
 func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 	var settings models.Settings
+	// Whether the portal is co-deployed with a Participant Registry admin API.
+	// Non-secret topology flag used by the UI to show/hide the PR-admin features.
+	prConfigured := strings.TrimSpace(h.Config.PrApiBaseUrl) != ""
 	if h.Server.DB.First(&settings).Error != nil {
 		return c.JSON(fiber.Map{
-			"description": "",
-			"theme":       nil,
-			"logoPath":    "",
-			"faviconPath": "",
-			"activeTheme": "",
-			"agreements":  []publicAgreementView{},
+			"description":  "",
+			"theme":        nil,
+			"logoPath":     "",
+			"faviconPath":  "",
+			"activeTheme":  "",
+			"agreements":   []publicAgreementView{},
+			"prConfigured": prConfigured,
 		})
 	}
 	// Deliberately a curated allowlist of public fields — never spread the whole
@@ -104,6 +108,8 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"activeRoles":            settings.ActiveRoles,
 		"defaultRole":            settings.DefaultRole,
 		"autoAcceptProposal":     settings.AutoAcceptProposal,
+		// Topology flag — gates the registry-admin features in the UI.
+		"prConfigured": prConfigured,
 	})
 }
 
@@ -149,6 +155,7 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		SatelliteTokenScope         *string `json:"satelliteTokenScope"`
 		DataspaceTitle              *string `json:"dataspaceTitle"`
 		VcIssuerBaseUrl             *string `json:"vcIssuerBaseUrl"`
+		PrApiBaseUrl                *string `json:"prApiBaseUrl"`
 
 		// Onboarding-flow configuration ("" = use the NEXT_PUBLIC_* env default).
 		DefaultAssociationName *string `json:"defaultAssociationName"`
@@ -224,6 +231,9 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.VcIssuerBaseUrl != nil {
 		settings.VcIssuerBaseUrl = strings.TrimSpace(*input.VcIssuerBaseUrl)
+	}
+	if input.PrApiBaseUrl != nil {
+		settings.PrApiBaseUrl = strings.TrimSpace(*input.PrApiBaseUrl)
 	}
 	if input.DefaultAssociationName != nil {
 		settings.DefaultAssociationName = strings.TrimSpace(*input.DefaultAssociationName)

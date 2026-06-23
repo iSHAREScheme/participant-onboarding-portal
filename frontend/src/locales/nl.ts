@@ -26,6 +26,12 @@ const nl = {
     participants: "Deelnemers",
     organizationAccess: "Organisatietoegang",
     myParty: "Mijn partij",
+    networkHealth: "Netwerkstatus",
+    revoke: "Intrekken",
+    transfer: "Overdragen",
+    dataspaces: "Dataspaces",
+    trustedList: "Vertrouwde lijst",
+    scheduler: "Planner",
     menu: "Menu"
   },
   organizationAccess: {
@@ -269,6 +275,267 @@ const nl = {
         body: "Dat was de rondleiding. Start hem opnieuw via “Rondleiding starten” in uw accountmenu."
       }
     }
+  },
+  revoke: {
+    title: "Intrekken",
+    description: "Trek een partij in bij het register, of draag deze over aan een ander deelnemersregister.",
+    form: {
+      heading: "Intrekken starten",
+      revokingOrg: "In te trekken organisatie",
+      orgPlaceholder: "Organisatie-id",
+      partyId: "Partij-ID",
+      type: "Actie",
+      transferTo: "Overdragen aan partij-ID",
+      hint: "Geef de partij (en/of organisatie) op die u wilt intrekken. Voor overdracht is ook de doelpartij nodig.",
+      submit: "Intrekken starten",
+      submitting: "Bezig met verzenden…",
+      required: "Voer een partij of organisatie in om in te trekken.",
+      success: "Intrekkingsverzoek verzonden.",
+      error: "Kan het intrekkingsverzoek niet verzenden."
+    },
+    types: {
+      revoke: "Intrekken",
+      transfer: "Overdragen"
+    },
+    confirm: {
+      title: "Partij intrekken",
+      message: "“{{target}}” intrekken bij het register? Dit kan niet ongedaan worden gemaakt.",
+      button: "Intrekken"
+    },
+    list: {
+      heading: "Intrekkingsverzoeken",
+      refresh: "Vernieuwen",
+      org: "Organisatie",
+      party: "Partij",
+      type: "Actie",
+      status: "Status",
+      date: "Aangemaakt",
+      empty: "Geen intrekkingsverzoeken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan intrekkingsverzoeken niet laden."
+    }
+  },
+  transfer: {
+    title: "Overdragen",
+    description: "Draag het eigendom van een partij over aan een ander deelnemersregister.",
+    form: {
+      heading: "Overdracht aanvragen",
+      partyId: "Partij-ID",
+      transferTo: "Overdragen aan register",
+      transferToPlaceholder: "Id van doelregister",
+      hint: "Geef de over te dragen partij op en het deelnemersregister waaraan deze moet worden overgedragen.",
+      submit: "Overdracht aanvragen",
+      submitting: "Bezig met verzenden…",
+      required: "Voer zowel de partij als het doelregister in.",
+      success: "Overdrachtsverzoek verzonden.",
+      error: "Kan het overdrachtsverzoek niet verzenden."
+    },
+    confirm: {
+      title: "Partij overdragen",
+      message: "“{{party}}” overdragen aan “{{target}}”? Het doelregister moet het verzoek goedkeuren.",
+      button: "Overdracht aanvragen"
+    },
+    list: {
+      heading: "Overdrachtsverzoeken",
+      refresh: "Vernieuwen",
+      party: "Partij",
+      from: "Van",
+      to: "Naar",
+      status: "Status",
+      date: "Aangevraagd",
+      empty: "Geen overdrachtsverzoeken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan overdrachtsverzoeken niet laden."
+    }
+  },
+  dataspaces: {
+    title: "Dataspaces",
+    description: "Beheer de dataspaces die in het deelnemersregister zijn geregistreerd.",
+    form: {
+      createHeading: "Dataspace aanmaken",
+      editHeading: "Dataspace bewerken ({{id}})",
+      subject: "Naam",
+      subjectPlaceholder: "Naam van de dataspace",
+      dataspaceId: "Dataspace-ID",
+      status: "Status",
+      country: "Land van registratie",
+      countryPlaceholder: "bijv. Nederland",
+      definitionUrl: "Definitie-URL",
+      website: "Website",
+      countriesOfOperation: "Landen van werking",
+      sectorIndustry: "Sector / branche",
+      tags: "Labels",
+      tagsPlaceholder: "Komma-gescheiden labels",
+      specificAgreements: "Specifieke overeenkomsten",
+      listPlaceholder: "Komma-gescheiden waarden",
+      listHint: "Landen van werking, sector/branche en specifieke overeenkomsten accepteren meerdere komma-gescheiden waarden.",
+      create: "Dataspace aanmaken",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      required: "Een naam en dataspace-ID zijn verplicht.",
+      created: "Dataspace aangemaakt.",
+      updated: "Dataspace bijgewerkt.",
+      loadError: "Kan de dataspace niet laden.",
+      error: "Kan de dataspace niet opslaan."
+    },
+    status: {
+      new: "Nieuw",
+      inProgress: "In behandeling",
+      active: "Actief",
+      notActive: "Niet actief"
+    },
+    list: {
+      heading: "Dataspaces",
+      refresh: "Vernieuwen",
+      subject: "Naam",
+      id: "Dataspace-ID",
+      status: "Status",
+      country: "Land",
+      actions: "Acties",
+      edit: "Bewerken",
+      empty: "Geen dataspaces.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan dataspaces niet laden."
+    }
+  },
+  trusted: {
+    title: "Vertrouwde lijst",
+    description: "Beheer de certificaatautoriteiten die door het deelnemersregister worden vertrouwd.",
+    form: {
+      addHeading: "Certificaatautoriteit toevoegen",
+      editHeading: "Bewerken ({{subject}})",
+      certificate: "Certificaat",
+      validating: "Certificaat valideren…",
+      valid: "Geldig",
+      invalid: "Ongeldig",
+      subject: "Onderwerp",
+      subjectPlaceholder: "Upload een certificaat om in te vullen",
+      fingerprint: "Vingerafdruk",
+      type: "Type",
+      status: "Status",
+      hint: "Upload een certificaat (.cer, .crt, .der, .pem, .pfx, .key) om het te valideren en kies vervolgens een type voordat u het toevoegt.",
+      create: "Toevoegen aan vertrouwde lijst",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      badFile: "Ongeldig bestandstype. Upload een certificaatbestand.",
+      validateError: "Kan het certificaat niet valideren.",
+      typeRequired: "Selecteer een certificaattype.",
+      certRequired: "Upload en valideer eerst een certificaat.",
+      created: "Certificaatautoriteit toegevoegd.",
+      updated: "Certificaatautoriteit bijgewerkt.",
+      deleted: "Certificaatautoriteit verwijderd.",
+      error: "Kan de certificaatautoriteit niet opslaan.",
+      deleteError: "Kan de certificaatautoriteit niet verwijderen."
+    },
+    types: {
+      pkio: "PKIo",
+      ishareTest: "iSHARE Test",
+      eidas: "eIDAS"
+    },
+    statuses: {
+      granted: "Verleend",
+      withdrawn: "Ingetrokken",
+      supervisionCeased: "Toezicht beëindigd",
+      underSupervision: "Onder toezicht"
+    },
+    confirm: {
+      title: "Certificaatautoriteit verwijderen",
+      message: "“{{target}}” uit de vertrouwde lijst verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      button: "Verwijderen"
+    },
+    list: {
+      heading: "Vertrouwde certificaatautoriteiten",
+      refresh: "Vernieuwen",
+      subject: "Onderwerp",
+      type: "Type",
+      validity: "Geldigheid",
+      status: "Status",
+      actions: "Acties",
+      edit: "Bewerken",
+      delete: "Verwijderen",
+      empty: "Geen vertrouwde certificaatautoriteiten.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan de vertrouwde lijst niet laden."
+    }
+  },
+  scheduler: {
+    title: "Planner",
+    description: "Plan terugkerende taken voor het deelnemersregister, zoals netwerkstatuscontroles.",
+    form: {
+      createHeading: "Taak plannen",
+      editHeading: "Taak bewerken ({{name}})",
+      type: "Taaktype",
+      typePlaceholder: "Selecteer een taaktype",
+      process: "Procesnaam",
+      processPlaceholder: "Een naam om deze taak te herkennen",
+      frequency: "Frequentie",
+      frequencyPlaceholder: "Selecteer een frequentie",
+      every: "Elke",
+      startDate: "Startdatum",
+      startTime: "Starttijd",
+      emails: "Notificatie-e-mails",
+      emailsPlaceholder: "Komma-gescheiden e-mailadressen",
+      enable: "Deze planning inschakelen",
+      hint: "Frequenties in seconden/minuten/uren draaien op het gekozen interval; dagelijks en wekelijks draaien eenmaal per periode. Notificaties worden naar de vermelde adressen verzonden.",
+      create: "Taak plannen",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      required: "Taaktype, procesnaam, frequentie en ten minste één e-mail zijn verplicht.",
+      created: "Taak gepland.",
+      updated: "Planning bijgewerkt.",
+      error: "Kan de planning niet opslaan."
+    },
+    types: {
+      networkHealth: "Netwerkstatuscontrole"
+    },
+    units: {
+      sec: "Seconde",
+      min: "Minuut",
+      hr: "Uur"
+    },
+    frequency: {
+      every: "Elke {{value}} {{unit}}",
+      daily: "Dagelijks eenmaal",
+      weekly: "Wekelijks eenmaal"
+    },
+    list: {
+      heading: "Geplande taken",
+      refresh: "Vernieuwen",
+      process: "Proces",
+      type: "Type",
+      frequency: "Frequentie",
+      enabled: "Ingeschakeld",
+      actions: "Acties",
+      edit: "Bewerken",
+      yes: "Ja",
+      no: "Nee",
+      empty: "Geen geplande taken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan geplande taken niet laden."
+    }
+  },
+  networkHealth: {
+    title: "Netwerkstatus",
+    description: "Live status van het ledger-netwerk van het deelnemersregister. Beschikbaar wanneer het portaal samen met het register is uitgerold.",
+    refresh: "Vernieuwen",
+    refreshing: "Bezig met vernieuwen…",
+    overall: "Algemene status",
+    lastExecution: "Laatste uitvoering",
+    notificationStatus: "E-mailnotificatiestatus",
+    org: "Organisatie",
+    health: "Gezondheid",
+    peers: "Peers",
+    peerName: "Peer",
+    blockNo: "Bloknr.",
+    status: "Status",
+    explorer: "Explorer",
+    notConfigured: "Netwerkstatus is alleen beschikbaar wanneer het portaal samen met het deelnemersregister is uitgerold.",
+    unavailable: "Het deelnemersregister is momenteel niet beschikbaar. Probeer het zo meteen opnieuw.",
+    loadError: "Kan netwerkstatus niet laden.",
+    empty: "Er zijn geen organisatiegegevens gerapporteerd."
   },
   home: {
     title: "Titel",
