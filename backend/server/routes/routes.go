@@ -189,6 +189,18 @@ func GroupPRRequests(server *s.Server, group fiber.Router, config *config.Config
 	group.Get("/scheduler", middlewares.RequireAdminRole(), handler.GetSchedulerList)
 	group.Post("/scheduler", middlewares.RequireAdminRole(), handler.CreateScheduler)
 	group.Put("/scheduler", middlewares.RequireAdminRole(), handler.EditScheduler)
+	// Issuer-integration webhooks: subscriber registry (list/get/create/update/
+	// delete + secret rotation) and the delivery outbox (list + redeliver +
+	// re-emit for a party). Subscriber secrets are write/rotate-only.
+	group.Get("/issuer/subscribers", middlewares.RequireAdminRole(), handler.ListIssuerSubscribers)
+	group.Post("/issuer/subscribers", middlewares.RequireAdminRole(), handler.CreateIssuerSubscriber)
+	group.Get("/issuer/subscribers/:id", middlewares.RequireAdminRole(), handler.GetIssuerSubscriber)
+	group.Patch("/issuer/subscribers/:id", middlewares.RequireAdminRole(), handler.UpdateIssuerSubscriber)
+	group.Delete("/issuer/subscribers/:id", middlewares.RequireAdminRole(), handler.DeleteIssuerSubscriber)
+	group.Post("/issuer/subscribers/:id/rotate-secret", middlewares.RequireAdminRole(), handler.RotateIssuerSubscriberSecret)
+	group.Get("/issuer/deliveries", middlewares.RequireAdminRole(), handler.ListIssuerDeliveries)
+	group.Post("/issuer/deliveries/:id/redeliver", middlewares.RequireAdminRole(), handler.RedeliverIssuerDelivery)
+	group.Post("/issuer/parties/:partyId/reemit", middlewares.RequireAdminRole(), handler.ReemitPartyEvents)
 }
 
 func GroupMeRequests(server *s.Server, group fiber.Router, config *config.Config) {

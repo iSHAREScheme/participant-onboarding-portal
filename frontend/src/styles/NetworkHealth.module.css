@@ -208,6 +208,104 @@
   font-size: 0.9rem;
 }
 
+/* Header action buttons (Refresh + Add scheduler). */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Secondary (outline) button — e.g. "Add scheduler" next to the primary Refresh. */
+.secondaryBtn {
+  background: #fff;
+  color: var(--text-secondary, #013a57);
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.secondaryBtn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+/* Scheduled-jobs block, placed below the network-health view. */
+.section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ececec;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+.sectionTitle {
+  font-size: 1.1rem;
+  color: var(--text-secondary, #013a57);
+  margin: 0;
+}
+.rowBtn {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.rowBtn:hover {
+  background: #f3f4f6;
+}
+
+/* Schedule-a-job modal (overlay + panel), mirroring the confirm-dialog pattern. */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+.modalPanel {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 1.25rem 1.4rem 1.4rem;
+}
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+.modalTitle {
+  font-size: 1.15rem;
+  color: var(--text-secondary, #013a57);
+  margin: 0;
+}
+.modalClose {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+.modalClose:hover {
+  color: #1f2937;
+}
+
 @media (max-width: 640px) {
   .container {
     padding: 0.5rem 0.75rem;

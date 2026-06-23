@@ -31,7 +31,9 @@ const nl = {
     transfer: "Overdragen",
     dataspaces: "Dataspaces",
     trustedList: "Vertrouwde lijst",
-    scheduler: "Planner",
+    issuerWebhooks: "Issuer-webhooks",
+    yes: "Ja",
+    no: "Nee",
     menu: "Menu"
   },
   organizationAccess: {
@@ -397,6 +399,93 @@ const nl = {
       empty: "Geen dataspaces.",
       unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
       error: "Kan dataspaces niet laden."
+    }
+  },
+  subscribers: {
+    title: "Issuer-webhooks",
+    description: "Registreer de issuer-/adapter-endpoints die party-levenscyclusgebeurtenissen ontvangen, beheer hun ondertekeningssleutels en bekijk of verstuur de webhook-outbox opnieuw.",
+    tabs: {
+      subscribers: "Abonnees",
+      deliveries: "Verzendingen"
+    },
+    form: {
+      createHeading: "Abonnee registreren",
+      editHeading: "Abonnee bewerken ({{name}})",
+      name: "Naam",
+      namePlaceholder: "bijv. iSHARE VC issuer",
+      url: "Webhook-URL",
+      eventFilter: "Gebeurtenisfilter",
+      eventFilterHint: "Laat leeg voor de standaardstroom (party.created, party.updated). Voor gedetailleerde gebeurtenissen, geef ze komma-gescheiden op: claim.created, claim.updated, claim.revoked, party.revoked.",
+      replayProtection: "Replay-bescherming (onderteken tijdstempel + body)",
+      enabled: "Ingeschakeld",
+      create: "Abonnee registreren",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Opslaan…",
+      nameRequired: "Een naam is verplicht.",
+      urlRequired: "Een webhook-URL is verplicht.",
+      urlHttps: "De webhook-URL moet https gebruiken.",
+      created: "Abonnee geregistreerd.",
+      updated: "Abonnee bijgewerkt.",
+      error: "Kan de abonnee niet opslaan."
+    },
+    secret: {
+      heading: "Ondertekeningssleutel voor {{name}} — eenmalig getoond, kopieer deze nu",
+      dismiss: "Sluiten"
+    },
+    list: {
+      heading: "Abonnees",
+      refresh: "Vernieuwen",
+      name: "Naam",
+      url: "Webhook-URL",
+      events: "Gebeurtenissen",
+      eventsDefault: "standaardstroom",
+      enabled: "Ingeschakeld",
+      lastStatus: "Laatste verzending",
+      actions: "Acties",
+      edit: "Bewerken",
+      rotate: "Sleutel roteren",
+      delete: "Verwijderen",
+      empty: "Geen abonnees geregistreerd.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan abonnees niet laden.",
+      rotateConfirm: "De ondertekeningssleutel van deze abonnee roteren? De nieuwe sleutel wordt eenmalig getoond.",
+      rotated: "Sleutel geroteerd.",
+      rotateError: "Kan de sleutel niet roteren.",
+      deleteConfirm: "Deze abonnee verwijderen? Hij ontvangt dan geen gebeurtenissen meer.",
+      deleted: "Abonnee verwijderd.",
+      deleteError: "Kan de abonnee niet verwijderen."
+    },
+    deliveries: {
+      heading: "Verzendingen",
+      reemitHeading: "Gebeurtenissen voor een party opnieuw versturen",
+      reemitHint: "Plaats een party.updated-gebeurtenis in de wachtrij zodat abonnees deze party opnieuw ophalen en afstemmen — een handmatige hersteltrigger.",
+      reemit: "Opnieuw versturen",
+      reemitRequired: "Een party-id is verplicht.",
+      reemitted: "Verstuurd naar {{count}} abonnee(s).",
+      reemitError: "Kan gebeurtenissen niet opnieuw versturen.",
+      created: "Aangemaakt",
+      event: "Gebeurtenis",
+      party: "Party-id",
+      partyFilter: "Party-id",
+      subscriber: "Abonnee",
+      status: "Status",
+      attempts: "Pogingen",
+      actions: "Acties",
+      redeliver: "Opnieuw verzenden",
+      redelivered: "Verzending opnieuw in wachtrij geplaatst.",
+      redeliverError: "Kan de verzending niet opnieuw in de wachtrij plaatsen.",
+      empty: "Geen verzendingen.",
+      error: "Kan verzendingen niet laden.",
+      applyFilters: "Toepassen",
+      allSubscribers: "Alle abonnees",
+      statuses: {
+        all: "Alle statussen",
+        pending: "In behandeling",
+        failed: "Mislukt",
+        delivered: "Afgeleverd",
+        dead: "Dead-letter"
+      }
     }
   },
   trusted: {

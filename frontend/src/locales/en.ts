@@ -32,7 +32,9 @@ const en = {
     transfer: "Transfer",
     dataspaces: "Dataspaces",
     trustedList: "Trusted list",
-    scheduler: "Scheduler",
+    issuerWebhooks: "Issuer webhooks",
+    yes: "Yes",
+    no: "No",
     menu: "Menu"
   },
   organizationAccess: {
@@ -398,6 +400,93 @@ const en = {
       empty: "No dataspaces.",
       unavailable: "The participant registry is currently unavailable.",
       error: "Failed to load dataspaces."
+    }
+  },
+  subscribers: {
+    title: "Issuer webhooks",
+    description: "Register the issuer/adapter endpoints that receive party lifecycle events, manage their signing secrets, and inspect or redeliver the webhook outbox.",
+    tabs: {
+      subscribers: "Subscribers",
+      deliveries: "Deliveries"
+    },
+    form: {
+      createHeading: "Register subscriber",
+      editHeading: "Edit subscriber ({{name}})",
+      name: "Name",
+      namePlaceholder: "e.g. iSHARE VC issuer",
+      url: "Webhook URL",
+      eventFilter: "Event filter",
+      eventFilterHint: "Leave empty for the default stream (party.created, party.updated). To also receive fine-grained events, list them comma-separated: claim.created, claim.updated, claim.revoked, party.revoked.",
+      replayProtection: "Replay protection (sign timestamp + body)",
+      enabled: "Enabled",
+      create: "Register subscriber",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      nameRequired: "A name is required.",
+      urlRequired: "A webhook URL is required.",
+      urlHttps: "The webhook URL must use https.",
+      created: "Subscriber registered.",
+      updated: "Subscriber updated.",
+      error: "Failed to save the subscriber."
+    },
+    secret: {
+      heading: "Signing secret for {{name}} — shown once, copy it now",
+      dismiss: "Dismiss"
+    },
+    list: {
+      heading: "Subscribers",
+      refresh: "Refresh",
+      name: "Name",
+      url: "Webhook URL",
+      events: "Events",
+      eventsDefault: "default stream",
+      enabled: "Enabled",
+      lastStatus: "Last delivery",
+      actions: "Actions",
+      edit: "Edit",
+      rotate: "Rotate secret",
+      delete: "Delete",
+      empty: "No subscribers registered.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load subscribers.",
+      rotateConfirm: "Rotate this subscriber's signing secret? The new secret is shown once.",
+      rotated: "Secret rotated.",
+      rotateError: "Failed to rotate the secret.",
+      deleteConfirm: "Delete this subscriber? It will stop receiving events.",
+      deleted: "Subscriber deleted.",
+      deleteError: "Failed to delete the subscriber."
+    },
+    deliveries: {
+      heading: "Deliveries",
+      reemitHeading: "Re-emit events for a party",
+      reemitHint: "Enqueue a party.updated event so subscribers re-fetch and reconcile this party — a manual recovery trigger.",
+      reemit: "Re-emit",
+      reemitRequired: "A party id is required.",
+      reemitted: "Re-emitted to {{count}} subscriber(s).",
+      reemitError: "Failed to re-emit events.",
+      created: "Created",
+      event: "Event",
+      party: "Party ID",
+      partyFilter: "Party ID",
+      subscriber: "Subscriber",
+      status: "Status",
+      attempts: "Attempts",
+      actions: "Actions",
+      redeliver: "Redeliver",
+      redelivered: "Delivery requeued.",
+      redeliverError: "Failed to requeue the delivery.",
+      empty: "No deliveries.",
+      error: "Failed to load deliveries.",
+      applyFilters: "Apply",
+      allSubscribers: "All subscribers",
+      statuses: {
+        all: "All statuses",
+        pending: "Pending",
+        failed: "Failed",
+        delivered: "Delivered",
+        dead: "Dead-lettered"
+      }
     }
   },
   trusted: {

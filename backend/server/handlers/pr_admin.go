@@ -205,3 +205,98 @@ func (h *HandlerPR) CreateScheduler(c *fiber.Ctx) error {
 func (h *HandlerPR) EditScheduler(c *fiber.Ctx) error {
 	return h.forwardBody(c, h.client.EditScheduler)
 }
+
+// ── Issuer-integration webhooks (subscriber registry + delivery outbox) ─────────
+
+// ListIssuerSubscribers proxies GET {PR}/api/issuer/subscribers — registered
+// issuer/adapter webhook endpoints (read; secrets are never returned).
+func (h *HandlerPR) ListIssuerSubscribers(c *fiber.Ctx) error {
+	out, err := h.client.IssuerSubscriberList(prBearer(c))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// GetIssuerSubscriber proxies GET {PR}/api/issuer/subscribers/{id}.
+func (h *HandlerPR) GetIssuerSubscriber(c *fiber.Ctx) error {
+	out, err := h.client.IssuerSubscriberByID(prBearer(c), c.Params("id"))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// CreateIssuerSubscriber proxies POST {PR}/api/issuer/subscribers. The PR returns
+// the generated signing secret once in the response (shown to the operator).
+func (h *HandlerPR) CreateIssuerSubscriber(c *fiber.Ctx) error {
+	return h.forwardBody(c, h.client.CreateIssuerSubscriber)
+}
+
+// UpdateIssuerSubscriber proxies PATCH {PR}/api/issuer/subscribers/{id}.
+func (h *HandlerPR) UpdateIssuerSubscriber(c *fiber.Ctx) error {
+	var body map[string]interface{}
+	if len(c.Body()) > 0 {
+		if err := json.Unmarshal(c.Body(), &body); err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body")
+		}
+	}
+	out, err := h.client.UpdateIssuerSubscriber(prBearer(c), c.Params("id"), body)
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// DeleteIssuerSubscriber proxies DELETE {PR}/api/issuer/subscribers/{id}.
+func (h *HandlerPR) DeleteIssuerSubscriber(c *fiber.Ctx) error {
+	out, err := h.client.DeleteIssuerSubscriber(prBearer(c), c.Params("id"))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// RotateIssuerSubscriberSecret proxies POST {PR}/api/issuer/subscribers/{id}/rotate-secret.
+// An optional {overlapSeconds} body is forwarded; the PR returns the new secret once.
+func (h *HandlerPR) RotateIssuerSubscriberSecret(c *fiber.Ctx) error {
+	var body map[string]interface{}
+	if len(c.Body()) > 0 {
+		if err := json.Unmarshal(c.Body(), &body); err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body")
+		}
+	}
+	out, err := h.client.RotateIssuerSubscriberSecret(prBearer(c), c.Params("id"), body)
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// ListIssuerDeliveries proxies GET {PR}/api/issuer/deliveries, forwarding the
+// operator's filter query (status/partyId/subscriberId/limit) verbatim.
+func (h *HandlerPR) ListIssuerDeliveries(c *fiber.Ctx) error {
+	out, err := h.client.IssuerDeliveryList(prBearer(c), string(c.Request().URI().QueryString()))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// RedeliverIssuerDelivery proxies POST {PR}/api/issuer/deliveries/{id}/redeliver.
+func (h *HandlerPR) RedeliverIssuerDelivery(c *fiber.Ctx) error {
+	out, err := h.client.RedeliverIssuerDelivery(prBearer(c), c.Params("id"))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}
+
+// ReemitPartyEvents proxies POST {PR}/api/issuer/parties/{partyId}/reemit.
+func (h *HandlerPR) ReemitPartyEvents(c *fiber.Ctx) error {
+	out, err := h.client.ReemitParty(prBearer(c), c.Params("partyId"))
+	if err != nil {
+		return relayPRError(c, err)
+	}
+	return c.Type("json").Send(out)
+}

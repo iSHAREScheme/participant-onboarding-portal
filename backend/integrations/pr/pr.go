@@ -321,6 +321,102 @@ func (c *Client) EditScheduler(token string, body interface{}) (json.RawMessage,
 	return out, nil
 }
 
+// ── Issuer-integration webhooks (ISSUER_INTEGRATION_CONTRACT.md I3/§13–15) ──────
+// The PR's issuer-webhook subscriber registry + delivery outbox, all under
+// {PR}/api/issuer/*. Subscriber secrets are write/rotate-only (never read back).
+
+// IssuerSubscriberList lists registered issuer-webhook subscribers
+// (GET {PR}/api/issuer/subscribers) → { subscribers:[…] }.
+func (c *Client) IssuerSubscriberList(token string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodGet, "/api/issuer/subscribers", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// IssuerSubscriberByID fetches one subscriber (GET {PR}/api/issuer/subscribers/{id}).
+func (c *Client) IssuerSubscriberByID(token, id string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodGet, "/api/issuer/subscribers/"+url.PathEscape(id), nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateIssuerSubscriber registers a subscriber (POST {PR}/api/issuer/subscribers).
+// The PR returns the generated signing secret once, in the response.
+func (c *Client) CreateIssuerSubscriber(token string, body interface{}) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodPost, "/api/issuer/subscribers", body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UpdateIssuerSubscriber edits a subscriber (PATCH {PR}/api/issuer/subscribers/{id}).
+func (c *Client) UpdateIssuerSubscriber(token, id string, body interface{}) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodPatch, "/api/issuer/subscribers/"+url.PathEscape(id), body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DeleteIssuerSubscriber removes a subscriber (DELETE {PR}/api/issuer/subscribers/{id}).
+func (c *Client) DeleteIssuerSubscriber(token, id string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodDelete, "/api/issuer/subscribers/"+url.PathEscape(id), nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RotateIssuerSubscriberSecret rotates a subscriber's signing secret
+// (POST {PR}/api/issuer/subscribers/{id}/rotate-secret). `body` may carry an
+// {overlapSeconds} override; the PR returns the new secret once.
+func (c *Client) RotateIssuerSubscriberSecret(token, id string, body interface{}) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodPost, "/api/issuer/subscribers/"+url.PathEscape(id)+"/rotate-secret", body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// IssuerDeliveryList lists webhook deliveries (GET {PR}/api/issuer/deliveries),
+// forwarding the operator's filter query (status/partyId/subscriberId/limit).
+func (c *Client) IssuerDeliveryList(token, rawQuery string) (json.RawMessage, error) {
+	path := "/api/issuer/deliveries"
+	if strings.TrimSpace(rawQuery) != "" {
+		path += "?" + rawQuery
+	}
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RedeliverIssuerDelivery requeues a failed/dead delivery
+// (POST {PR}/api/issuer/deliveries/{id}/redeliver).
+func (c *Client) RedeliverIssuerDelivery(token, id string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodPost, "/api/issuer/deliveries/"+url.PathEscape(id)+"/redeliver", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReemitParty re-enqueues a party.updated event for a party
+// (POST {PR}/api/issuer/parties/{partyId}/reemit).
+func (c *Client) ReemitParty(token, partyID string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(token, http.MethodPost, "/api/issuer/parties/"+url.PathEscape(partyID)+"/reemit", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // normalizeBearer ensures a single "Bearer " prefix on a raw token value.
 func normalizeBearer(token string) string {
 	t := strings.TrimSpace(token)

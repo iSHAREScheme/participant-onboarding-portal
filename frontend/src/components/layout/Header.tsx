@@ -252,10 +252,10 @@ const Header: React.FC = () => {
                   </li>
                   <li>
                     <Link
-                      href="/scheduler"
-                      className={isActive("/scheduler") ? styles.active : ""}
+                      href="/subscribers"
+                      className={isActive("/subscribers") ? styles.active : ""}
                     >
-                      {t("common.scheduler")}
+                      {t("common.issuerWebhooks")}
                     </Link>
                   </li>
                 </>

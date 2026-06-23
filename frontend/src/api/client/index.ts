@@ -593,6 +593,50 @@ export class API {
     return this.client.put(`/pr/scheduler`, body)
   }
 
+  // --- Issuer-integration webhooks ------------------------------------------
+  // The PR's issuer-webhook subscriber registry + delivery outbox
+  // (ISSUER_INTEGRATION_CONTRACT.md). Subscriber signing secrets are
+  // write/rotate-only — returned once on create/rotate, never read back.
+
+  // PR admin: list issuer-webhook subscribers → { subscribers:[…] }.
+  listIssuerSubscribers () {
+    return this.client.get(`/pr/issuer/subscribers`)
+  }
+  // PR admin: one subscriber → { subscriber:{…} }.
+  getIssuerSubscriber (id: string) {
+    return this.client.get(`/pr/issuer/subscribers/${encodeURIComponent(id)}`)
+  }
+  // PR admin: register a subscriber. Response carries the generated { secret } once.
+  createIssuerSubscriber (body: Record<string, any>) {
+    return this.client.post(`/pr/issuer/subscribers`, body)
+  }
+  // PR admin: edit a subscriber (url / eventFilter / replayProtection / enabled).
+  updateIssuerSubscriber (id: string, body: Record<string, any>) {
+    return this.client.patch(`/pr/issuer/subscribers/${encodeURIComponent(id)}`, body)
+  }
+  // PR admin: delete a subscriber.
+  deleteIssuerSubscriber (id: string) {
+    return this.client.delete(`/pr/issuer/subscribers/${encodeURIComponent(id)}`)
+  }
+  // PR admin: rotate a subscriber's signing secret; returns the new { secret } once.
+  // Optional overlapSeconds keeps the prior secret valid for a window.
+  rotateIssuerSubscriberSecret (id: string, overlapSeconds?: number) {
+    const body = overlapSeconds === undefined ? undefined : { overlapSeconds }
+    return this.client.post(`/pr/issuer/subscribers/${encodeURIComponent(id)}/rotate-secret`, body)
+  }
+  // PR admin: list webhook deliveries (outbox / dead-letter) → { deliveries:[…] }.
+  listIssuerDeliveries (params?: { status?: string; partyId?: string; subscriberId?: string; limit?: number }) {
+    return this.client.get(`/pr/issuer/deliveries`, { params })
+  }
+  // PR admin: requeue a failed/dead delivery for immediate retry.
+  redeliverIssuerDelivery (id: string) {
+    return this.client.post(`/pr/issuer/deliveries/${encodeURIComponent(id)}/redeliver`)
+  }
+  // PR admin: re-emit a party.updated event for a party (manual reconcile trigger).
+  reemitPartyEvents (partyId: string) {
+    return this.client.post(`/pr/issuer/parties/${encodeURIComponent(partyId)}/reemit`)
+  }
+
   // Admin-only party updates (proxied to the satellite).
   // v2.2: full replace via PUT /parties/{id}.
   updateParty (id: string, body: any) {
