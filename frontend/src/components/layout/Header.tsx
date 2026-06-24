@@ -221,17 +221,11 @@ const Header: React.FC = () => {
                   <li>
                     <Link
                       href="/revoke"
-                      className={isActive("/revoke") ? styles.active : ""}
+                      className={
+                        isActive("/revoke") || isActive("/transfer") ? styles.active : ""
+                      }
                     >
-                      {t("common.revoke")}
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/transfer"
-                      className={isActive("/transfer") ? styles.active : ""}
-                    >
-                      {t("common.transfer")}
+                      {t("common.revokeTransfer")}
                     </Link>
                   </li>
                   <li>

@@ -101,6 +101,44 @@
   cursor: not-allowed;
 }
 
+/* Segmented action toggle (Revoke / Transfer) — a pill group that reads as one
+   control and stays aligned with the rounded inputs below it. */
+.segment {
+  display: inline-flex;
+  background: #f0f4f5;
+  border: 1px solid #c3cccd;
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 1.1rem;
+}
+.segmentBtn {
+  border: none;
+  background: transparent;
+  color: #013a57;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.45rem 1.2rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.segmentBtn:hover:not(.segmentBtnActive) {
+  background: #e3eaeb;
+}
+.segmentBtnActive {
+  background: #fff;
+  color: var(--button-primary, #0066ee);
+  box-shadow: 0 1px 3px rgba(1, 58, 87, 0.15);
+}
+
+/* Small muted note under a field (e.g. "no other satellites yet"). */
+.fieldNote {
+  color: #6b7280;
+  font-size: 0.8rem;
+  margin: 0.3rem 0 0.75rem;
+}
+
 /* Inline checkbox + label (e.g. scheduler "enabled"). */
 .checkboxRow {
   display: flex;
