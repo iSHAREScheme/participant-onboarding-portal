@@ -113,6 +113,9 @@ const nl = {
       error: "Kan deelnemer niet laden.",
       notFound: "Deelnemer niet gevonden.",
       schemaLabel: "Schema",
+      projectionLabel: "Geprojecteerd als",
+      projectionHint:
+        "Het record van deze partij is opgeslagen onder een ouder schema en wordt hier getoond in het nieuwere claim-model. Voor partijen die niet zijn gemigreerd, zijn de claims afgeleid van de opgeslagen gegevens en alleen voor weergave.",
       viewMore: "Meer bekijken",
       close: "Sluiten",
       sections: {

@@ -114,6 +114,9 @@ const en = {
       error: "Failed to load participant.",
       notFound: "Participant not found.",
       schemaLabel: "Schema",
+      projectionLabel: "Projected as",
+      projectionHint:
+        "This party's record is stored under an older schema and is shown here in the newer claim model. For parties that have not been migrated, the claims are derived from the stored data for display only.",
       viewMore: "View more",
       close: "Close",
       sections: {

@@ -66,6 +66,21 @@
   font-weight: 600;
 }
 
+/* Shown only when the party is stored under one schema but projected into a
+   newer one for display (displaySchemaVersion ≠ schemaVersion). Amber tone +
+   dashed outline mark it as a derived/projected view rather than stored state. */
+.projection {
+  flex: 0 0 auto;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px dashed #f59e0b;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: help;
+}
+
 .body {
   flex: 1 1 auto;
   min-height: 0;

@@ -215,6 +215,15 @@ const ParticipantDetail: NextPage = () => {
   const hasClaims = Array.isArray(party?.claims) && party.claims.length > 0;
   const claimModel = hasClaims || usesClaimModel(getSatelliteVersion());
   const version = hasClaims ? str(party?.schemaVersion) || "3.0" : getSatelliteVersion();
+  // The satellite can PROJECT a party stored under an older schema into a newer
+  // display model (e.g. an unmigrated v2 party surfaced as v3 claims). It signals
+  // this with `displaySchemaVersion`; show it next to the stored schema when the
+  // two differ, so the reader knows the claims shown are a projection rather than
+  // the party's stored representation.
+  const displayVersion = str(party?.displaySchemaVersion);
+  const normalizeVer = (v: string) => v.trim().toLowerCase().replace(/^v/, "");
+  const isProjected =
+    !!displayVersion && normalizeVer(displayVersion) !== normalizeVer(version);
   // Editing is available from 2.2 onward (PUT) and on 3.0 (PATCH).
   const canEdit = version.startsWith("3") || version.startsWith("2.2");
   const partyName = party ? str(party.party_name ?? party.name) : "";
@@ -609,6 +618,14 @@ const ParticipantDetail: NextPage = () => {
                   <span className={styles.schema}>
                     {t("participants.detail.schemaLabel")}: {version}
                   </span>
+                  {isProjected && (
+                    <span
+                      className={styles.projection}
+                      title={t("participants.detail.projectionHint")}
+                    >
+                      {t("participants.detail.projectionLabel")}: {displayVersion}
+                    </span>
+                  )}
                   {canEdit && !editing && (
                     <button
                       className={styles.editBtn}
