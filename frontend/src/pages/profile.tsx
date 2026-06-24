@@ -3,6 +3,7 @@ import { useKeycloak } from "@react-keycloak/web";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "../styles/Profile.module.css";
 import ProtectedRoute from "components/ProtectedRoute";
+import LanguageSwitcher from "components/LanguageSwitcher";
 import API from "api/client";
 
 interface UserProfile {
@@ -158,6 +159,15 @@ const Profile: React.FC = () => {
             )}
           </div>
         </form>
+
+        <div className={styles.form}>
+          <div className={styles.formGroup}>
+            <label>{t("profile.labels.language")}</label>
+            <div>
+              <LanguageSwitcher />
+            </div>
+          </div>
+        </div>
 
       </div>
     </ProtectedRoute>

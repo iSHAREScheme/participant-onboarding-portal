@@ -67,6 +67,12 @@ func (h *HandlerRegistry) issuerJSON(method, path string, out interface{}) (int,
 		return 0, err
 	}
 	req.Header.Set("Accept", "application/json")
+	// The issuer's ObP API ("obp.api_key") requires a shared bearer on every /v1
+	// request; attach it when configured. Without it a secured issuer answers 401
+	// and the dashboard shows "unavailable".
+	if key := strings.TrimSpace(h.Config.VcIssuerApiKey); key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
 
 	client := &http.Client{Timeout: issuerHTTPTimeout}
 	res, err := client.Do(req)

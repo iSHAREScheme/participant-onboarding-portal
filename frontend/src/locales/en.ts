@@ -30,13 +30,16 @@ const en = {
     networkHealth: "Network health",
     revoke: "Revoke",
     transfer: "Transfer",
-    revokeTransfer: "Revoke / Transfer",
+    lifecycle: "Lifecycle",
     dataspaces: "Dataspaces",
     trustedList: "Trusted list",
     issuerWebhooks: "Issuer webhooks",
     yes: "Yes",
     no: "No",
-    menu: "Menu"
+    menu: "Menu",
+    clear: "Clear",
+    searching: "Searching…",
+    noMatches: "No matching participants"
   },
   organizationAccess: {
     title: "Organization access",
@@ -176,6 +179,7 @@ const en = {
         cancel: "Cancel",
         saved: "Saved.",
         saveError: "Failed to save changes.",
+        noComplianceClaim: "This participant has no editable compliance claim.",
         claimsTitle: "Claims"
       }
     }
@@ -285,7 +289,7 @@ const en = {
   },
   revoke: {
     title: "Revoke",
-    titleCombined: "Revoke / Transfer",
+    titleCombined: "Lifecycle",
     description: "Revoke a party from the registry, or transfer it to another participant registry.",
     form: {
       heading: "Lifecycle action",
@@ -1431,7 +1435,8 @@ const en = {
       firstName: "First Name",
       lastName: "Last Name",
       newPassword: "New Password (optional)",
-      confirmPassword: "Confirm Password"
+      confirmPassword: "Confirm Password",
+      language: "Language"
     },
     linkedAccounts: {
       title: "Login methods",

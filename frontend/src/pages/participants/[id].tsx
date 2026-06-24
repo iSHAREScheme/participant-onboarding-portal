@@ -224,8 +224,18 @@ const ParticipantDetail: NextPage = () => {
   const normalizeVer = (v: string) => v.trim().toLowerCase().replace(/^v/, "");
   const isProjected =
     !!displayVersion && normalizeVer(displayVersion) !== normalizeVer(version);
-  // Editing is available from 2.2 onward (PUT) and on 3.0 (PATCH).
-  const canEdit = version.startsWith("3") || version.startsWith("2.2");
+  // Editing: on a v3 satellite every write goes through the claim model, so a
+  // party is editable only when it carries a REAL (persisted, id-bearing)
+  // frameworkCompliance claim — this excludes derived/projected display claims
+  // (no id) on unmigrated parties, which can't be PATCHed. On a legacy v2.x
+  // satellite, the v2.2 full-PUT path applies instead.
+  const satelliteIsV3 = getSatelliteVersion().trim().startsWith("3");
+  const hasRealComplianceClaim =
+    Array.isArray(party?.claims) &&
+    party.claims.some(
+      (c: any) => c?.type === "frameworkCompliance" && str(c?.id)
+    );
+  const canEdit = satelliteIsV3 ? hasRealComplianceClaim : version.startsWith("2.2");
   const partyName = party ? str(party.party_name ?? party.name) : "";
   const partyId = party ? str(party.party_id ?? party.id) : "";
   // EORI/DID aliases (v3 `alsoKnownAs`; tolerate snake_case / aka). Drop blanks

@@ -39,6 +39,11 @@ type Config struct {
 	// polls for credential offers (its ObP API, e.g. http://ishare-vc-issuer:8080).
 	// Empty = credential issuance is not configured and the dashboard says so.
 	VcIssuerBaseUrl string
+	// VcIssuerApiKey is the shared bearer token the issuer's ObP API ("obp.api_key"
+	// on the issuer) requires on every /v1 request. Sent as Authorization: Bearer
+	// on the credential-offer poll. A secret — supplied via env only, never stored
+	// in settings or returned to the UI. Empty when the issuer runs auth-disabled.
+	VcIssuerApiKey string
 	// PrApiBaseUrl is the base URL of the Participant Registry admin API ("SO.api").
 	// It is reached server-to-server by forwarding the operator's OIDC bearer token
 	// (the same token the portal authenticated the admin with), so the PR must trust
@@ -198,6 +203,9 @@ func (config *Config) LoadEnvironment() error {
 	// External iSHARE VC issuer (ObP polling API). Server-to-server base URL; the
 	// offer URIs it returns carry the issuer's own public base URL for wallets.
 	config.VcIssuerBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_ISSUER_BASE_URL")), "/")
+	// Shared bearer the issuer's /v1 ObP API requires (matches the issuer's
+	// obp.api_key). Secret → env only.
+	config.VcIssuerApiKey = strings.TrimSpace(os.Getenv("VC_ISSUER_API_KEY"))
 
 	// Participant Registry admin API (SO.api). Server-to-server base URL; auth is
 	// the forwarded operator token, so no credential is configured here.

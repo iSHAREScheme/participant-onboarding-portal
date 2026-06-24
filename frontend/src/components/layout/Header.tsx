@@ -7,7 +7,6 @@ import { useKeycloak } from "@react-keycloak/web"
 import { useLanguage } from "../../context/LanguageContext"
 import { useSettings } from "../../context/SettingsContext"
 import { useTheme } from "../../hooks/useTheme"
-import LanguageSwitcher from "../LanguageSwitcher"
 import AdminTour, { ADMIN_TOUR_START_EVENT } from "../AdminTour"
 import { getPublicEnv } from "config/publicEnv"
 import { clearStoredKeycloakTokens } from "util/keycloakTokens"
@@ -190,24 +189,6 @@ const Header: React.FC = () => {
                   {t("common.participants")}
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/users"
-                  data-tour="users"
-                  className={isActive("/users") ? styles.active : ""}
-                >
-                  {t("common.users")}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/settings"
-                  data-tour="settings"
-                  className={isActive("/settings") ? styles.active : ""}
-                >
-                  {t("common.settings")}
-                </Link>
-              </li>
               {prConfigured && (
                 <>
                   <li>
@@ -225,7 +206,7 @@ const Header: React.FC = () => {
                         isActive("/revoke") || isActive("/transfer") ? styles.active : ""
                       }
                     >
-                      {t("common.revokeTransfer")}
+                      {t("common.lifecycle")}
                     </Link>
                   </li>
                   <li>
@@ -254,14 +235,30 @@ const Header: React.FC = () => {
                   </li>
                 </>
               )}
+              {/* Users + Settings always sit last, in that order. */}
+              <li>
+                <Link
+                  href="/users"
+                  data-tour="users"
+                  className={isActive("/users") ? styles.active : ""}
+                >
+                  {t("common.users")}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/settings"
+                  data-tour="settings"
+                  className={isActive("/settings") ? styles.active : ""}
+                >
+                  {t("common.settings")}
+                </Link>
+              </li>
             </ul>
             )}
             {/* On mobile these live in the drawer; on desktop they're hidden here
                 and shown in the top-bar right section instead. */}
             <div className={styles.drawerExtras}>
-              <div className={styles.drawerLang}>
-                <LanguageSwitcher />
-              </div>
               {keycloak?.authenticated && (
                 <div className={styles.drawerUser}>
                   <div className={styles.drawerUsername}>
@@ -293,7 +290,6 @@ const Header: React.FC = () => {
           </nav>
         )}
         <div className={styles.rightSection}>
-          <LanguageSwitcher />
           <div className={styles.authButton}>
             {keycloak && !keycloak.authenticated && (
               <button onClick={handleLogin}>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import { FormInput, FormSelect } from "components";
+import PartySearchSelect from "components/PartySearchSelect";
 import API from "api/client";
 import { prFailed, prMessage } from "util/prResponse";
 import { useLanguage } from "../context/LanguageContext";
@@ -544,17 +545,19 @@ const Subscribers: NextPage = () => {
         <p className={styles.hint}>{t("subscribers.deliveries.reemitHint")}</p>
         <div className={styles.filters}>
           <div className={styles.filterField}>
-            <FormInput
+            <PartySearchSelect
               label={t("subscribers.deliveries.party")}
-              id="reemitPartyId"
-              name="reemitPartyId"
-              type="text"
-              placeholder="EU.NL.NTRNL-12345678"
               value={reemitPartyId}
-              onChange={(e) => setReemitPartyId(e.target.value)}
+              onChange={setReemitPartyId}
+              required
             />
           </div>
-          <button type="button" className={styles.primaryBtn} onClick={reemit} disabled={submitting}>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            onClick={reemit}
+            disabled={submitting || !reemitPartyId.trim()}
+          >
             {t("subscribers.deliveries.reemit")}
           </button>
         </div>

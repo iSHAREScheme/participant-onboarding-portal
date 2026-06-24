@@ -120,13 +120,14 @@ function MyApp({ Component, pageProps }: AppProps) {
             const isAdmin = roles.includes('onboarding-admin')
             const target = isAdmin ? '/admin' : '/register'
 
-            // Only redirect if current path is not already appropriate for the role
-            const path = router.pathname
-            const isOnAdminArea = /^\/(admin|users|settings|participants)(\/|$)/.test(path)
-            const isOnUserArea = /^\/(?:register|profile|organization-access)(?:\/|$)/.test(path)
-
-            const shouldRedirect = isAdmin ? !isOnAdminArea : !isOnUserArea
-            if (shouldRedirect && path !== target) router.replace(target)
+            // Steer the freshly-authenticated user to their role's home ONLY from the
+            // post-login landing — the Keycloak login redirect returns to "/". On any
+            // real route (e.g. a browser refresh of a deep page, which re-runs SSO and
+            // re-fires onAuthSuccess) leave them exactly where they are; per-page route
+            // guards enforce access control regardless.
+            if (router.pathname === '/') {
+              router.replace(target)
+            }
           }}}
       >
         <LanguageProvider>

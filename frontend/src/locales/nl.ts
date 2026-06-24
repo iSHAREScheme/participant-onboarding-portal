@@ -29,13 +29,16 @@ const nl = {
     networkHealth: "Netwerkstatus",
     revoke: "Intrekken",
     transfer: "Overdragen",
-    revokeTransfer: "Intrekken / Overdragen",
+    lifecycle: "Levenscyclus",
     dataspaces: "Dataspaces",
     trustedList: "Vertrouwde lijst",
     issuerWebhooks: "Issuer-webhooks",
     yes: "Ja",
     no: "Nee",
-    menu: "Menu"
+    menu: "Menu",
+    clear: "Wissen",
+    searching: "Zoeken…",
+    noMatches: "Geen overeenkomende deelnemers"
   },
   organizationAccess: {
     title: "Organisatietoegang",
@@ -175,6 +178,7 @@ const nl = {
         cancel: "Annuleren",
         saved: "Opgeslagen.",
         saveError: "Kan wijzigingen niet opslaan.",
+        noComplianceClaim: "Deze deelnemer heeft geen bewerkbare compliance-claim.",
         claimsTitle: "Claims"
       }
     }
@@ -284,7 +288,7 @@ const nl = {
   },
   revoke: {
     title: "Intrekken",
-    titleCombined: "Intrekken / Overdragen",
+    titleCombined: "Levenscyclus",
     description: "Trek een partij in bij het register, of draag deze over aan een ander deelnemersregister.",
     form: {
       heading: "Levenscyclusactie",
@@ -1428,7 +1432,8 @@ const nl = {
       firstName: "Voornaam",
       lastName: "Achternaam",
       newPassword: "Nieuw Wachtwoord (optioneel)",
-      confirmPassword: "Bevestig Wachtwoord"
+      confirmPassword: "Bevestig Wachtwoord",
+      language: "Taal"
     },
     linkedAccounts: {
       title: "Inlogmethoden",

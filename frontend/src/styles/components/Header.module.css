@@ -72,7 +72,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .navbar a {
@@ -81,6 +81,10 @@
   font-weight: 500;
   padding: 0.5rem 1rem;
   transition: color 0.3s ease;
+  /* Keep each label on a single line so two-word items ("Network health",
+     "Trusted list") don't wrap and sit taller than their neighbours, which
+     misaligns the row. */
+  white-space: nowrap;
 }
 
 .navbar a:hover {
