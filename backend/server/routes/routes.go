@@ -129,6 +129,13 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 	group.Get("/settings/smtp", middlewares.RequireAdminRole(), kc.GetSmtp)
 	group.Put("/settings/smtp", middlewares.RequireAdminRole(), kc.UpdateSmtp)
 	group.Post("/settings/smtp/test", middlewares.RequireAdminRole(), kc.TestSmtp)
+
+	// Realm user administration for the admin Users page, proxied through the BFF so
+	// the Keycloak admin API stays private to the edge and only needs the backend's
+	// own admin credentials (callers are gated on the onboarding-admin role).
+	group.Get("/users", middlewares.RequireAdminRole(), kc.ListUsers)
+	group.Post("/users", middlewares.RequireAdminRole(), kc.CreateUser)
+	group.Delete("/users/:id", middlewares.RequireAdminRole(), kc.DeleteUser)
 }
 
 func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.Config) {
@@ -164,27 +171,14 @@ func GroupDelegationRequests(server *s.Server, group fiber.Router, config *confi
 // transfer, scheduler, network health, versions — is a uniform one-method change.
 func GroupPRRequests(server *s.Server, group fiber.Router, config *config.Config) {
 	handler := handlers.NewHandlerPR(server, config)
-	// Template (read-only) on the /api/* bearer surface: network/ledger health.
-	// The shape every PR-admin endpoint follows.
+	// This portal exposes only satellite-level PR functions. Scheme-owner-only
+	// features (trusted list, dataspaces, revoke) are intentionally absent — no route,
+	// no handler, no role reference — so non-scheme-owners have nothing to reach.
+	// Network/ledger health (read-only).
 	group.Get("/network-health", middlewares.RequireAdminRole(), handler.GetNetworkHealth)
-	// Revoke: list requests (read) + initiate (write/mutation template).
-	group.Get("/revoke/requests", middlewares.RequireAdminRole(), handler.GetRevokeList)
-	group.Post("/revoke", middlewares.RequireAdminRole(), handler.InitiateRevoke)
 	// Transfer a party's ownership to another registry: list (read) + request (write).
 	group.Get("/transfer/requests", middlewares.RequireAdminRole(), handler.GetTransferList)
 	group.Post("/transfer", middlewares.RequireAdminRole(), handler.CreateTransfer)
-	// Dataspace management: list (read) + detail (read) + create/edit (write).
-	group.Get("/dataspaces", middlewares.RequireAdminRole(), handler.GetDataspaceList)
-	group.Get("/dataspaces/detail", middlewares.RequireAdminRole(), handler.GetDataspaceDetail)
-	group.Post("/dataspaces", middlewares.RequireAdminRole(), handler.CreateDataspace)
-	group.Put("/dataspaces", middlewares.RequireAdminRole(), handler.EditDataspace)
-	// Trusted-list (certificate authorities): list (read) + validate/create/update/
-	// delete (write). Delete uses POST (the PR expects the model in the body).
-	group.Get("/trusted", middlewares.RequireAdminRole(), handler.GetTrustedList)
-	group.Post("/trusted/validate", middlewares.RequireAdminRole(), handler.ValidateTrustedCert)
-	group.Post("/trusted", middlewares.RequireAdminRole(), handler.CreateTrustedCA)
-	group.Put("/trusted", middlewares.RequireAdminRole(), handler.UpdateTrustedCA)
-	group.Post("/trusted/delete", middlewares.RequireAdminRole(), handler.DeleteTrustedCA)
 	// Scheduler: list (read) + create/edit (write). The PR exposes no delete.
 	group.Get("/scheduler", middlewares.RequireAdminRole(), handler.GetSchedulerList)
 	group.Post("/scheduler", middlewares.RequireAdminRole(), handler.CreateScheduler)

@@ -284,6 +284,19 @@ export interface DelegationOverview {
   members: DelegationMember[]
 }
 
+// A realm user as projected by the backend Users endpoints. `roles` lists the
+// realm roles the admin UI cares about (currently just onboarding-admin).
+export interface KeycloakUser {
+  id: string
+  username: string
+  email: string
+  firstName: string
+  lastName: string
+  enabled: boolean
+  createdTimestamp: number
+  roles?: string[]
+}
+
 export class API {
   public client: AxiosInstance
   constructor () {
@@ -421,6 +434,21 @@ export class API {
     return this.client.put(`/me/profile`, body)
   }
 
+  // --- Realm user administration (admin Users page) ----------------------
+  // Proxied through the backend so Keycloak's admin API stays private to the edge;
+  // the backend authenticates with its own admin credentials and gates on the
+  // onboarding-admin role.
+  listKeycloakUsers () {
+    return this.client.get<{ users: KeycloakUser[] }>(`/users`)
+  }
+  // Create a user (role "user" | "admin"); the backend also emails a set-password link.
+  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "user" | "admin" }) {
+    return this.client.post(`/users`, body)
+  }
+  deleteKeycloakUser (id: string) {
+    return this.client.delete(`/users/${encodeURIComponent(id)}`)
+  }
+
   fetchRegistry () {
     return this.client.get(`/registry`)
   }
@@ -506,17 +534,6 @@ export class API {
     return this.client.get(`/pr/network-health`)
   }
 
-  // PR admin: list revoke/transfer requests.
-  getRevokeRequests () {
-    return this.client.get(`/pr/revoke/requests`)
-  }
-
-  // PR admin: initiate a revoke (RevokeModel body). Returns the registry's
-  // FinalResponse ({ status, message }). Gated behind a confirmation in the UI.
-  initiateRevoke (body: Record<string, any>) {
-    return this.client.post(`/pr/revoke`, body)
-  }
-
   // PR admin: list party-transfer requests.
   getTransferRequests () {
     return this.client.get(`/pr/transfer/requests`)
@@ -526,56 +543,6 @@ export class API {
   // body: { partyId, transferTo, … }). Returns the registry's FinalResponse.
   createTransfer (body: Record<string, any>) {
     return this.client.post(`/pr/transfer`, body)
-  }
-
-  // PR admin: list managed dataspaces with full records ({ count, data:[…] }).
-  // Distinct from the thin id+title list at /registry/dataspaces used for
-  // dropdowns — this is the management surface on the co-deployed /api/* layer.
-  getManagedDataspaces () {
-    return this.client.get(`/pr/dataspaces`)
-  }
-
-  // PR admin: fetch one dataspace's full record to populate the edit form.
-  getDataspaceDetail (id: string) {
-    return this.client.get(`/pr/dataspaces/detail`, { params: { id } })
-  }
-
-  // PR admin: create a dataspace (dataspace model body). Returns FinalResponse.
-  createDataspace (body: Record<string, any>) {
-    return this.client.post(`/pr/dataspaces`, body)
-  }
-
-  // PR admin: update an existing dataspace (identified by its dataspaceID).
-  updateDataspace (body: Record<string, any>) {
-    return this.client.put(`/pr/dataspaces`, body)
-  }
-
-  // PR admin: list trusted certificate authorities ({ count, data:[…] }).
-  getTrustedList () {
-    return this.client.get(`/pr/trusted`)
-  }
-
-  // PR admin: validate a certificate before adding it to the trusted list.
-  // `certificate` is the base64 of the certificate file; the registry returns
-  // { validity, errors, model:{ subject, certificateFingerprint, certificate, … } }
-  // used to populate the create form.
-  validateTrustedCert (certificate: string) {
-    return this.client.post(`/pr/trusted/validate`, { certificate })
-  }
-
-  // PR admin: add a trusted CA (validated certificate model). Returns FinalResponse.
-  createTrustedCA (body: Record<string, any>) {
-    return this.client.post(`/pr/trusted`, body)
-  }
-
-  // PR admin: update a trusted CA (status/type). Returns FinalResponse.
-  updateTrustedCA (body: Record<string, any>) {
-    return this.client.put(`/pr/trusted`, body)
-  }
-
-  // PR admin: remove a trusted CA (certificate model body). Returns FinalResponse.
-  deleteTrustedCA (body: Record<string, any>) {
-    return this.client.post(`/pr/trusted/delete`, body)
   }
 
   // PR admin: list scheduled jobs ({ count, data:[…] }).

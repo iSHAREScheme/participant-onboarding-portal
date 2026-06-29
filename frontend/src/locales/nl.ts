@@ -336,6 +336,10 @@ const nl = {
     form: {
       heading: "Overdracht aanvragen",
       partyId: "Partij-ID",
+      participant: "Deelnemer",
+      fromRegistry: "Vanuit register",
+      noParties: "U heeft geen deelnemers om over te dragen.",
+      noSatellites: "Er zijn nog geen andere deelnemersregisters beschikbaar in het netwerk.",
       transferTo: "Overdragen aan register",
       transferToPlaceholder: "Id van doelregister",
       hint: "Geef de over te dragen partij op en het deelnemersregister waaraan deze moet worden overgedragen.",

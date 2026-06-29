@@ -17,6 +17,11 @@ import (
 // so the integration — auth (forwarded operator token), request execution and
 // error mapping — never differs per endpoint. Routes are admin-gated here; the PR
 // enforces its own authorization on the forwarded token.
+//
+// This portal exposes only satellite-level functions (network health, transfer,
+// scheduler, issuer webhooks). Scheme-owner-only features (trusted list,
+// dataspaces, revoke) are intentionally NOT proxied here — they belong to the
+// scheme-owner satellite UI, not this onboarding portal.
 type HandlerPR struct {
 	Server *s.Server
 	Config *config.Config
@@ -57,16 +62,6 @@ func (h *HandlerPR) GetNetworkHealth(c *fiber.Ctx) error {
 	return c.Type("json").Send(out)
 }
 
-// GetRevokeList proxies GET {PR}/api/getRevokeList — the registry's revoke/transfer
-// requests (read).
-func (h *HandlerPR) GetRevokeList(c *fiber.Ctx) error {
-	out, err := h.client.RevokeList(prBearer(c))
-	if err != nil {
-		return relayPRError(c, err)
-	}
-	return c.Type("json").Send(out)
-}
-
 // forwardBody is the shared write-handler body: parse the JSON request body and
 // run it through a pr.Client write method (forwarding the operator's token),
 // relaying the registry's response or mirrored error. Every POST PR-admin handler
@@ -88,12 +83,6 @@ func (h *HandlerPR) forwardBody(
 	return c.Type("json").Send(out)
 }
 
-// InitiateRevoke proxies POST {PR}/api/initiateRevoke (RevokeModel body). Gated
-// behind a confirmation in the UI.
-func (h *HandlerPR) InitiateRevoke(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.InitiateRevoke)
-}
-
 // GetTransferList proxies GET {PR}/api/transferList — party-transfer requests (read).
 func (h *HandlerPR) GetTransferList(c *fiber.Ctx) error {
 	out, err := h.client.TransferList(prBearer(c))
@@ -107,83 +96,6 @@ func (h *HandlerPR) GetTransferList(c *fiber.Ctx) error {
 // request transfer of a party to another registry.
 func (h *HandlerPR) CreateTransfer(c *fiber.Ctx) error {
 	return h.forwardBody(c, h.client.CreateTransfer)
-}
-
-// GetDataspaceList proxies GET {PR}/api/dataSpaceList — the registry's
-// dataspaces with full records (read).
-func (h *HandlerPR) GetDataspaceList(c *fiber.Ctx) error {
-	out, err := h.client.DataspaceList(prBearer(c))
-	if err != nil {
-		return relayPRError(c, err)
-	}
-	return c.Type("json").Send(out)
-}
-
-// GetDataspaceDetail proxies GET {PR}/api/dataSpaceList/edit?id={id} — one
-// dataspace's full record, used to populate the edit form.
-func (h *HandlerPR) GetDataspaceDetail(c *fiber.Ctx) error {
-	id := c.Query("id")
-	if id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "A dataspace id is required")
-	}
-	out, err := h.client.DataspaceByID(prBearer(c), id)
-	if err != nil {
-		return relayPRError(c, err)
-	}
-	return c.Type("json").Send(out)
-}
-
-// CreateDataspace proxies POST {PR}/api/createDataSpace (dataspace model body).
-func (h *HandlerPR) CreateDataspace(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.CreateDataspace)
-}
-
-// EditDataspace proxies POST {PR}/api/editDataSpace (dataspace model body).
-func (h *HandlerPR) EditDataspace(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.EditDataspace)
-}
-
-// GetTrustedList proxies GET {PR}/api/ca/list — the registry's trusted
-// certificate authorities with full records (read).
-func (h *HandlerPR) GetTrustedList(c *fiber.Ctx) error {
-	out, err := h.client.TrustedList(prBearer(c))
-	if err != nil {
-		return relayPRError(c, err)
-	}
-	return c.Type("json").Send(out)
-}
-
-// ValidateTrustedCert proxies POST {PR}/api/trusted/validate. The frontend posts
-// JSON { certificate: "<base64>" } (uniform with the rest of the API); this hop
-// forwards the base64 to the PR as the verbatim body it expects, keeping the
-// non-JSON quirk contained to the integration layer.
-func (h *HandlerPR) ValidateTrustedCert(c *fiber.Ctx) error {
-	var in struct {
-		Certificate string `json:"certificate"`
-	}
-	if err := json.Unmarshal(c.Body(), &in); err != nil || in.Certificate == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "A base64-encoded certificate is required")
-	}
-	out, err := h.client.ValidateTrustedCert(prBearer(c), in.Certificate)
-	if err != nil {
-		return relayPRError(c, err)
-	}
-	return c.Type("json").Send(out)
-}
-
-// CreateTrustedCA proxies POST {PR}/api/ca/create (validated certificate model).
-func (h *HandlerPR) CreateTrustedCA(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.CreateTrustedCA)
-}
-
-// UpdateTrustedCA proxies POST {PR}/api/ca/update (certificate model body).
-func (h *HandlerPR) UpdateTrustedCA(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.UpdateTrustedCA)
-}
-
-// DeleteTrustedCA proxies POST {PR}/api/deleteTrustedCA (certificate model body).
-func (h *HandlerPR) DeleteTrustedCA(c *fiber.Ctx) error {
-	return h.forwardBody(c, h.client.DeleteTrustedCA)
 }
 
 // GetSchedulerList proxies GET {PR}/api/getSchedulerList — the registry's

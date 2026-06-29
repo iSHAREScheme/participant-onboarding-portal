@@ -337,6 +337,10 @@ const en = {
     form: {
       heading: "Request transfer",
       partyId: "Party ID",
+      participant: "Participant",
+      fromRegistry: "From registry",
+      noParties: "You have no participants to transfer.",
+      noSatellites: "No other participant registries are available in the network yet.",
       transferTo: "Transfer to registry",
       transferToPlaceholder: "Destination registry id",
       hint: "Provide the party to move and the participant registry it should be transferred to.",

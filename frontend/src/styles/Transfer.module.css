@@ -65,7 +65,6 @@
   margin-top: 0.85rem;
 }
 
-/* Primary action (e.g. initiate transfer) — shared by the PR-admin form pages. */
 .primaryBtn {
   background: var(--button-primary, #0066ee);
   color: #fff;
@@ -83,122 +82,11 @@
   cursor: not-allowed;
 }
 
-/* Destructive action — red, distinct from the primary button. */
-.dangerBtn {
-  background: #d32f2f;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 0.55rem 1.2rem;
-  font-size: 0.92rem;
-  cursor: pointer;
-}
-.dangerBtn:hover:not(:disabled) {
-  background: #b91c1c;
-}
-.dangerBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Segmented action toggle (Revoke / Transfer) — a pill group that reads as one
-   control and stays aligned with the rounded inputs below it. */
-.segment {
-  display: inline-flex;
-  background: #f0f4f5;
-  border: 1px solid #c3cccd;
-  border-radius: 9999px;
-  padding: 3px;
-  gap: 2px;
-  margin-bottom: 1.1rem;
-}
-.segmentBtn {
-  border: none;
-  background: transparent;
-  color: #013a57;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 0.45rem 1.2rem;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.segmentBtn:hover:not(.segmentBtnActive) {
-  background: #e3eaeb;
-}
-.segmentBtnActive {
-  background: #fff;
-  color: var(--button-primary, #0066ee);
-  box-shadow: 0 1px 3px rgba(1, 58, 87, 0.15);
-}
-
 /* Small muted note under a field (e.g. "no other satellites yet"). */
 .fieldNote {
   color: #6b7280;
   font-size: 0.8rem;
   margin: 0.3rem 0 0.75rem;
-}
-
-/* Inline checkbox + label (e.g. scheduler "enabled"). */
-.checkboxRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0 0;
-  font-size: 0.9rem;
-  color: #1f2937;
-}
-.checkboxRow input {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-/* Certificate upload row (trusted-list add flow). */
-.uploadRow {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-bottom: 0.85rem;
-}
-.uploadLabel {
-  font-size: 0.85rem;
-  color: var(--text-secondary, #013a57);
-  font-weight: 600;
-}
-.fileInput {
-  font-size: 0.88rem;
-  color: #374151;
-}
-.fileInput::file-selector-button {
-  margin-right: 0.75rem;
-  background: #fff;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.fileInput::file-selector-button:hover {
-  background: #f3f4f6;
-}
-
-/* Validity badge shown after a certificate is validated. */
-.badge {
-  display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-.badgeValid {
-  background: #e6f4ea;
-  color: #1e7e34;
-}
-.badgeInvalid {
-  background: #fbe9e7;
-  color: #b91c1c;
 }
 
 .listHead {

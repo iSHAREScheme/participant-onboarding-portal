@@ -86,9 +86,24 @@ func (h *HandlerRegistry) issuerJSON(method, path string, out interface{}) (int,
 	if err != nil {
 		return res.StatusCode, err
 	}
+	// Only decode JSON on a 2xx. A non-2xx issuer response is frequently plaintext
+	// (e.g. a 401 "missing bearer token" when VC_ISSUER_API_KEY is unset), and
+	// feeding that to json.Unmarshal yielded the misleading "invalid character 'm'
+	// looking for beginning of value" errors. Surface the status + a short body
+	// snippet so the caller logs a clear, actionable diagnostic instead.
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		snippet := strings.TrimSpace(string(body))
+		if len(snippet) > 200 {
+			snippet = snippet[:200]
+		}
+		if snippet != "" {
+			return res.StatusCode, fmt.Errorf("issuer returned %d: %s", res.StatusCode, snippet)
+		}
+		return res.StatusCode, fmt.Errorf("issuer returned %d", res.StatusCode)
+	}
 	if out != nil && len(body) > 0 {
 		if err := json.Unmarshal(body, out); err != nil {
-			return res.StatusCode, err
+			return res.StatusCode, fmt.Errorf("issuer returned non-JSON (status %d): %w", res.StatusCode, err)
 		}
 	}
 	return res.StatusCode, nil

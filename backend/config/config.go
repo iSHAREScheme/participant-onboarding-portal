@@ -75,6 +75,12 @@ type Config struct {
 	KeycloakRealm         string
 	KeycloakAdminUsername string
 	KeycloakAdminPassword string
+	// KeycloakClientID is the public frontend client (NEXT_PUBLIC_KEYCLOAK_CLIENT_ID),
+	// used as the client_id when emailing a newly-created user their set-password link.
+	KeycloakClientID string
+	// FrontendDomain is the portal's public origin (NEXT_PUBLIC_FRONTEND_DOMAIN); the
+	// new-user action email redirects back here once the required actions are done.
+	FrontendDomain string
 	// KeycloakIdp is the eHerkenning identity-provider alias (shared with the
 	// frontend via NEXT_PUBLIC_KEYCLOAK_IDP) used to verify eHerkenning signing.
 	KeycloakIdp string
@@ -248,6 +254,8 @@ func (config *Config) LoadEnvironment() error {
 	config.KeycloakRealm = os.Getenv("NEXT_PUBLIC_KEYCLOAK_REALM")
 	config.KeycloakAdminUsername = os.Getenv("KEYCLOAK_ADMIN_USERNAME")
 	config.KeycloakAdminPassword = os.Getenv("KEYCLOAK_ADMIN_PASSWORD")
+	config.KeycloakClientID = os.Getenv("NEXT_PUBLIC_KEYCLOAK_CLIENT_ID")
+	config.FrontendDomain = strings.TrimRight(os.Getenv("NEXT_PUBLIC_FRONTEND_DOMAIN"), "/")
 	config.KeycloakIdp = os.Getenv("NEXT_PUBLIC_KEYCLOAK_IDP")
 
 	config.SatelliteDebug = os.Getenv("SATELLITE_DEBUG") == "true"

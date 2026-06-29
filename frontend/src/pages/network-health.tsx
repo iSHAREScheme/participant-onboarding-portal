@@ -10,7 +10,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useSettings } from "../context/SettingsContext";
 import { useToast } from "../context/ToastContext";
 import styles from "styles/NetworkHealth.module.css";
-import form from "styles/Revoke.module.css";
+import form from "styles/PrForm.module.css";
 
 // The PR /api/getLatestBlockDetails response is a Hyperledger-Fabric ledger view.
 // We render it defensively (fields may vary by registry version): overall status,
