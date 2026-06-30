@@ -237,7 +237,10 @@ const nl = {
       requestSectionTitle: "Beschikbare credentials",
       requestSectionHint: "Vraag de verifieerbare credentials aan waar uw organisatie recht op heeft. Voeg ze na uitgifte toe aan een wallet.",
       notAvailable: "Niet beschikbaar voor uw partij.",
-      issued: "Uitgegeven aan uw wallet.",
+      issued: "Deze credential is uitgegeven.",
+      getWalletLink: "Wallet-link ophalen",
+      gettingLink: "Bezig met ophalen…",
+      noWalletLink: "Kan op dit moment geen wallet-link genereren — probeer het later opnieuw.",
       types: {
         PartyCredential: "Partij-credential",
         iSHAREParticipantCredential: "iSHARE-deelnemerscredential",

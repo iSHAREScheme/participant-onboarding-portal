@@ -35,8 +35,9 @@ const CATALOGUE = [
 ];
 
 // Poll cadence while the issuer is still preparing credentials (after a request).
-const POLL_MS = 4000;
-const MAX_POLLS = 12;
+const POLL_MS = 3000;
+const MAX_POLLS = 15;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const fmtWhen = (iso?: string): string => {
   if (!iso) return "";
@@ -48,24 +49,27 @@ const isExpired = (iso?: string): boolean => {
   const d = new Date(iso);
   return !isNaN(d.getTime()) && d.getTime() < Date.now();
 };
+const isProcessing = (s?: string): boolean => s === "pending" || s === "processing";
 
 // The party's credential wallet hand-off. The portal never signs: an external
 // iSHARE VC issuer builds + signs the credentials on demand and exposes OID4VCI
-// credential-offer URIs. Issuance is portal-driven — the user requests each
-// credential they're entitled to; this section then polls for the offer and
-// renders it as a QR code / wallet deep link.
+// credential-offer URIs (a pre-authorized pull — the holder's wallet app claims the
+// credential from the offer; nothing is "connected" to the party). Issuance is
+// portal-driven: the user requests each credential they're entitled to; this section
+// then polls for the offer and renders it as a QR code / wallet deep link.
 const CredentialsSection: React.FC = () => {
   const { t } = useLanguage();
   const [data, setData] = useState<OffersResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  // "" | check | refresh | retry | req:<type>
+  // "" | check | retry | req:<type> | link:<type>
   const [busy, setBusy] = useState<string>("");
   const [copied, setCopied] = useState<string>("");
-  // Types requested this session — lets us show "not available" when a request
-  // returns no offer (the type wasn't buildable from the party's claims).
+  // Types requested this session — lets us show "not available" only after a request
+  // has settled with no offer (the type wasn't buildable from the party's claims).
   const [requested, setRequested] = useState<Set<string>>(new Set());
-  const pollsRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Issued types we tried to mint a wallet link for that produced none — surfaces an
+  // honest note instead of a button that appears to do nothing.
+  const [noLink, setNoLink] = useState<Set<string>>(new Set());
   const aliveRef = useRef(true);
 
   const fetchOffers = useCallback(async (): Promise<OffersResponse | null> => {
@@ -82,28 +86,30 @@ const CredentialsSection: React.FC = () => {
     }
   }, []);
 
-  // Poll while the issuer is still working (after a request), backing off after
-  // MAX_POLLS so the page doesn't hammer the issuer indefinitely.
-  const poll = useCallback(async () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    pollsRef.current = 0;
-    const loop = async () => {
-      const d = await fetchOffers();
-      const st = d?.status;
-      if ((st === "pending" || st === "processing") && pollsRef.current < MAX_POLLS) {
-        pollsRef.current += 1;
-        timerRef.current = setTimeout(loop, POLL_MS);
-      }
-    };
-    await loop();
+  // Poll until the issuer job settles (no longer pending/processing) or we hit the
+  // cap. Fully awaited — so a caller's "busy" state persists for the whole job
+  // instead of clearing after the first fetch (which briefly flashed wrong states).
+  const poll = useCallback(async (): Promise<OffersResponse | null> => {
+    let d = await fetchOffers();
+    let n = 0;
+    while (aliveRef.current && isProcessing(d?.status) && n < MAX_POLLS) {
+      n += 1;
+      await sleep(POLL_MS);
+      if (!aliveRef.current) break;
+      d = await fetchOffers();
+    }
+    return d;
   }, [fetchOffers]);
 
   useEffect(() => {
     aliveRef.current = true;
-    poll();
+    // Defer to a microtask so the loaders' setState stays out of the synchronous
+    // effect body (react-hooks/set-state-in-effect), matching the other pages.
+    queueMicrotask(() => {
+      poll();
+    });
     return () => {
       aliveRef.current = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [poll]);
 
@@ -111,6 +117,11 @@ const CredentialsSection: React.FC = () => {
   const requestType = async (type: string) => {
     setBusy(`req:${type}`);
     setRequested((s) => new Set(s).add(type));
+    setNoLink((s) => {
+      const n = new Set(s);
+      n.delete(type);
+      return n;
+    });
     try {
       await new API().requestMyCredentials([type]);
     } catch {
@@ -120,15 +131,23 @@ const CredentialsSection: React.FC = () => {
     if (aliveRef.current) setBusy("");
   };
 
-  const doRefresh = async () => {
-    setBusy("refresh");
+  // Mint a fresh wallet offer (QR) for an already-issued credential. If the issuer
+  // returns no offer for it, remember that so the card shows an honest note.
+  const getWalletLink = async (type: string) => {
+    setBusy(`link:${type}`);
     try {
       await new API().refreshMyCredentialOffers();
     } catch {
-      /* surfaced by the subsequent poll */
+      /* surfaced below */
     }
-    await poll();
-    if (aliveRef.current) setBusy("");
+    const d = await poll();
+    if (aliveRef.current) {
+      const got = (d?.results || []).some(
+        (r) => r.credential_type === type && r.credential_offer_uri
+      );
+      if (!got) setNoLink((s) => new Set(s).add(type));
+      setBusy("");
+    }
   };
 
   const doRetry = async () => {
@@ -173,6 +192,7 @@ const CredentialsSection: React.FC = () => {
   };
 
   const status = data?.status || "none";
+  const settled = !isProcessing(status);
   const results = data?.results || [];
 
   // One issued offer card (QR + wallet hand-off).
@@ -212,15 +232,51 @@ const CredentialsSection: React.FC = () => {
     );
   };
 
-  // A catalogue card for a type with no current offer: either already issued
-  // (refresh to re-mint a wallet link), requestable, in-flight, or not available.
+  // A catalogue card for a type with no current offer: loading, already-issued
+  // (mint a wallet link), requestable, or not available for this party.
   const renderTypeCard = (type: string): React.ReactNode => {
+    const requesting = busy === `req:${type}`;
+    const gettingLink = busy === `link:${type}`;
     const issued = results.some(
       (r) => r.credential_type === type && r.action && r.action !== "revoked"
     );
-    const requesting = busy === `req:${type}`;
-    const notAvailable = !issued && !requesting && requested.has(type);
     const desc = typeDescription(type);
+
+    let inner: React.ReactNode;
+    if (requesting) {
+      // Loading state while the async issuance job runs.
+      inner = (
+        <>
+          <Skeleton width={140} height={140} radius={8} style={{ margin: "4px auto 12px" }} />
+          <p className={styles.scanHint}>{t("party.credentials.requesting")}</p>
+        </>
+      );
+    } else if (issued) {
+      inner = (
+        <>
+          <p className={styles.scanHint}>{t("party.credentials.issued")}</p>
+          {noLink.has(type) ? (
+            <p className={styles.expiredNote}>{t("party.credentials.noWalletLink")}</p>
+          ) : (
+            <div className={styles.actions}>
+              <button className={styles.secondaryBtn} onClick={() => getWalletLink(type)} disabled={busy !== ""}>
+                {gettingLink ? t("party.credentials.gettingLink") : t("party.credentials.getWalletLink")}
+              </button>
+            </div>
+          )}
+        </>
+      );
+    } else if (settled && requested.has(type)) {
+      inner = <p className={styles.expiredNote}>{t("party.credentials.notAvailable")}</p>;
+    } else {
+      inner = (
+        <div className={styles.actions}>
+          <button className={styles.primaryBtn} onClick={() => requestType(type)} disabled={busy !== ""}>
+            {t("party.credentials.request")}
+          </button>
+        </div>
+      );
+    }
 
     return (
       <div className={styles.offerCard} key={`cat-${type}`}>
@@ -229,28 +285,7 @@ const CredentialsSection: React.FC = () => {
         </div>
         <h3 className={styles.cardTitle}>{typeLabel(type)}</h3>
         {desc && <p className={styles.scanHint}>{desc}</p>}
-        {issued ? (
-          <>
-            <p className={styles.scanHint}>{t("party.credentials.issued")}</p>
-            <div className={styles.actions}>
-              <button className={styles.secondaryBtn} onClick={doRefresh} disabled={busy !== ""}>
-                {busy === "refresh" ? t("party.credentials.refreshing") : t("party.credentials.refresh")}
-              </button>
-            </div>
-          </>
-        ) : notAvailable ? (
-          <p className={styles.expiredNote}>{t("party.credentials.notAvailable")}</p>
-        ) : (
-          <div className={styles.actions}>
-            <button
-              className={styles.primaryBtn}
-              onClick={() => requestType(type)}
-              disabled={busy !== ""}
-            >
-              {requesting ? t("party.credentials.requesting") : t("party.credentials.request")}
-            </button>
-          </div>
-        )}
+        {inner}
       </div>
     );
   };
@@ -259,27 +294,15 @@ const CredentialsSection: React.FC = () => {
   const renderCatalogue = (): React.ReactNode => (
     <div className={styles.grid}>
       {CATALOGUE.flatMap((type) => {
+        const requesting = busy === `req:${type}`;
         const offers = results.filter(
           (r) => r.credential_type === type && r.credential_offer_uri
         );
-        if (offers.length > 0) {
-          return offers.map((o, i) =>
-            renderOffer(o, `${type}-${o.subject_key || ""}-${i}`)
-          );
+        if (!requesting && offers.length > 0) {
+          return offers.map((o, i) => renderOffer(o, `${type}-${o.subject_key || ""}-${i}`));
         }
         return [renderTypeCard(type)];
       })}
-    </div>
-  );
-
-  const globalActions = (
-    <div className={styles.sectionActions}>
-      <button className={styles.secondaryBtn} onClick={doCheck} disabled={busy !== ""}>
-        {busy === "check" ? t("party.credentials.checking") : t("party.credentials.checkAgain")}
-      </button>
-      <button className={styles.secondaryBtn} onClick={doRefresh} disabled={busy !== ""}>
-        {busy === "refresh" ? t("party.credentials.refreshing") : t("party.credentials.refresh")}
-      </button>
     </div>
   );
 
@@ -323,15 +346,13 @@ const CredentialsSection: React.FC = () => {
             </div>
           </div>
         )}
-        {(status === "pending" || status === "processing") && (
-          <div className={styles.note}>
-            <strong>{t("party.credentials.preparing.title")}</strong>
-            <div>{t("party.credentials.preparing.message")}</div>
-          </div>
-        )}
         <p className={styles.requestHint}>{t("party.credentials.requestSectionHint")}</p>
         {renderCatalogue()}
-        {globalActions}
+        <div className={styles.sectionActions}>
+          <button className={styles.secondaryBtn} onClick={doCheck} disabled={busy !== ""}>
+            {busy === "check" ? t("party.credentials.checking") : t("party.credentials.checkAgain")}
+          </button>
+        </div>
       </>
     );
   }

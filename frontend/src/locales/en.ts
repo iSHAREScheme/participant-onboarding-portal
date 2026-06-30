@@ -238,7 +238,10 @@ const en = {
       requestSectionTitle: "Available credentials",
       requestSectionHint: "Request the verifiable credentials your organisation is entitled to. Once issued, add them to a wallet.",
       notAvailable: "Not available for your party.",
-      issued: "Issued to your wallet.",
+      issued: "This credential has been issued.",
+      getWalletLink: "Get wallet link",
+      gettingLink: "Getting link…",
+      noWalletLink: "Couldn't generate a wallet link right now — please try again later.",
       types: {
         PartyCredential: "Party credential",
         iSHAREParticipantCredential: "iSHARE participant credential",
