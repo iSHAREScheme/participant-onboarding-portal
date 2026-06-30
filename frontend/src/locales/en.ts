@@ -233,10 +233,21 @@ const en = {
         title: "Credential issuance didn't complete",
         message: "Something went wrong while issuing your credentials. You can retry."
       },
+      request: "Request",
+      requesting: "Requesting…",
+      requestSectionTitle: "Available credentials",
+      requestSectionHint: "Request the verifiable credentials your organisation is entitled to. Once issued, add them to a wallet.",
+      notAvailable: "Not available for your party.",
+      issued: "Issued to your wallet.",
       types: {
         PartyCredential: "Party credential",
         iSHAREParticipantCredential: "iSHARE participant credential",
         DataspaceParticipantCredential: "Dataspace participant credential"
+      },
+      typeDescriptions: {
+        PartyCredential: "Proves your organisation's identity (its party id and name).",
+        iSHAREParticipantCredential: "Proves your active iSHARE framework participation.",
+        DataspaceParticipantCredential: "Proves your membership of a data space."
       }
     }
   },

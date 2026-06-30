@@ -148,6 +148,7 @@ func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.
 	// external iSHARE VC issuer (the portal is the "ObP" poller — it never signs).
 	// The party id is derived server-side from the caller's proposal (IDOR-safe).
 	group.Get("/me/credentials", handler.GetMyCredentialOffers)
+	group.Post("/me/credentials/request", handler.RequestMyCredentials)
 	group.Post("/me/credentials/refresh", handler.RefreshMyCredentialOffers)
 	group.Post("/me/credentials/reprocess", handler.ReprocessMyCredentials)
 	group.Get("/connection", middlewares.RequireAdminRole(), handler.GetConnection)

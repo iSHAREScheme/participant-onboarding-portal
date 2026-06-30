@@ -515,6 +515,14 @@ export class API {
     return this.client.get(`/registry/me/credentials`)
   }
 
+  // Request on-demand issuance of specific credential types for the caller's party.
+  // Issuance is portal-driven: the issuer builds only the requested types that are
+  // buildable from the party's claims and exposes offers. Returns the issuer's job
+  // ack ({ status:"accepted", job_id, ... }); poll getMyCredentialOffers afterwards.
+  requestMyCredentials (credentialTypes: string[]) {
+    return this.client.post(`/registry/me/credentials/request`, { credentialTypes })
+  }
+
   // Ask the issuer to mint fresh offer URIs for already-issued credentials
   // (used when offers have expired) without revoking or rebuilding them.
   refreshMyCredentialOffers () {

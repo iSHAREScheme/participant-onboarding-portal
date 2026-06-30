@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,18 +56,31 @@ func (h *HandlerRegistry) issuerConfigured() bool {
 }
 
 // issuerJSON performs a server-to-server request to the external issuer's ObP API
-// and decodes the JSON response into out (when non-nil). Returns the HTTP status
-// code so callers can distinguish transport failures from issuer-side errors.
-func (h *HandlerRegistry) issuerJSON(method, path string, out interface{}) (int, error) {
+// and decodes the JSON response into out (when non-nil). A non-nil reqBody is sent
+// as a JSON request payload (e.g. the credential_types for an issuance request).
+// Returns the HTTP status code so callers can distinguish transport failures from
+// issuer-side errors.
+func (h *HandlerRegistry) issuerJSON(method, path string, reqBody, out interface{}) (int, error) {
 	base := strings.TrimRight(strings.TrimSpace(h.Config.VcIssuerBaseUrl), "/")
 	if base == "" {
 		return 0, fmt.Errorf("vc issuer not configured")
 	}
-	req, err := http.NewRequest(method, base+path, nil)
+	var bodyReader io.Reader
+	if reqBody != nil {
+		raw, err := json.Marshal(reqBody)
+		if err != nil {
+			return 0, err
+		}
+		bodyReader = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, base+path, bodyReader)
 	if err != nil {
 		return 0, err
 	}
 	req.Header.Set("Accept", "application/json")
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	// The issuer's ObP API ("obp.api_key") requires a shared bearer on every /v1
 	// request; attach it when configured. Without it a secured issuer answers 401
 	// and the dashboard shows "unavailable".
@@ -140,7 +154,7 @@ func (h *HandlerRegistry) GetMyCredentialOffers(c *fiber.Ctx) error {
 	}
 
 	var out map[string]interface{}
-	code, err := h.issuerJSON(fiber.MethodGet, offerPath(partyID, "/offers"), &out)
+	code, err := h.issuerJSON(fiber.MethodGet, offerPath(partyID, "/offers"), nil, &out)
 	if err != nil {
 		log.Printf("vc-issuer: offers poll failed for %q: %v", partyID, err)
 		resp["status"] = "unavailable"
@@ -188,9 +202,57 @@ func (h *HandlerRegistry) issuerAction(c *fiber.Ctx, suffix string) error {
 
 	partyID := strings.TrimSpace(proposal.PartyId)
 	var out map[string]interface{}
-	code, err := h.issuerJSON(fiber.MethodPost, offerPath(partyID, suffix), &out)
+	code, err := h.issuerJSON(fiber.MethodPost, offerPath(partyID, suffix), nil, &out)
 	if err != nil || code < 200 || code >= 300 {
 		log.Printf("vc-issuer: action %q failed for %q: code=%d err=%v", suffix, partyID, code, err)
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "The credential issuer is currently unavailable")
+	}
+	if out == nil {
+		out = map[string]interface{}{}
+	}
+	out["issuerConfigured"] = true
+	return c.JSON(out)
+}
+
+// RequestMyCredentials triggers on-demand issuance of the named credential types
+// for the authenticated caller's party. Issuance is portal-driven: the issuer
+// builds only the requested types that are buildable from the party's registry
+// claims, signs them, and exposes OID4VCI offers — which the dashboard then polls
+// for. The party id is derived from the caller's token (never from input), so a
+// user can only ever request credentials for their own party. Body:
+// {"credentialTypes":["PartyCredential", ...]}.
+func (h *HandlerRegistry) RequestMyCredentials(c *fiber.Ctx) error {
+	proposal := h.callerProposal(c)
+	if proposal == nil || strings.TrimSpace(proposal.PartyId) == "" {
+		return responses.ErrorResponse(c, fiber.StatusConflict, "Your party has not been admitted yet")
+	}
+	if !h.issuerConfigured() {
+		return responses.ErrorResponse(c, fiber.StatusNotImplemented, "Credential issuance is not configured")
+	}
+
+	var input struct {
+		CredentialTypes []string `json:"credentialTypes"`
+	}
+	if err := json.Unmarshal(c.Body(), &input); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body")
+	}
+	types := make([]string, 0, len(input.CredentialTypes))
+	for _, t := range input.CredentialTypes {
+		if s := strings.TrimSpace(t); s != "" {
+			types = append(types, s)
+		}
+	}
+	if len(types) == 0 {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Select at least one credential to request")
+	}
+
+	partyID := strings.TrimSpace(proposal.PartyId)
+	var out map[string]interface{}
+	// POST /v1/parties/{id}/credentials {credential_types:[...]} → 202 + job_id.
+	code, err := h.issuerJSON(fiber.MethodPost, offerPath(partyID, "/credentials"),
+		map[string]any{"credential_types": types}, &out)
+	if err != nil || code < 200 || code >= 300 {
+		log.Printf("vc-issuer: credential request failed for %q (types=%v): code=%d err=%v", partyID, types, code, err)
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "The credential issuer is currently unavailable")
 	}
 	if out == nil {

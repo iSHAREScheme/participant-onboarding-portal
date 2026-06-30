@@ -232,10 +232,21 @@ const nl = {
         title: "Uitgifte van credentials niet voltooid",
         message: "Er is iets misgegaan bij het uitgeven van uw credentials. U kunt het opnieuw proberen."
       },
+      request: "Aanvragen",
+      requesting: "Bezig met aanvragen…",
+      requestSectionTitle: "Beschikbare credentials",
+      requestSectionHint: "Vraag de verifieerbare credentials aan waar uw organisatie recht op heeft. Voeg ze na uitgifte toe aan een wallet.",
+      notAvailable: "Niet beschikbaar voor uw partij.",
+      issued: "Uitgegeven aan uw wallet.",
       types: {
         PartyCredential: "Partij-credential",
         iSHAREParticipantCredential: "iSHARE-deelnemerscredential",
         DataspaceParticipantCredential: "Dataspace-deelnemerscredential"
+      },
+      typeDescriptions: {
+        PartyCredential: "Bewijst de identiteit van uw organisatie (partij-id en naam).",
+        iSHAREParticipantCredential: "Bewijst uw actieve deelname aan het iSHARE-framework.",
+        DataspaceParticipantCredential: "Bewijst uw lidmaatschap van een dataspace."
       }
     }
   },
