@@ -32,6 +32,7 @@ const en = {
     transfer: "Transfer",
     lifecycle: "Lifecycle",
     dataspaces: "Dataspaces",
+    frameworks: "Frameworks",
     trustedList: "Trusted list",
     issuerWebhooks: "Issuer webhooks",
     yes: "Yes",
@@ -431,6 +432,30 @@ const en = {
       empty: "No dataspaces.",
       unavailable: "The participant registry is currently unavailable.",
       error: "Failed to load dataspaces."
+    }
+  },
+  frameworks: {
+    title: "Frameworks",
+    description: "Browse the frameworks exposed by the participant registry v3 endpoint.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    pageSize: "Page size",
+    empty: "No frameworks found.",
+    unavailable: "The participant registry is currently unavailable.",
+    error: "Failed to load frameworks.",
+    notConfigured: "The participant registry is not configured for this deployment.",
+    untitled: "Untitled framework",
+    showRaw: "Show details",
+    hideRaw: "Hide details",
+    issuer: "Issuer: {{issuer}}",
+    fields: {
+      version: "Version",
+      validFrom: "Valid from",
+      validUntil: "Valid until",
+      updated: "Updated"
+    },
+    pagination: {
+      summary: "Showing {{first}}–{{last}} of {{total}} frameworks"
     }
   },
   subscribers: {

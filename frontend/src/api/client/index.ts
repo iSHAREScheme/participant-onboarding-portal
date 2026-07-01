@@ -478,6 +478,11 @@ export class API {
     return this.client.get(`/registry/dataspaces`)
   }
 
+  // Frameworks registered in the Participant Registry: { frameworks, pagination, claims }.
+  fetchFrameworks (params?: { page?: number; pageSize?: number }) {
+    return this.client.get(`/registry/frameworks`, { params })
+  }
+
   // Admin-only: list one page of participants from the satellite registry.
   // Pagination, name search and the active/certified filters are evaluated by
   // the satellite; the backend returns { data, page, pageSize, total, totalPages }.

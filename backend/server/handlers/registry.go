@@ -153,6 +153,88 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"dataspaces": dataspaces})
 }
 
+// GetFrameworks godoc
+// @Summary      List frameworks from the Participant Registry
+// @Description  Fetches the frameworks registered in the satellite (server-side, owner-token authenticated), decodes the signed frameworks token and returns the framework rows plus pagination metadata.
+// @Tags         registry
+// @Produce      json
+// @Param        page      query     int  false  "Page number"
+// @Param        pageSize  query     int  false  "Page size"
+// @Success      200  {object}  map[string]interface{}
+// @Router       /registry/frameworks [get]
+func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	pageSize := c.QueryInt("pageSize", 10)
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	client := &http.Client{}
+	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	}
+
+	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, "/frameworks")
+	values := url.Values{}
+	values.Set("page", strconv.Itoa(page))
+	values.Set("pageSize", strconv.Itoa(pageSize))
+	endpoint += "?" + values.Encode()
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to fetch frameworks")
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: GET /frameworks status=%d", resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return responses.ErrorResponse(c, resp.StatusCode, "satellite frameworks request failed")
+	}
+
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to parse frameworks response")
+	}
+	token, _ := wrapper["frameworksToken"].(string)
+	if token == "" {
+		token, _ = wrapper["frameworks_token"].(string)
+	}
+
+	claims := map[string]interface{}{}
+	if parts := strings.Split(token, "."); len(parts) == 3 {
+		if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
+			_ = json.Unmarshal(payload, &claims)
+		}
+	}
+	frameworks, pagination := extractFrameworks(claims)
+	if len(pagination) == 0 {
+		pagination["currentPage"] = page
+		pagination["pageSize"] = pageSize
+		pagination["count"] = len(frameworks)
+	}
+
+	return c.JSON(fiber.Map{
+		"frameworks": frameworks,
+		"pagination": pagination,
+		"claims":     claims,
+	})
+}
+
 // extractDataspaces defensively pulls {id, title} entries out of a decoded
 // dataspacesToken payload, tolerating the different nestings the satellite may
 // use (dataspacesInfo as an array, or wrapping a `dataspaces` array).
@@ -185,6 +267,69 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 		out = append(out, fiber.Map{"id": id, "title": title})
 	}
 	return out
+}
+
+// extractFrameworks defensively pulls framework rows from the v3 frameworksToken
+// payload. The spec describes a paginated signed JWT; implementations may place
+// rows directly under frameworksInfo, frameworksInfo.data, frameworks or data.
+func extractFrameworks(claims map[string]interface{}) ([]fiber.Map, fiber.Map) {
+	pagination := fiber.Map{}
+	var arr []interface{}
+	for _, key := range []string{"frameworksInfo", "frameworks", "data"} {
+		switch v := claims[key].(type) {
+		case []interface{}:
+			arr = v
+		case map[string]interface{}:
+			if arr == nil {
+				if inner, ok := v["data"].([]interface{}); ok {
+					arr = inner
+				} else if inner, ok := v["frameworks"].([]interface{}); ok {
+					arr = inner
+				}
+			}
+			for _, pkey := range []string{"currentPage", "page", "pageSize", "total", "totalItems", "totalPages", "count"} {
+				if val, ok := v[pkey]; ok {
+					pagination[pkey] = val
+				}
+			}
+		}
+		if arr != nil {
+			break
+		}
+	}
+	for _, pkey := range []string{"currentPage", "page", "pageSize", "total", "totalItems", "totalPages", "count"} {
+		if val, ok := claims[pkey]; ok {
+			pagination[pkey] = val
+		}
+	}
+
+	out := []fiber.Map{}
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		row := fiber.Map{"raw": m}
+		for _, key := range []string{"id", "frameworkId", "framework_id"} {
+			if s, _ := m[key].(string); strings.TrimSpace(s) != "" {
+				row["id"] = s
+				break
+			}
+		}
+		for _, key := range []string{"title", "name", "frameworkName", "framework_name"} {
+			if s, _ := m[key].(string); strings.TrimSpace(s) != "" {
+				row["title"] = s
+				break
+			}
+		}
+		for _, key := range []string{"description", "status", "version", "startDate", "endDate", "validFrom", "validUntil", "createdAt", "updatedAt"} {
+			if val, ok := m[key]; ok {
+				row[key] = val
+			}
+		}
+		out = append(out, row)
+	}
+	return out, pagination
 }
 
 // GetRegistry godoc
@@ -290,6 +435,7 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 //   - mineOnly: keep parties registered under this portal's registrar, and
 //   - on a v3 claim-model satellite, active/certified (which the satellite
 //     ignores — that state lives in the claims).
+//
 // The default list (unfiltered, or v2 active/certified) stays a single page.
 func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize int, name string, activeOnly, certifiedOnly, mineOnly, claimModel bool) error {
 	registrar := h.resolveRegistrarId()

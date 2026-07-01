@@ -201,6 +201,14 @@ const Header: React.FC = () => {
                   </li>
                   <li>
                     <Link
+                      href="/frameworks"
+                      className={isActive("/frameworks") ? styles.active : ""}
+                    >
+                      {t("common.frameworks")}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       href="/transfer"
                       className={isActive("/transfer") ? styles.active : ""}
                     >

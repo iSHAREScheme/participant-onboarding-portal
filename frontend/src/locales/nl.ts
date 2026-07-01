@@ -31,6 +31,7 @@ const nl = {
     transfer: "Overdragen",
     lifecycle: "Levenscyclus",
     dataspaces: "Dataspaces",
+    frameworks: "Frameworks",
     trustedList: "Vertrouwde lijst",
     issuerWebhooks: "Issuer-webhooks",
     yes: "Ja",
@@ -430,6 +431,30 @@ const nl = {
       empty: "Geen dataspaces.",
       unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
       error: "Kan dataspaces niet laden."
+    }
+  },
+  frameworks: {
+    title: "Frameworks",
+    description: "Bekijk de frameworks die het v3-endpoint van het deelnemersregister aanbiedt.",
+    refresh: "Vernieuwen",
+    refreshing: "Vernieuwen…",
+    pageSize: "Paginagrootte",
+    empty: "Geen frameworks gevonden.",
+    unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+    error: "Kan frameworks niet laden.",
+    notConfigured: "Het deelnemersregister is niet geconfigureerd voor deze deployment.",
+    untitled: "Framework zonder titel",
+    showRaw: "Details tonen",
+    hideRaw: "Details verbergen",
+    issuer: "Issuer: {{issuer}}",
+    fields: {
+      version: "Versie",
+      validFrom: "Geldig vanaf",
+      validUntil: "Geldig tot",
+      updated: "Bijgewerkt"
+    },
+    pagination: {
+      summary: "{{first}}–{{last}} van {{total}} frameworks"
     }
   },
   subscribers: {
