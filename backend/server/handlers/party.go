@@ -1349,7 +1349,14 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, res.StatusCode, detail)
 	}
 
-	// Update the status to completed
+	// Update the status to completed. Persist the canonical identifier used by
+	// the satellite so follow-up flows (credential issuer polling, webhooks) use
+	// the same party id as the registry.
+	if flavor.UseDidIdentifiers {
+		proposal.PartyId = partyDID
+	} else {
+		proposal.PartyId = normalizedPartyID
+	}
 	proposal.Status = "completed"
 
 	// Save the changes
@@ -1439,6 +1446,9 @@ func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Propos
 		return responses.ErrorResponse(c, status, msg)
 	}
 
+	// Store the canonical DID because 2.2 registers parties through /parties and
+	// downstream issuer/webhook flows key credentials by the registry DID.
+	proposal.PartyId = partyDID
 	proposal.Status = "completed"
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
@@ -1525,7 +1535,7 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 	}
 
 	request := &requests.PartyV3CreateRequest{
-		ID:            proposal.PartyId,
+		ID:            partyDID,
 		Name:          proposal.PartyName,
 		AlsoKnownAs:   aliases,
 		SchemaVersion: "v3.0",
@@ -1545,6 +1555,9 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 		return responses.ErrorResponse(c, status, msg)
 	}
 
+	// Store the canonical DID because v3 registers parties through /parties and
+	// downstream issuer/webhook flows key credentials by the registry DID.
+	proposal.PartyId = partyDID
 	proposal.Status = "completed"
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
