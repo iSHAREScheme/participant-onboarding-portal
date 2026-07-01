@@ -41,26 +41,38 @@ func NewHandlerRegistry(server *s.Server, config *config.Config) *HandlerRegistr
 func (h *HandlerRegistry) GetConnection(c *fiber.Ctx) error {
 	cfg := h.Config
 	version := strings.TrimSpace(cfg.SatelliteVersion)
+	frameworkAgreementId := strings.TrimSpace(cfg.FrameworkAgreementId)
+	if frameworkAgreementId == "" && strings.TrimSpace(cfg.FrameworkId) != "" {
+		frameworkAgreementId = strings.TrimSpace(cfg.FrameworkId) + "-tou"
+	}
 	// A connection needs both a certificate chain and a private key (path or
 	// inline). Only report whether they are present — never the key itself.
 	certConfigured := strings.TrimSpace(cfg.SatelliteX5c) != "" &&
 		(strings.TrimSpace(cfg.SatellitePrivateKey) != "" || strings.TrimSpace(cfg.SatellitePrivateKeyPath) != "")
 	return c.JSON(fiber.Map{
-		"baseUrl":               cfg.SatelliteBaseUrl,
-		"iss":                   cfg.SatelliteIss,
-		"aud":                   cfg.SatelliteAud,
-		"version":               version,
-		"claimModel":            strings.HasPrefix(version, "3"),
-		"versionDetect":         cfg.SatelliteVersionDetect,
-		"epCreationEndpoint":    cfg.SatelliteEpCreationEndpoint,
-		"partiesEndpoint":       cfg.SatellitePartiesEndpoint,
-		"tokenEndpoint":         cfg.SatelliteTokenEndpoint,
-		"tokenScope":            cfg.SatelliteTokenScope,
-		"registrarId":           cfg.RegistrarId,
-		"dataspaceId":           cfg.DataspaceId,
-		"dataspaceTitle":        cfg.DataspaceTitle,
-		"certificateConfigured": certConfigured,
-		"oidcDisabled":          cfg.OIDCDisable,
+		"baseUrl":                         cfg.SatelliteBaseUrl,
+		"iss":                             cfg.SatelliteIss,
+		"aud":                             cfg.SatelliteAud,
+		"version":                         version,
+		"claimModel":                      strings.HasPrefix(version, "3"),
+		"versionDetect":                   cfg.SatelliteVersionDetect,
+		"epCreationEndpoint":              cfg.SatelliteEpCreationEndpoint,
+		"partiesEndpoint":                 cfg.SatellitePartiesEndpoint,
+		"tokenEndpoint":                   cfg.SatelliteTokenEndpoint,
+		"tokenScope":                      cfg.SatelliteTokenScope,
+		"registrarId":                     cfg.RegistrarId,
+		"dataspaceId":                     cfg.DataspaceId,
+		"dataspaceTitle":                  cfg.DataspaceTitle,
+		"frameworkId":                     cfg.FrameworkId,
+		"frameworkAgreementType":          cfg.FrameworkAgreementType,
+		"frameworkAgreementId":            frameworkAgreementId,
+		"frameworkAgreementTitle":         cfg.FrameworkAgreementTitle,
+		"frameworkRoleId":                 cfg.FrameworkRoleId,
+		"frameworkRoleLoa":                cfg.FrameworkRoleLoa,
+		"frameworkRoleLegalAdherence":     cfg.FrameworkRoleLegalAdherence,
+		"frameworkRoleCompliancyVerified": cfg.FrameworkRoleCompliancy,
+		"certificateConfigured":           certConfigured,
+		"oidcDisabled":                    cfg.OIDCDisable,
 	})
 }
 

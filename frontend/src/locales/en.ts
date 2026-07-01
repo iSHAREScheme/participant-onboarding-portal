@@ -1552,7 +1552,8 @@ const en = {
       certificateType: "Certificate Type",
       x5c: "Certificate (x5c, base64 DER)",
       x5t: "Thumbprint (x5t#S256)",
-      assertion: "Assertion"
+      assertion: "Assertion",
+      minimum: "Required for v3 party"
     },
     claimTypes: {
       frameworkCompliance: "Framework Compliance",

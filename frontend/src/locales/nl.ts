@@ -1549,7 +1549,8 @@ const nl = {
       certificateType: "Type certificaat",
       x5c: "Certificaat (x5c, base64 DER)",
       x5t: "Vingerafdruk (x5t#S256)",
-      assertion: "Assertie"
+      assertion: "Assertie",
+      minimum: "Vereist voor v3-partij"
     },
     claimTypes: {
       frameworkCompliance: "Framework-naleving",
