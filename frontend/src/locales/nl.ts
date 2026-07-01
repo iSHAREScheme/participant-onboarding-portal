@@ -131,7 +131,8 @@ const nl = {
         authRegistries: "Autorisatieregisters",
         certificates: "Certificaten",
         additionalInfo: "Aanvullende informatie",
-        claims: "Claims"
+        claims: "Claims",
+        history: "Geschiedenis"
       },
       fields: {
         partyId: "Party ID",
@@ -169,6 +170,15 @@ const nl = {
         agreements: "Geen overeenkomsten.",
         authRegistries: "Geen autorisatieregisters.",
         certificates: "Geen certificaten."
+      },
+      history: {
+        loading: "Geschiedenis laden…",
+        error: "Geschiedenis is momenteel niet beschikbaar.",
+        empty: "Geen geschiedenis gevonden.",
+        object: "Object",
+        actor: "Actor",
+        noFieldChanges: "Geen veldwijzigingen beschikbaar.",
+        more: "Nog {{count}} wijzigingen"
       },
       edit: {
         button: "Bewerken",

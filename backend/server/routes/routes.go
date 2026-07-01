@@ -157,6 +157,7 @@ func GroupRegistryRequests(server *s.Server, group fiber.Router, config *config.
 	group.Get("/frameworks", middlewares.RequireAdminRole(), handler.GetFrameworks)
 	group.Get("/participants", middlewares.RequireAdminRole(), handler.GetParticipants)
 	group.Get("/participants/detail", middlewares.RequireAdminRole(), handler.GetParticipantDetail)
+	group.Get("/participants/history", middlewares.RequireAdminRole(), handler.GetParticipantHistory)
 	group.Post("/certificate/validate", handler.VerifyTrustedCertificate)
 }
 

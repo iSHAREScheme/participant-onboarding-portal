@@ -654,6 +654,63 @@ func (h *HandlerRegistry) GetParticipantDetail(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": party})
 }
 
+// GetParticipantHistory returns ledger-derived history for a single participant
+// from the connected v3 Participant Registry. Existing history is attributed to
+// the Fabric/MSP actor available on-ledger; human portal users are only available
+// for future writes if the PR records them explicitly.
+func (h *HandlerRegistry) GetParticipantHistory(c *fiber.Ctx) error {
+	id := strings.TrimSpace(c.Query("eori"))
+	if id == "" {
+		id = strings.TrimSpace(c.Query("id"))
+	}
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing participant id")
+	}
+
+	client := &http.Client{}
+	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	}
+
+	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, "/parties/"+url.PathEscape(id)+"/history"), nil)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to fetch participant history")
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		if h.Config.SatelliteDebug {
+			log.Printf("satellite: participant history request failed status=%d body=%s", resp.StatusCode, string(body))
+		}
+		return responses.ErrorResponse(c, resp.StatusCode, "satellite participant history request failed")
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to parse participant history")
+	}
+	if history, ok := raw["participantHistory"]; ok {
+		return c.JSON(fiber.Map{"data": history})
+	}
+
+	token := stringField(raw, "participantHistoryToken", "participant_history_token")
+	if token == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "participant history token missing")
+	}
+	decoded, err := decodeJWTPayload(token)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to decode participant history token")
+	}
+	return c.JSON(fiber.Map{"data": decoded["participantHistory"]})
+}
+
 // GetMyParty returns the authenticated applicant's OWN party as registered in the
 // Participant Registry. The party id is taken from the caller's proposal (looked
 // up by the token's username) — never from input — so it can only ever return the
@@ -813,6 +870,31 @@ func (h *HandlerRegistry) fetchSatelliteParties(query string) (map[string]interf
 	}
 
 	return decodedData, nil
+}
+
+func decodeJWTPayload(token string) (map[string]interface{}, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT format")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, err
+	}
+	decoded := make(map[string]interface{})
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return nil, err
+	}
+	return decoded, nil
+}
+
+func stringField(raw map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := raw[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // fetchPartiesPage requests a single page of parties from the satellite,

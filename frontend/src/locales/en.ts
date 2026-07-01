@@ -132,7 +132,8 @@ const en = {
         authRegistries: "Authorisation registries",
         certificates: "Certificates",
         additionalInfo: "Additional information",
-        claims: "Claims"
+        claims: "Claims",
+        history: "History"
       },
       fields: {
         partyId: "Party ID",
@@ -170,6 +171,15 @@ const en = {
         agreements: "No agreements.",
         authRegistries: "No authorisation registries.",
         certificates: "No certificates."
+      },
+      history: {
+        loading: "Loading history…",
+        error: "History is currently unavailable.",
+        empty: "No history found.",
+        object: "Object",
+        actor: "Actor",
+        noFieldChanges: "No field-level changes available.",
+        more: "{{count}} more changes"
       },
       edit: {
         button: "Edit",

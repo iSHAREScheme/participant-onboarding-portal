@@ -505,6 +505,12 @@ export class API {
     })
   }
 
+  fetchParticipantHistory (id: string) {
+    return this.client.get(`/registry/participants/history`, {
+      params: { eori: id },
+    })
+  }
+
   // The applicant's OWN registered party (scoped server-side to their proposal):
   // { status, partyId, partyName, data }. `data` is null until admitted to the PR.
   getMyParty () {

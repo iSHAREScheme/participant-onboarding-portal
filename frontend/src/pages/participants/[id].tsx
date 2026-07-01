@@ -102,6 +102,33 @@ interface ClaimView {
   fields: { label: string; value: ReactNode; raw?: string }[];
 }
 
+interface HistoryChange {
+  field: string;
+  before?: any;
+  after?: any;
+}
+
+interface HistoryEntry {
+  ledgerId?: string;
+  transactionId?: string;
+  timestamp?: number;
+  actor?: {
+    mspId?: string;
+    commonName?: string;
+  };
+  objectType: string;
+  objectId: string;
+  claimType?: string;
+  action: string;
+  changes?: HistoryChange[];
+}
+
+const formatHistoryValue = (value: any): string => {
+  if (value === undefined || value === null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
 // Humanise a claim field key for display ("capabilityUrl" → "Capability Url").
 const claimFieldLabel = (k: string): string =>
   k
@@ -152,6 +179,9 @@ const ParticipantDetail: NextPage = () => {
   const [editing, setEditing] = useState(false);
   // Claim whose full data is shown in the modal (e.g. a long x509 certificate).
   const [openClaim, setOpenClaim] = useState<ClaimView | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -198,6 +228,23 @@ const ParticipantDetail: NextPage = () => {
     }
   }, [id]);
 
+  const loadHistory = useCallback(async () => {
+    if (!id) return;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    try {
+      const api = new API();
+      const res = await api.fetchParticipantHistory(id);
+      const items = res?.data?.data?.items;
+      setHistory(Array.isArray(items) ? items : []);
+    } catch {
+      setHistory([]);
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [id]);
+
   // AdminRoute flips this once the admin is authorized; fetching is driven by
   // the effect below (which also waits for the dynamic route id to hydrate).
   const onAuthorized = useCallback(() => setAuthorized(true), []);
@@ -208,6 +255,10 @@ const ParticipantDetail: NextPage = () => {
   useEffect(() => {
     if (authorized && id) queueMicrotask(load);
   }, [authorized, id, load]);
+
+  useEffect(() => {
+    if (authorized && id) queueMicrotask(loadHistory);
+  }, [authorized, id, loadHistory]);
 
   // Adhere to the schema the satellite actually returned for THIS party: a real
   // v3 party carries a `claims` array. Fall back to the configured version so a
@@ -558,6 +609,82 @@ const ParticipantDetail: NextPage = () => {
     );
   };
 
+  const renderHistory = () => (
+    <section className={styles.section}>
+      <h2 className={styles.sectionTitle}>{sec("history")}</h2>
+      {historyLoading ? (
+        <p className={styles.loading}>{t("participants.detail.history.loading")}</p>
+      ) : historyError ? (
+        <p className={styles.errorInline}>{t("participants.detail.history.error")}</p>
+      ) : history.length ? (
+        <div className={styles.historyList}>
+          {history.map((entry, index) => {
+            const actor = [entry.actor?.mspId, entry.actor?.commonName]
+              .map(str)
+              .filter(Boolean)
+              .join(" / ");
+            const titleParts = [
+              humanize(entry.action),
+              entry.objectType === "claim" && entry.claimType
+                ? claimTypeLabel(entry.claimType)
+                : humanize(entry.objectType),
+            ].filter(Boolean);
+            return (
+              <article className={styles.historyItem} key={`${entry.ledgerId}-${index}`}>
+                <div className={styles.historyHead}>
+                  <div className={styles.historyTitle}>
+                    {titleParts.join(" ")}
+                  </div>
+                  <span className={styles.historyLedger}>
+                    #{entry.ledgerId || entry.transactionId || index + 1}
+                  </span>
+                </div>
+                <div className={styles.historyMeta}>
+                  <span>{t("participants.detail.history.object")}: {entry.objectId}</span>
+                  <span>{t("participants.detail.history.actor")}: {actor || "—"}</span>
+                  {entry.timestamp ? (
+                    <span>
+                      {new Date(entry.timestamp * 1000).toLocaleString()}
+                    </span>
+                  ) : null}
+                </div>
+                {entry.changes?.length ? (
+                  <div className={styles.historyChanges}>
+                    {entry.changes.slice(0, 12).map((change, changeIndex) => (
+                      <div className={styles.historyChange} key={`${change.field}-${changeIndex}`}>
+                        <span className={styles.historyField}>{change.field}</span>
+                        <span className={styles.historyBefore} title={formatHistoryValue(change.before)}>
+                          {truncate(formatHistoryValue(change.before), 96)}
+                        </span>
+                        <span className={styles.historyArrow}>→</span>
+                        <span className={styles.historyAfter} title={formatHistoryValue(change.after)}>
+                          {truncate(formatHistoryValue(change.after), 96)}
+                        </span>
+                      </div>
+                    ))}
+                    {entry.changes.length > 12 && (
+                      <div className={styles.historyMore}>
+                        {t("participants.detail.history.more", {
+                          count: entry.changes.length - 12,
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className={styles.empty}>
+                    {t("participants.detail.history.noFieldChanges")}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className={styles.empty}>{t("participants.detail.history.empty")}</p>
+      )}
+    </section>
+  );
+
   return (
     <AdminRoute fetchData={onAuthorized}>
       <div className={styles.container}>
@@ -689,12 +816,14 @@ const ParticipantDetail: NextPage = () => {
                 onSaved={() => {
                   setEditing(false);
                   load();
+                  loadHistory();
                 }}
                 onCancel={() => setEditing(false)}
               />
             ) : (
               <div className={styles.body}>
                 {claimModel ? renderClaimView() : renderPartyView()}
+                {renderHistory()}
               </div>
             )}
           </>
