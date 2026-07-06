@@ -176,14 +176,23 @@ const en = {
         loading: "Loading history…",
         error: "History is currently unavailable.",
         empty: "No history found.",
+        emptyEdited: "No field changes recorded yet.",
         object: "Object",
         actor: "Actor",
         noFieldChanges: "No field-level changes available.",
-        more: "{{count}} more changes"
+        more: "{{count}} more changes",
+        show: "Show changes ({{count}})",
+        hide: "Hide changes",
+        changesLabel: "{{count}} field changes"
       },
       edit: {
         button: "Edit",
         title: "Edit participant",
+        partyInfoTitle: "Party information",
+        partyInfoHint: "Only party-level fields are edited here. Each claim is edited individually from its card.",
+        editClaim: "Edit claim",
+        editClaimTitle: "Edit claim",
+        noEditableClaimFields: "This claim type has no editable fields — its values are set at issuance.",
         save: "Save",
         saving: "Saving…",
         saveClaim: "Save claim",
@@ -192,6 +201,10 @@ const en = {
         saveError: "Failed to save changes.",
         noComplianceClaim: "This participant has no editable compliance claim.",
         claimsTitle: "Claims"
+      },
+      projectionWarn: {
+        title: "Derived data — needs migration",
+        body: "This participant has no native v3 claims, so the claims shown are derived (projected) from its legacy record for display only. They may be incomplete and cannot be edited until the party is migrated to native v3 claims."
       }
     }
   },

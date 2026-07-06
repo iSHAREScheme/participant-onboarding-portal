@@ -175,14 +175,23 @@ const nl = {
         loading: "Geschiedenis laden…",
         error: "Geschiedenis is momenteel niet beschikbaar.",
         empty: "Geen geschiedenis gevonden.",
+        emptyEdited: "Nog geen veldwijzigingen vastgelegd.",
         object: "Object",
         actor: "Actor",
         noFieldChanges: "Geen veldwijzigingen beschikbaar.",
-        more: "Nog {{count}} wijzigingen"
+        more: "Nog {{count}} wijzigingen",
+        show: "Wijzigingen tonen ({{count}})",
+        hide: "Wijzigingen verbergen",
+        changesLabel: "{{count}} veldwijzigingen"
       },
       edit: {
         button: "Bewerken",
         title: "Deelnemer bewerken",
+        partyInfoTitle: "Partijgegevens",
+        partyInfoHint: "Alleen partijgegevens worden hier bewerkt. Elke claim wordt afzonderlijk via zijn kaart bewerkt.",
+        editClaim: "Claim bewerken",
+        editClaimTitle: "Claim bewerken",
+        noEditableClaimFields: "Dit claimtype heeft geen bewerkbare velden — de waarden worden bij uitgifte vastgelegd.",
         save: "Opslaan",
         saving: "Opslaan…",
         saveClaim: "Claim opslaan",
@@ -191,6 +200,10 @@ const nl = {
         saveError: "Kan wijzigingen niet opslaan.",
         noComplianceClaim: "Deze deelnemer heeft geen bewerkbare compliance-claim.",
         claimsTitle: "Claims"
+      },
+      projectionWarn: {
+        title: "Afgeleide gegevens — migratie nodig",
+        body: "Deze deelnemer heeft geen native v3-claims, dus de getoonde claims zijn afgeleid (geprojecteerd) uit het verouderde record en dienen alleen ter weergave. Ze kunnen onvolledig zijn en kunnen pas worden bewerkt nadat de partij naar native v3-claims is gemigreerd."
       }
     }
   },

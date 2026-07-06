@@ -645,3 +645,149 @@
     gap: 0.6rem 1rem;
   }
 }
+
+/* ---- Projected/derived warning banner (actionable) --------------------- */
+.projectionWarning {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  color: #92400e;
+}
+.projectionWarnIcon {
+  font-size: 1.15rem;
+  line-height: 1.4;
+  flex: 0 0 auto;
+}
+.projectionWarnBody {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: #7c2d12;
+}
+
+/* ---- Per-claim card actions (edit / view more) ------------------------- */
+.claimCardActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.6rem;
+}
+.claimEditBtn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.claimEditBtn:hover {
+  background: #f3f4f6;
+}
+
+/* ---- History: collapsed header + edited-only rows ---------------------- */
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.historyToggle {
+  border: none;
+  background: none;
+  color: #2563eb;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+}
+.historyToggle:hover {
+  text-decoration: underline;
+}
+.historyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.9rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+.historyRow:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+.historyRowTitle {
+  font-weight: 600;
+  color: #111827;
+}
+.historyRowMeta {
+  font-size: 0.8rem;
+  color: #6b7280;
+  flex: 1 1 auto;
+}
+.historyRowLedger {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ---- Diff popup rows --------------------------------------------------- */
+.diffRow {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.diffField {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #374151;
+  margin-bottom: 0.2rem;
+}
+.diffValues {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+/* ---- also-known-as repeater (v3 party-info edit) ----------------------- */
+.repeaterField {
+  margin-top: 0.75rem;
+}
+.repeaterLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.4rem;
+}
+.repeaterRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.removeButton {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #b91c1c;
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.removeButton:hover {
+  background: #fef2f2;
+}

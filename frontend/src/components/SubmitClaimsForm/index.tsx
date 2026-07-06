@@ -51,6 +51,24 @@ const MINIMUM_CLAIM_TYPES: EditableClaimType[] = [
   "x509Certificate",
 ];
 
+// Default certificateType for x509 claims.
+const DEFAULT_CERTIFICATE_TYPE = "eSeal";
+
+// iSHARE framework roles. The dropdown shows the human-readable title (label);
+// the roleId (value) is what gets stored in the claim / sent to the backend.
+const FRAMEWORK_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: "ServiceConsumer", label: "Service Consumer" },
+  { value: "ServiceProvider", label: "Service Provider" },
+  { value: "EntitledParty", label: "Entitled Party" },
+  { value: "AuthorisationRegistry", label: "Authorisation Registry" },
+  { value: "IdentityProvider", label: "Identity Provider" },
+  { value: "IdentityBroker", label: "Identity Broker" },
+  { value: "iShareSatellite", label: "iSHARE Satellite" },
+];
+
+const roleTitle = (roleId: string): string =>
+  FRAMEWORK_ROLE_OPTIONS.find((o) => o.value === roleId)?.label || roleId;
+
 const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
 
 const buildInitialDefaults = (): ClaimDefaults => {
@@ -142,11 +160,14 @@ const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDr
     case "frameworkRole":
       next.frameworkId = next.frameworkId || defaults.frameworkId;
       next.roleId = next.roleId || defaults.frameworkRoleId;
-      next.title = next.title || defaults.frameworkRoleId;
+      next.title = next.title || roleTitle(next.roleId);
       next.loa = next.loa || defaults.frameworkRoleLoa;
       next.legalAdherence = next.legalAdherence || defaults.frameworkRoleLegalAdherence;
       next.compliancyVerified =
         next.compliancyVerified || defaults.frameworkRoleCompliancyVerified;
+      break;
+    case "x509Certificate":
+      next.certificateType = next.certificateType || DEFAULT_CERTIFICATE_TYPE;
       break;
     case "dataspaceMembership":
       next.legalAdherence = next.legalAdherence || "not-applicable";
@@ -416,6 +437,22 @@ const SubmitClaimsForm: React.FC = () => {
     />
   );
 
+  // Read-only static field: still bound (so it is submitted) but not editable —
+  // used for defaults that must not be changed on this screen (registrarId,
+  // start/end dates, frameworkId).
+  const claimStatic = (index: number, key: string, label: string) => (
+    <FormInput
+      label={label}
+      id={`claim-${index}-${key}`}
+      name={`claim-${index}-${key}`}
+      type="text"
+      placeholder=""
+      disabled
+      value={claims[index][key] || ""}
+      onChange={() => {}}
+    />
+  );
+
   // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → md5 hash ---
 
   const handleCertFile = async (index: number, file: File) => {
@@ -649,7 +686,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkCompliance":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), t("submit.placeholders.framework"), true)}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
             {claimInput(index, "capabilityUrl", t("submit.claim.capabilityUrl"), t("submit.placeholders.url"))}
             {claimInput(index, "ai_description", t("submit.claim.description"))}
             {claimInput(index, "ai_website", t("submit.claim.website"), t("submit.placeholders.url"))}
@@ -675,7 +712,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkAgreement":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), "", true)}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
             {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
             {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
             {claimInput(index, "title", t("submit.claim.title"), "", true)}
@@ -684,9 +721,16 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkRole":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), "", true)}
-            {claimInput(index, "roleId", t("submit.claim.roleId"), t("submit.placeholders.roleId"), true)}
-            {claimInput(index, "title", t("submit.claim.title"))}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
+            <FormSelect
+              label={t("submit.claim.roleId")}
+              options={FRAMEWORK_ROLE_OPTIONS}
+              value={claim.roleId || ""}
+              onChange={(v) =>
+                updateClaimFields(index, { roleId: v, title: roleTitle(v) })
+              }
+              required
+            />
             <FormSelect
               label={t("submit.claim.loa")}
               options={loaOptions}
@@ -863,9 +907,9 @@ const SubmitClaimsForm: React.FC = () => {
               onChange={(v) => updateClaim(index, "status", v)}
               required
             />
-            {claimInput(index, "registrarId", t("submit.claim.registrarId"), "", true)}
-            {claimInput(index, "startDate", t("submit.claim.startDate"), t("submit.placeholders.date"))}
-            {claimInput(index, "endDate", t("submit.claim.endDate"), t("submit.placeholders.date"))}
+            {claimStatic(index, "registrarId", t("submit.claim.registrarId"))}
+            {claimStatic(index, "startDate", t("submit.claim.startDate"))}
+            {claimStatic(index, "endDate", t("submit.claim.endDate"))}
             {renderTypeFields(claim, index)}
           </div>
           {renderTypeUploads(claim, index)}

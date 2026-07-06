@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
+import ClaimEditModal from "components/ClaimEditModal";
 import { Skeleton } from "components";
 import API from "api/client";
 import { cacheParticipants, getCachedParticipant } from "util/participantCache";
@@ -100,6 +101,7 @@ interface ClaimView {
   type: string; // key under submit.claimTypes.*
   status?: string;
   fields: { label: string; value: ReactNode; raw?: string }[];
+  claim?: any; // the underlying real claim (present for id-bearing v3 claims → editable)
 }
 
 interface HistoryChange {
@@ -163,7 +165,7 @@ const claimViewFromReal = (c: any): ClaimView => {
   if (c?.additionalInfo && typeof c.additionalInfo === "object") {
     Object.entries(c.additionalInfo).forEach(([k, v]) => push(k, v));
   }
-  return { type: str(c?.type), status: str(c?.status), fields };
+  return { type: str(c?.type), status: str(c?.status), fields, claim: c };
 };
 
 const ParticipantDetail: NextPage = () => {
@@ -179,6 +181,9 @@ const ParticipantDetail: NextPage = () => {
   const [editing, setEditing] = useState(false);
   // Claim whose full data is shown in the modal (e.g. a long x509 certificate).
   const [openClaim, setOpenClaim] = useState<ClaimView | null>(null);
+  const [editClaim, setEditClaim] = useState<any | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [diffEntry, setDiffEntry] = useState<HistoryEntry | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(false);
@@ -439,15 +444,26 @@ const ParticipantDetail: NextPage = () => {
                       </Row>
                     ))}
                   </div>
-                  {hasLong && (
-                    <button
-                      type="button"
-                      className={styles.viewMore}
-                      onClick={() => setOpenClaim(c)}
-                    >
-                      {t("participants.detail.viewMore")}
-                    </button>
-                  )}
+                  <div className={styles.claimCardActions}>
+                    {satelliteIsV3 && c.claim?.id && (
+                      <button
+                        type="button"
+                        className={styles.claimEditBtn}
+                        onClick={() => setEditClaim(c.claim)}
+                      >
+                        {t("participants.detail.edit.editClaim")}
+                      </button>
+                    )}
+                    {hasLong && (
+                      <button
+                        type="button"
+                        className={styles.viewMore}
+                        onClick={() => setOpenClaim(c)}
+                      >
+                        {t("participants.detail.viewMore")}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -609,81 +625,78 @@ const ParticipantDetail: NextPage = () => {
     );
   };
 
-  const renderHistory = () => (
-    <section className={styles.section}>
-      <h2 className={styles.sectionTitle}>{sec("history")}</h2>
-      {historyLoading ? (
-        <p className={styles.loading}>{t("participants.detail.history.loading")}</p>
-      ) : historyError ? (
-        <p className={styles.errorInline}>{t("participants.detail.history.error")}</p>
-      ) : history.length ? (
-        <div className={styles.historyList}>
-          {history.map((entry, index) => {
-            const actor = [entry.actor?.mspId, entry.actor?.commonName]
-              .map(str)
-              .filter(Boolean)
-              .join(" / ");
-            const titleParts = [
-              humanize(entry.action),
-              entry.objectType === "claim" && entry.claimType
-                ? claimTypeLabel(entry.claimType)
-                : humanize(entry.objectType),
-            ].filter(Boolean);
-            return (
-              <article className={styles.historyItem} key={`${entry.ledgerId}-${index}`}>
-                <div className={styles.historyHead}>
-                  <div className={styles.historyTitle}>
-                    {titleParts.join(" ")}
-                  </div>
-                  <span className={styles.historyLedger}>
-                    #{entry.ledgerId || entry.transactionId || index + 1}
-                  </span>
-                </div>
-                <div className={styles.historyMeta}>
-                  <span>{t("participants.detail.history.object")}: {entry.objectId}</span>
-                  <span>{t("participants.detail.history.actor")}: {actor || "—"}</span>
-                  {entry.timestamp ? (
-                    <span>
-                      {new Date(entry.timestamp * 1000).toLocaleString()}
-                    </span>
-                  ) : null}
-                </div>
-                {entry.changes?.length ? (
-                  <div className={styles.historyChanges}>
-                    {entry.changes.slice(0, 12).map((change, changeIndex) => (
-                      <div className={styles.historyChange} key={`${change.field}-${changeIndex}`}>
-                        <span className={styles.historyField}>{change.field}</span>
-                        <span className={styles.historyBefore} title={formatHistoryValue(change.before)}>
-                          {truncate(formatHistoryValue(change.before), 96)}
-                        </span>
-                        <span className={styles.historyArrow}>→</span>
-                        <span className={styles.historyAfter} title={formatHistoryValue(change.after)}>
-                          {truncate(formatHistoryValue(change.after), 96)}
-                        </span>
-                      </div>
-                    ))}
-                    {entry.changes.length > 12 && (
-                      <div className={styles.historyMore}>
-                        {t("participants.detail.history.more", {
-                          count: entry.changes.length - 12,
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className={styles.empty}>
-                    {t("participants.detail.history.noFieldChanges")}
-                  </p>
-                )}
-              </article>
-            );
-          })}
+  // History is collapsed by default. Expanding shows only entries that actually
+  // changed fields; clicking one opens the full before→after diff in a popup.
+  const renderHistory = () => {
+    const edited = history.filter((h) => (h.changes?.length ?? 0) > 0);
+    return (
+      <section className={styles.section}>
+        <div className={styles.historyHeader}>
+          <h2 className={styles.sectionTitle}>{sec("history")}</h2>
+          <button
+            type="button"
+            className={styles.historyToggle}
+            onClick={() => setHistoryOpen((o) => !o)}
+            aria-expanded={historyOpen}
+          >
+            {historyOpen
+              ? t("participants.detail.history.hide")
+              : t("participants.detail.history.show", { count: edited.length })}
+          </button>
         </div>
-      ) : (
-        <p className={styles.empty}>{t("participants.detail.history.empty")}</p>
-      )}
-    </section>
-  );
+        {historyOpen &&
+          (historyLoading ? (
+            <p className={styles.loading}>
+              {t("participants.detail.history.loading")}
+            </p>
+          ) : historyError ? (
+            <p className={styles.errorInline}>
+              {t("participants.detail.history.error")}
+            </p>
+          ) : edited.length ? (
+            <div className={styles.historyList}>
+              {edited.map((entry, index) => {
+                const titleParts = [
+                  humanize(entry.action),
+                  entry.objectType === "claim" && entry.claimType
+                    ? claimTypeLabel(entry.claimType)
+                    : humanize(entry.objectType),
+                ].filter(Boolean);
+                return (
+                  <button
+                    type="button"
+                    className={styles.historyRow}
+                    key={`${entry.ledgerId}-${index}`}
+                    onClick={() => setDiffEntry(entry)}
+                  >
+                    <span className={styles.historyRowTitle}>
+                      {titleParts.join(" ")}
+                    </span>
+                    <span className={styles.historyRowMeta}>
+                      {t("participants.detail.history.changesLabel", {
+                        count: entry.changes?.length ?? 0,
+                      })}
+                      {entry.timestamp
+                        ? ` · ${new Date(
+                            entry.timestamp * 1000
+                          ).toLocaleString()}`
+                        : ""}
+                    </span>
+                    <span className={styles.historyRowLedger}>
+                      #{entry.ledgerId || entry.transactionId || index + 1}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={styles.empty}>
+              {t("participants.detail.history.emptyEdited")}
+            </p>
+          ))}
+      </section>
+    );
+  };
 
   return (
     <AdminRoute fetchData={onAuthorized}>
@@ -809,6 +822,23 @@ const ParticipantDetail: NextPage = () => {
               )}
             </header>
 
+            {isProjected && (
+              <div className={styles.projectionWarning} role="alert">
+                <span
+                  className={styles.projectionWarnIcon}
+                  aria-hidden="true"
+                >
+                  ⚠
+                </span>
+                <div>
+                  <strong>{t("participants.detail.projectionWarn.title")}</strong>
+                  <p className={styles.projectionWarnBody}>
+                    {t("participants.detail.projectionWarn.body")}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {editing ? (
               <ParticipantEditForm
                 party={party}
@@ -865,6 +895,83 @@ const ParticipantDetail: NextPage = () => {
                       {fld.raw || "—"}
                     </span>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editClaim && (
+        <ClaimEditModal
+          partyId={partyId}
+          claim={editClaim}
+          onSaved={() => {
+            setEditClaim(null);
+            load();
+            loadHistory();
+          }}
+          onClose={() => setEditClaim(null)}
+        />
+      )}
+
+      {diffEntry && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDiffEntry(null)}
+        >
+          <div className={styles.modalPanel} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <span className={styles.claimType}>
+                {[
+                  humanize(diffEntry.action),
+                  diffEntry.objectType === "claim" && diffEntry.claimType
+                    ? claimTypeLabel(diffEntry.claimType)
+                    : humanize(diffEntry.objectType),
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              </span>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setDiffEntry(null)}
+                aria-label={t("participants.detail.close")}
+              >
+                &times;
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.historyMeta}>
+                <span>
+                  {t("participants.detail.history.object")}: {diffEntry.objectId}
+                </span>
+                {diffEntry.timestamp ? (
+                  <span>
+                    {new Date(diffEntry.timestamp * 1000).toLocaleString()}
+                  </span>
+                ) : null}
+              </div>
+              {(diffEntry.changes ?? []).map((change, i) => (
+                <div className={styles.diffRow} key={`${change.field}-${i}`}>
+                  <div className={styles.diffField}>{change.field}</div>
+                  <div className={styles.diffValues}>
+                    <span
+                      className={styles.historyBefore}
+                      title={formatHistoryValue(change.before)}
+                    >
+                      {formatHistoryValue(change.before)}
+                    </span>
+                    <span className={styles.historyArrow}>→</span>
+                    <span
+                      className={styles.historyAfter}
+                      title={formatHistoryValue(change.after)}
+                    >
+                      {formatHistoryValue(change.after)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

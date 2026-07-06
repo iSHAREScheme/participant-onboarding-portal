@@ -6,8 +6,11 @@ import styles from "styles/ParticipantDetail.module.css";
 
 type Party = Record<string, any>;
 const str = (v: any): string => (v === undefined || v === null ? "" : String(v));
+const arr = (v: any): string[] =>
+  Array.isArray(v) ? v.map(str).filter(Boolean) : [];
 
-interface FormState {
+// v2.x flat form state (legacy full-PUT path only).
+interface V22FormState {
   partyName: string;
   capabilityUrl: string;
   status: string;
@@ -21,33 +24,7 @@ interface FormState {
   tags: string;
 }
 
-// On a v3 satellite a party's adherence + company info live on its
-// frameworkCompliance claim (status/dates/capabilityUrl/additionalInfo), not on
-// flat party fields — so that's what the editor reads and writes.
-const complianceClaimOf = (p: Party): any =>
-  (Array.isArray(p.claims) ? p.claims : []).find(
-    (c: any) => c?.type === "frameworkCompliance"
-  );
-
-const initFrom = (p: Party, isV3: boolean): FormState => {
-  if (isV3) {
-    const c = complianceClaimOf(p) ?? {};
-    const ai = c.additionalInfo ?? {};
-    return {
-      partyName: str(p.name ?? p.party_name),
-      capabilityUrl: str(c.capabilityUrl),
-      status: str(c.status),
-      startDate: str(c.startDate ?? c.validFrom),
-      endDate: str(c.endDate ?? c.validUntil),
-      description: str(ai.description),
-      website: str(ai.website),
-      companyEmail: str(ai.companyEmail),
-      companyPhone: str(ai.companyPhone),
-      publiclyPublishable: str(ai.publiclyPublishable) || "false",
-      tags: str(ai.tags),
-    };
-  }
-  // v2.x flat shape (legacy PUT path).
+const initV22 = (p: Party): V22FormState => {
   const a = p.adherence ?? {};
   const ai = p.additional_info ?? {};
   return {
@@ -65,80 +42,10 @@ const initFrom = (p: Party, isV3: boolean): FormState => {
   };
 };
 
-// Inline editor for a single non-compliance claim (roles, certificates, …):
-// status + validity, the fields the v3 claim-patch whitelist allows on any claim.
-const ClaimEditor = ({ partyId, claim }: { partyId: string; claim: any }) => {
-  const { t } = useLanguage();
-  const e = (k: string) => t(`participants.detail.edit.${k}`);
-  const f = (k: string) => t(`participants.detail.fields.${k}`);
-  const [status, setStatus] = useState(str(claim?.status));
-  const [from, setFrom] = useState(str(claim?.startDate ?? claim?.validFrom));
-  const [until, setUntil] = useState(str(claim?.endDate ?? claim?.validUntil));
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const api = new API();
-      await api.patchClaim(partyId, str(claim?.id), {
-        status,
-        startDate: from,
-        endDate: until,
-      });
-      setMsg(e("saved"));
-    } catch (err: any) {
-      setMsg(err?.response?.data?.error || err?.response?.data?.message || e("saveError"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const label = str(claim?.roleId) || str(claim?.subjectName) || str(claim?.id);
-
-  return (
-    <div className={styles.claimCard}>
-      <div className={styles.claimHead}>
-        <span className={styles.claimType}>{str(claim?.type) || "claim"}</span>
-        <span className={styles.subtitle}>{label}</span>
-      </div>
-      <div className={styles.grid}>
-        <div className={styles.formRow}>
-          <label className={styles.formLabel}>{f("status")}</label>
-          <input
-            className={styles.formInput}
-            value={status}
-            onChange={(ev) => setStatus(ev.target.value)}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <label className={styles.formLabel}>{f("startDate")}</label>
-          <input
-            className={styles.formInput}
-            value={from}
-            onChange={(ev) => setFrom(ev.target.value)}
-          />
-        </div>
-        <div className={styles.formRow}>
-          <label className={styles.formLabel}>{f("endDate")}</label>
-          <input
-            className={styles.formInput}
-            value={until}
-            onChange={(ev) => setUntil(ev.target.value)}
-          />
-        </div>
-      </div>
-      <div className={styles.formActions}>
-        <button className={styles.saveBtn} onClick={save} disabled={saving}>
-          {saving ? e("saving") : e("saveClaim")}
-        </button>
-        {msg && <span className={styles.subtitle}>{msg}</span>}
-      </div>
-    </div>
-  );
-};
-
+// Party-level editor. On a v3 satellite it edits ONLY party-level fields
+// (name + alsoKnownAs) via PATCH /parties/{id}; the party's adherence, company
+// info and every other claim are edited individually from the claim cards, not
+// here. On a legacy v2.x satellite it falls back to the full-replace PUT form.
 const ParticipantEditForm = ({
   party,
   id,
@@ -153,42 +60,22 @@ const ParticipantEditForm = ({
   const { t } = useLanguage();
   const version = getSatelliteVersion();
   const isV3 = version.trim().startsWith("3");
-  const [initial] = useState<FormState>(() => initFrom(party, isV3));
-  const [form, setForm] = useState<FormState>(() => initFrom(party, isV3));
+  const f = (k: string) => t(`participants.detail.fields.${k}`);
+  const e = (k: string) => t(`participants.detail.edit.${k}`);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const complianceClaimId = isV3 ? str(complianceClaimOf(party)?.id) : "";
+  // --- v3 party-level state -------------------------------------------------
+  const initialName = str(party.name ?? party.party_name);
+  const initialAka = arr(party.alsoKnownAs);
+  const [name, setName] = useState(initialName);
+  const [aka, setAka] = useState<string[]>(initialAka);
 
-  const set = (k: keyof FormState, v: string) =>
+  // --- v2.2 full-form state -------------------------------------------------
+  const [form, setForm] = useState<V22FormState>(() => initV22(party));
+  const set = (k: keyof V22FormState, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v }));
-  const f = (k: string) => t(`participants.detail.fields.${k}`);
-  const e = (k: string) => t(`participants.detail.edit.${k}`);
 
-  // v3 claim PATCH: only the changed frameworkCompliance fields, as the flat
-  // dotted keys the satellite's patch whitelist accepts.
-  const buildClaimPatch = (): Record<string, any> => {
-    const patch: Record<string, any> = {};
-    if (form.status !== initial.status) patch.status = form.status;
-    if (form.startDate !== initial.startDate) patch.startDate = form.startDate;
-    if (form.endDate !== initial.endDate) patch.endDate = form.endDate;
-    if (form.capabilityUrl !== initial.capabilityUrl)
-      patch.capabilityUrl = form.capabilityUrl;
-    if (form.description !== initial.description)
-      patch["additionalInfo.description"] = form.description;
-    if (form.website !== initial.website)
-      patch["additionalInfo.website"] = form.website;
-    if (form.companyEmail !== initial.companyEmail)
-      patch["additionalInfo.companyEmail"] = form.companyEmail;
-    if (form.companyPhone !== initial.companyPhone)
-      patch["additionalInfo.companyPhone"] = form.companyPhone;
-    if (form.publiclyPublishable !== initial.publiclyPublishable)
-      patch["additionalInfo.publiclyPublishable"] = form.publiclyPublishable === "true";
-    if (form.tags !== initial.tags) patch["additionalInfo.tags"] = form.tags;
-    return patch;
-  };
-
-  // v2.2 PUT: full replace — all values must be provided, arrays preserved.
   const buildV22Put = (): any => ({
     id: str(party.party_id ?? party.id),
     schemaVersion: "v2.2",
@@ -223,26 +110,16 @@ const ParticipantEditForm = ({
     try {
       const api = new API();
       if (isV3) {
-        // v3 splits the write: the party name is a party-level field (PATCH the
-        // party); adherence + company info live on the frameworkCompliance claim
-        // (PATCH the claim).
-        let changed = false;
-        if (form.partyName !== initial.partyName) {
-          await api.patchParty(id, { name: form.partyName });
-          changed = true;
-        }
-        const claimPatch = buildClaimPatch();
-        if (Object.keys(claimPatch).length) {
-          if (!complianceClaimId) {
-            throw new Error(e("noComplianceClaim"));
-          }
-          await api.patchClaim(id, complianceClaimId, claimPatch);
-          changed = true;
-        }
-        if (!changed) {
+        const body: Record<string, any> = {};
+        if (name !== initialName) body.name = name;
+        const cleanAka = aka.map((s) => s.trim()).filter(Boolean);
+        if (JSON.stringify(cleanAka) !== JSON.stringify(initialAka))
+          body.alsoKnownAs = cleanAka;
+        if (!Object.keys(body).length) {
           onCancel();
           return;
         }
+        await api.patchParty(id, body);
       } else {
         await api.updateParty(id, buildV22Put());
       }
@@ -259,8 +136,79 @@ const ParticipantEditForm = ({
     }
   };
 
+  const actions = (
+    <div className={styles.formActions}>
+      <button className={styles.saveBtn} onClick={save} disabled={saving}>
+        {saving ? e("saving") : e("save")}
+      </button>
+      <button className={styles.cancelBtn} onClick={onCancel} disabled={saving}>
+        {e("cancel")}
+      </button>
+    </div>
+  );
+
+  // --- v3: party-info only --------------------------------------------------
+  if (isV3) {
+    return (
+      <div className={styles.body}>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>{e("partyInfoTitle")}</h2>
+          <p className={styles.subtitle}>{e("partyInfoHint")}</p>
+          <div className={styles.grid}>
+            <div className={styles.formRow}>
+              <label className={styles.formLabel}>{f("name")}</label>
+              <input
+                className={styles.formInput}
+                value={name}
+                onChange={(ev) => setName(ev.target.value)}
+              />
+            </div>
+          </div>
+          <div className={styles.repeaterField}>
+            <span className={styles.repeaterLabel}>{f("alsoKnownAs")}</span>
+            {aka.map((v, i) => (
+              <div className={styles.repeaterRow} key={i}>
+                <input
+                  className={styles.formInput}
+                  value={v}
+                  onChange={(ev) =>
+                    setAka((prev) =>
+                      prev.map((x, j) => (j === i ? ev.target.value : x))
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className={styles.removeButton}
+                  onClick={() =>
+                    setAka((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  aria-label={e("cancel")}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <div>
+              <button
+                type="button"
+                className={styles.cancelBtn}
+                onClick={() => setAka((prev) => [...prev, ""])}
+              >
+                + {f("alsoKnownAs")}
+              </button>
+            </div>
+          </div>
+          {error && <div className={styles.error}>{error}</div>}
+          {actions}
+        </section>
+      </div>
+    );
+  }
+
+  // --- v2.x: legacy full-replace form ---------------------------------------
   const textRow = (
-    key: keyof FormState,
+    key: keyof V22FormState,
     labelKey: string,
     opts?: { textarea?: boolean }
   ) => (
@@ -283,13 +231,6 @@ const ParticipantEditForm = ({
     </div>
   );
 
-  // Other real, persisted claims (roles, certificates, …) editable individually.
-  // Excludes frameworkCompliance (covered by the form above) and derived display
-  // claims (no id → nothing to PATCH).
-  const otherClaims = (Array.isArray(party.claims) ? party.claims : []).filter(
-    (c: any) => c?.type !== "frameworkCompliance" && str(c?.id)
-  );
-
   return (
     <div className={styles.body}>
       <section className={styles.section}>
@@ -305,11 +246,13 @@ const ParticipantEditForm = ({
               onChange={(ev) => set("status", ev.target.value)}
             >
               {form.status &&
-              !["active", "inactive", "Active", "Inactive"].includes(form.status) ? (
+              !["active", "inactive", "Active", "Inactive"].includes(
+                form.status
+              ) ? (
                 <option value={form.status}>{form.status}</option>
               ) : null}
-              <option value={isV3 ? "active" : "Active"}>Active</option>
-              <option value={isV3 ? "inactive" : "Inactive"}>Inactive</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
             </select>
           </div>
           {textRow("startDate", "startDate")}
@@ -331,34 +274,9 @@ const ParticipantEditForm = ({
           {textRow("tags", "tags")}
         </div>
         {textRow("description", "description", { textarea: true })}
-
         {error && <div className={styles.error}>{error}</div>}
-
-        <div className={styles.formActions}>
-          <button className={styles.saveBtn} onClick={save} disabled={saving}>
-            {saving ? e("saving") : e("save")}
-          </button>
-          <button
-            className={styles.cancelBtn}
-            onClick={onCancel}
-            disabled={saving}
-          >
-            {e("cancel")}
-          </button>
-        </div>
+        {actions}
       </section>
-
-      {/* v3 per-claim editing for roles / certificates / agreements. */}
-      {isV3 && otherClaims.length > 0 && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{e("claimsTitle")}</h2>
-          <div className={styles.cards}>
-            {otherClaims.map((claim: any, i: number) => (
-              <ClaimEditor key={claim?.id ?? i} partyId={id} claim={claim} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 };
