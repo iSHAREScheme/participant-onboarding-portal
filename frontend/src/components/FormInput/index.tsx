@@ -11,28 +11,44 @@ interface FormInputProps {
     placeholder: string;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     error?: string | undefined;
+    // Fixed, non-editable text shown inside the field before the input (e.g.
+    // "did:ishare:") to signal a value the backend prepends automatically. The
+    // user still types only the bare part, which is what value/onChange carry.
+    prefix?: string;
 }
 
-const FormInput: React.FC<FormInputProps> = ({ disabled, label, id, name, type, value, placeholder, required, onChange, error }) => {
+const FormInput: React.FC<FormInputProps> = ({ disabled, label, id, name, type, value, placeholder, required, onChange, error, prefix }) => {
     const [isFocused, setIsFocused] = useState(false);
     const hasValue = value !== undefined && value !== null && value !== '';
-    const isActive = hasValue || isFocused;
+    // A prefix is leading content, so the label always floats when one is set.
+    const isActive = hasValue || isFocused || !!prefix;
+
+    const input = (
+        <input
+            disabled={disabled}
+            type={type}
+            id={id}
+            name={name}
+            value={value}
+            placeholder=""
+            onChange={onChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className={`${styles.input} ${prefix ? styles.inputInWrap : ''} ${hasValue ? styles.hasValue : ''}`}
+        />
+    );
 
     return (
         <div className={styles.formGroup}>
             <div className={styles.inputContainer}>
-                <input
-                    disabled={disabled}
-                    type={type}
-                    id={id}
-                    name={name}
-                    value={value}
-                    placeholder=""
-                    onChange={onChange}
-                    onFocus={() => setIsFocused(true)}
-                    onBlur={() => setIsFocused(false)}
-                    className={`${styles.input} ${hasValue ? styles.hasValue : ''}`}
-                />
+                {prefix ? (
+                    <div className={styles.prefixWrap}>
+                        <span className={styles.prefixText}>{prefix}</span>
+                        {input}
+                    </div>
+                ) : (
+                    input
+                )}
                 <label htmlFor={name} className={`${styles.label} ${isActive ? styles.labelActive : ''}`}>
                     {label} {required && <span className={styles.required}>*</span>}
                 </label>

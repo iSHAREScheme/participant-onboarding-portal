@@ -183,7 +183,8 @@ const en = {
         more: "{{count}} more changes",
         show: "Show changes ({{count}})",
         hide: "Hide changes",
-        changesLabel: "{{count}} field changes"
+        changesLabel: "{{count}} field changes",
+        by: "by {{party}}"
       },
       edit: {
         button: "Edit",
@@ -203,8 +204,17 @@ const en = {
         claimsTitle: "Claims"
       },
       projectionWarn: {
-        title: "Derived data — needs migration",
-        body: "This participant has no native v3 claims, so the claims shown are derived (projected) from its legacy record for display only. They may be incomplete and cannot be edited until the party is migrated to native v3 claims."
+        incompleteTitle: "Incomplete v3 participant",
+        incompleteBody:
+          "This participant does not yet meet the v3 onboarding requirements, so the registry still treats it as a legacy (v2) record and the claims shown may be projected from its legacy data. Add the missing claim(s) to complete its migration to v3.",
+        missingLabel: "Missing required claims:",
+        unmigratedTitle: "Not yet migrated to v3",
+        unmigratedBody:
+          "This participant's data looks complete but isn't stored as native v3 claims yet — the claims shown are projected from its legacy record for display only. Run the v3 claim migration to persist them.",
+        req: {
+          certOrIdp: "X.509 certificate or IdP assertion",
+          x509ForRole: "X.509 certificate (required for its framework role)"
+        }
       }
     }
   },
@@ -1538,7 +1548,7 @@ const en = {
     identity: {
       heading: "Participant Identity",
       partyId: "Party ID",
-      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyIdPlaceholder: "EU.EORI.NL000000000",
       partyName: "Party Name",
       partyNamePlaceholder: "Legal entity name",
       alsoKnownAs: "Also Known As",

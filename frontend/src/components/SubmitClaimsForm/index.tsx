@@ -799,10 +799,13 @@ const SubmitClaimsForm: React.FC = () => {
             id="party_id"
             name="party_id"
             type="text"
+            prefix="did:ishare:"
             placeholder={t("submit.identity.partyIdPlaceholder")}
             required
             value={partyId}
-            onChange={(e) => setPartyId(e.target.value)}
+            onChange={(e) =>
+              setPartyId(e.target.value.replace(/^\s*did:ishare:/i, ""))
+            }
           />
           <FormInput
             label={t("submit.identity.partyName")}

@@ -52,6 +52,45 @@
   background: var(--input-background, #fff);
 }
 
+/* ---- Fixed, non-editable prefix (e.g. "did:ishare:") ------------------- */
+/* The bordered box moves to the wrapper so the prefix and input sit inside a
+   single field; the input itself becomes borderless and transparent. */
+.prefixWrap {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  border: 1px solid #C3CCCD;
+  border-radius: 8px;
+  background: var(--input-background, #fff);
+  overflow: hidden;
+}
+.prefixWrap:focus-within {
+  border-color: #757575;
+}
+.prefixText {
+  flex: 0 0 auto;
+  padding: 0 2px 0 12px;
+  color: #013A5799;
+  font-size: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+.inputInWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  padding: 12px 12px 12px 0;
+  background: transparent;
+}
+.inputInWrap:focus {
+  border: none;
+  outline: none;
+}
+
 .input:focus~.label,
 .input.hasValue~.label {}
 

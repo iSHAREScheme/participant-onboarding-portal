@@ -182,7 +182,8 @@ const nl = {
         more: "Nog {{count}} wijzigingen",
         show: "Wijzigingen tonen ({{count}})",
         hide: "Wijzigingen verbergen",
-        changesLabel: "{{count}} veldwijzigingen"
+        changesLabel: "{{count}} veldwijzigingen",
+        by: "door {{party}}"
       },
       edit: {
         button: "Bewerken",
@@ -202,8 +203,17 @@ const nl = {
         claimsTitle: "Claims"
       },
       projectionWarn: {
-        title: "Afgeleide gegevens — migratie nodig",
-        body: "Deze deelnemer heeft geen native v3-claims, dus de getoonde claims zijn afgeleid (geprojecteerd) uit het verouderde record en dienen alleen ter weergave. Ze kunnen onvolledig zijn en kunnen pas worden bewerkt nadat de partij naar native v3-claims is gemigreerd."
+        incompleteTitle: "Onvolledige v3-deelnemer",
+        incompleteBody:
+          "Deze deelnemer voldoet nog niet aan de v3-onboardingvereisten, dus het register behandelt de deelnemer nog als een verouderd (v2) record en de getoonde claims kunnen afgeleid zijn uit de verouderde gegevens. Voeg de onderstaande ontbrekende claim(s) toe om de migratie naar v3 te voltooien.",
+        missingLabel: "Ontbrekende verplichte claims:",
+        unmigratedTitle: "Nog niet gemigreerd naar v3",
+        unmigratedBody:
+          "De gegevens van deze deelnemer lijken volledig, maar zijn nog niet opgeslagen als native v3-claims — de getoonde claims zijn afgeleid uit het verouderde record en dienen alleen ter weergave. Voer de v3-claimmigratie uit om ze op te slaan.",
+        req: {
+          certOrIdp: "X.509-certificaat of IdP-assertie",
+          x509ForRole: "X.509-certificaat (vereist voor de framework-rol)"
+        }
       }
     }
   },
@@ -1535,7 +1545,7 @@ const nl = {
     identity: {
       heading: "Identiteit deelnemer",
       partyId: "Partij-ID",
-      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyIdPlaceholder: "EU.EORI.NL000000000",
       partyName: "Naam partij",
       partyNamePlaceholder: "Naam rechtspersoon",
       alsoKnownAs: "Ook bekend als",

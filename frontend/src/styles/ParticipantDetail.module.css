@@ -669,6 +669,33 @@
   font-size: 0.85rem;
   color: #7c2d12;
 }
+.projectionWarnMissing {
+  margin-top: 0.55rem;
+}
+.projectionWarnMissingLabel {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #7c2d12;
+}
+.projectionWarnList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.projectionWarnItem {
+  padding: 0.15rem 0.6rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #92400e;
+}
 
 /* ---- Per-claim card actions (edit / view more) ------------------------- */
 .claimCardActions {

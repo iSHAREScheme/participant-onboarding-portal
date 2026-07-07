@@ -32,6 +32,42 @@ const humanize = (s: string): string =>
     .replace(/^./, (c) => c.toUpperCase())
     .trim();
 
+// A framework role other than ServiceConsumer/EntitledParty additionally
+// requires an x509 certificate. Mirrors PR-MW isV3M2MCertificateRequiredRole.
+const v3CertRequiredRole = (roleId: string): boolean => {
+  const n = str(roleId)
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+  return n !== "serviceconsumer" && n !== "entitledparty";
+};
+
+// Given a party's claims (native or projected), return the ordered requirement
+// keys it still lacks to validate as a complete v3 participant; empty means the
+// set satisfies onboarding. Mirrors PR-MW utils/v3_claim_validation.go
+// `ValidateV3PartyOnboardingClaims` and is kept in sync by hand (same convention
+// as ClaimEditModal's mutable/immutable maps) — update both when the middleware's
+// onboarding requirements change. This surfaces the concrete gap (e.g. a party
+// whose agreements are all dataspace-scoped ends up with no frameworkAgreement)
+// instead of a generic "needs migration" banner.
+const missingV3Requirements = (claims: any[]): string[] => {
+  const list = asArray(claims);
+  const has = (type: string) => list.some((c) => str(c?.type) === type);
+  const missing: string[] = [];
+  if (!has("frameworkCompliance")) missing.push("frameworkCompliance");
+  if (!has("frameworkAgreement")) missing.push("frameworkAgreement");
+  if (!has("frameworkRole")) missing.push("frameworkRole");
+  if (!has("x509Certificate") && !has("idpAssertion")) missing.push("certOrIdp");
+  // Only flag the role-specific x509 rule when a role id is actually present, so
+  // a projected claim without a role id never produces a false positive.
+  const roleNeedsCert = list.some((c) => {
+    if (str(c?.type) !== "frameworkRole") return false;
+    const rid = str(c?.roleId ?? c?.role_id);
+    return rid !== "" && v3CertRequiredRole(rid);
+  });
+  if (roleNeedsCert && !has("x509Certificate")) missing.push("x509ForRole");
+  return missing;
+};
+
 // Merge a freshly fetched party over the cached one, taking incoming values only
 // where they actually carry data. The satellite's single-party (?eori=) lookup
 // can return a sparser object than the list page provided — omitting top-level
@@ -130,6 +166,11 @@ const formatHistoryValue = (value: any): string => {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 };
+
+// Who made a history entry: the transaction submitter's common name, falling
+// back to its MSP id. Empty when the ledger mirror didn't capture a creator.
+const historyActor = (entry: HistoryEntry): string =>
+  str(entry.actor?.commonName) || str(entry.actor?.mspId);
 
 // Humanise a claim field key for display ("capabilityUrl" → "Capability Url").
 const claimFieldLabel = (k: string): string =>
@@ -280,6 +321,10 @@ const ParticipantDetail: NextPage = () => {
   const normalizeVer = (v: string) => v.trim().toLowerCase().replace(/^v/, "");
   const isProjected =
     !!displayVersion && normalizeVer(displayVersion) !== normalizeVer(version);
+  // When projected, the concrete required claim(s) the party still lacks. Empty
+  // on a projected party means its data is complete but not yet persisted as
+  // native claims (pure migration lag) rather than incomplete onboarding.
+  const missingReqs = isProjected ? missingV3Requirements(party?.claims) : [];
   // Editing: on a v3 satellite every write goes through the claim model, so a
   // party is editable only when it carries a REAL (persisted, id-bearing)
   // frameworkCompliance claim — this excludes derived/projected display claims
@@ -319,6 +364,12 @@ const ParticipantDetail: NextPage = () => {
     const label = t(key);
     return label === key ? humanize(type) : label;
   };
+  // Label for a missing-requirement key: real claim types reuse their claim-type
+  // label; the two compound requirements have their own strings.
+  const reqLabel = (r: string): string =>
+    r === "certOrIdp" || r === "x509ForRole"
+      ? t(`participants.detail.projectionWarn.req.${r}`)
+      : claimTypeLabel(r);
 
   // --- 3.0 claim cards. A real v3 party carries a `claims` array; older or
   //     party-shaped payloads are reorganised from the flat fields below. ----
@@ -681,6 +732,11 @@ const ParticipantDetail: NextPage = () => {
                             entry.timestamp * 1000
                           ).toLocaleString()}`
                         : ""}
+                      {historyActor(entry)
+                        ? ` · ${t("participants.detail.history.by", {
+                            party: historyActor(entry),
+                          })}`
+                        : ""}
                     </span>
                     <span className={styles.historyRowLedger}>
                       #{entry.ledgerId || entry.transactionId || index + 1}
@@ -831,10 +887,37 @@ const ParticipantDetail: NextPage = () => {
                   ⚠
                 </span>
                 <div>
-                  <strong>{t("participants.detail.projectionWarn.title")}</strong>
-                  <p className={styles.projectionWarnBody}>
-                    {t("participants.detail.projectionWarn.body")}
-                  </p>
+                  {missingReqs.length > 0 ? (
+                    <>
+                      <strong>
+                        {t("participants.detail.projectionWarn.incompleteTitle")}
+                      </strong>
+                      <p className={styles.projectionWarnBody}>
+                        {t("participants.detail.projectionWarn.incompleteBody")}
+                      </p>
+                      <div className={styles.projectionWarnMissing}>
+                        <span className={styles.projectionWarnMissingLabel}>
+                          {t("participants.detail.projectionWarn.missingLabel")}
+                        </span>
+                        <ul className={styles.projectionWarnList}>
+                          {missingReqs.map((r) => (
+                            <li key={r} className={styles.projectionWarnItem}>
+                              {reqLabel(r)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        {t("participants.detail.projectionWarn.unmigratedTitle")}
+                      </strong>
+                      <p className={styles.projectionWarnBody}>
+                        {t("participants.detail.projectionWarn.unmigratedBody")}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -951,6 +1034,13 @@ const ParticipantDetail: NextPage = () => {
                 {diffEntry.timestamp ? (
                   <span>
                     {new Date(diffEntry.timestamp * 1000).toLocaleString()}
+                  </span>
+                ) : null}
+                {historyActor(diffEntry) ? (
+                  <span>
+                    {t("participants.detail.history.by", {
+                      party: historyActor(diffEntry),
+                    })}
                   </span>
                 ) : null}
               </div>
