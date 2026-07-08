@@ -84,6 +84,21 @@ const normalize = (p: any): ParticipantRow => {
 };
 
 type FilterMode = "all" | "mine" | "active" | "certified";
+// Which party field the search box matches.
+type SearchField = "name" | "id";
+
+// iSHARE framework roles offered in the role filter. Mirrors
+// FRAMEWORK_ROLE_OPTIONS in SubmitClaimsForm — keep in sync if the role set
+// changes. `value` is the frameworkRole claim's roleId the backend filters on.
+const ROLE_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "ServiceConsumer", label: "Service Consumer" },
+  { value: "ServiceProvider", label: "Service Provider" },
+  { value: "EntitledParty", label: "Entitled Party" },
+  { value: "AuthorisationRegistry", label: "Authorisation Registry" },
+  { value: "IdentityProvider", label: "Identity Provider" },
+  { value: "IdentityBroker", label: "Identity Broker" },
+  { value: "iShareSatellite", label: "iSHARE Satellite" },
+];
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -151,9 +166,17 @@ const Participants: NextPage = () => {
   const [search, setSearch] = useState<string>(
     () => getParticipantsListState()?.search ?? ""
   );
-  // Debounced, applied search term.
-  const [name, setName] = useState<string>(
-    () => getParticipantsListState()?.name ?? ""
+  // Debounced, applied search term (matched against the selected field below).
+  const [appliedTerm, setAppliedTerm] = useState<string>(
+    () => getParticipantsListState()?.term ?? ""
+  );
+  // Which field the search box matches: party name or party id.
+  const [searchField, setSearchField] = useState<SearchField>(
+    () => (getParticipantsListState()?.searchField as SearchField) ?? "name"
+  );
+  // Framework-role filter ("" = all roles).
+  const [role, setRole] = useState<string>(
+    () => getParticipantsListState()?.role ?? ""
   );
   const [filter, setFilter] = useState<FilterMode>(
     () => (getParticipantsListState()?.filter as FilterMode) ?? "all"
@@ -187,7 +210,7 @@ const Participants: NextPage = () => {
     }
     const term = search.trim();
     const id = setTimeout(() => {
-      setName(term);
+      setAppliedTerm(term);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(id);
@@ -195,8 +218,8 @@ const Participants: NextPage = () => {
 
   // Remember the view state for the SPA session so it's restored on return.
   useEffect(() => {
-    saveParticipantsListState({ page, name, search, filter });
-  }, [page, name, search, filter]);
+    saveParticipantsListState({ page, term: appliedTerm, search, searchField, role, filter });
+  }, [page, appliedTerm, search, searchField, role, filter]);
 
   // When the fitted page size changes (e.g. the viewport was resized), restart at
   // page 1 — the satellite's page boundaries move with the page size.
@@ -214,7 +237,7 @@ const Participants: NextPage = () => {
 
   const load = useCallback(async () => {
     if (!pageSize) return;
-    const cacheKey = `${page}|${pageSize}|${name}|${filter}`;
+    const cacheKey = `${page}|${pageSize}|${searchField}|${appliedTerm}|${role}|${filter}`;
     const cached = getCachedParticipantsList(cacheKey);
     const reqId = ++reqIdRef.current;
     // Render instantly from the last cached result for this query (e.g. when
@@ -232,10 +255,13 @@ const Participants: NextPage = () => {
     }
     try {
       const api = new API();
+      const term = appliedTerm.trim() || undefined;
       const res = await api.fetchParticipants({
         page,
         pageSize,
-        name: name || undefined,
+        name: searchField === "name" ? term : undefined,
+        id: searchField === "id" ? term : undefined,
+        role: role || undefined,
         activeOnly: filter === "active" || undefined,
         certifiedOnly: filter === "certified" || undefined,
         mineOnly: filter === "mine" || undefined,
@@ -263,7 +289,7 @@ const Participants: NextPage = () => {
     } finally {
       if (reqId === reqIdRef.current) setIsLoading(false);
     }
-  }, [page, name, filter, pageSize]);
+  }, [page, appliedTerm, searchField, role, filter, pageSize]);
 
   // AdminRoute calls this once the admin is authorized (stable identity so it
   // doesn't retrigger AdminRoute's effect); fetching is driven by the effect
@@ -271,7 +297,7 @@ const Participants: NextPage = () => {
   const onAuthorized = useCallback(() => setAuthorized(true), []);
 
   // Fetch whenever we're authorized and have a measured page size; load's
-  // identity changes with page/search/filter/pageSize.
+  // identity changes with page/search term/search field/role/filter/pageSize.
   // load() optimistically sets state synchronously (instant cache render / loading
   // flag) before it awaits, so scheduling it in a microtask keeps that out of the
   // effect body (react-hooks/set-state-in-effect) while still running before paint.
@@ -297,11 +323,21 @@ const Participants: NextPage = () => {
     setPage(1); // a different result set starts at page 1
   };
 
+  const changeSearchField = (value: SearchField) => {
+    setSearchField(value);
+    setPage(1); // re-run the current term against the new field from page 1
+  };
+
+  const changeRole = (value: string) => {
+    setRole(value);
+    setPage(1); // a different result set starts at page 1
+  };
+
   const openDetail = (partyId: string) => {
     if (partyId) router.push(`/participants/${encodeURIComponent(partyId)}`);
   };
 
-  const hasQuery = name.length > 0 || filter !== "all";
+  const hasQuery = appliedTerm.length > 0 || filter !== "all" || role !== "";
   // Controls are available as soon as we're authorized (even while loading or
   // when a search yields zero rows), so the user can always adjust or refresh.
   const showToolbar = authorized;
@@ -320,10 +356,36 @@ const Participants: NextPage = () => {
               type="text"
               className={styles.searchInput}
               data-tour="participants-search"
-              placeholder={t("participants.search")}
+              placeholder={
+                searchField === "id"
+                  ? t("participants.searchById")
+                  : t("participants.search")
+              }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <select
+              className={styles.statusSelect}
+              aria-label={t("participants.searchByAria")}
+              value={searchField}
+              onChange={(e) => changeSearchField(e.target.value as SearchField)}
+            >
+              <option value="name">{t("participants.searchByName")}</option>
+              <option value="id">{t("participants.searchByPartyId")}</option>
+            </select>
+            <select
+              className={styles.statusSelect}
+              aria-label={t("participants.roleFilterAria")}
+              value={role}
+              onChange={(e) => changeRole(e.target.value)}
+            >
+              <option value="">{t("participants.roleAll")}</option>
+              {ROLE_FILTER_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
             <select
               className={styles.statusSelect}
               value={filter}

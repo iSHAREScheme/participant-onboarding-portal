@@ -63,8 +63,14 @@ export function getCachedParticipantsList(key: string): CachedParticipantsList |
 
 export interface ParticipantsListState {
   page: number;
-  name: string;
+  // Debounced, applied search term (matched against `searchField`).
+  term: string;
+  // Raw (un-debounced) contents of the search box.
   search: string;
+  // Which field the search term matches: "name" or "id" (party id).
+  searchField: string;
+  // Framework-role filter ("" = all roles).
+  role: string;
   filter: string;
 }
 
