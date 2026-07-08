@@ -91,7 +91,9 @@ const en = {
     loading: "Loading participants...",
     error: "Failed to load participants.",
     empty: "No participants found.",
-    search: "Search by name…",
+    search: "Search by name or party ID…",
+    roleFilterAria: "Filter by role",
+    roleAll: "All roles",
     filters: {
       all: "All participants",
       mine: "My participants",

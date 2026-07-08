@@ -414,21 +414,32 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 	}
 
 	name := strings.TrimSpace(c.Query("name"))
+	// `search` is a single free-text term matched against BOTH the party name and
+	// the party id (name OR id contains). The satellite can only AND its filters,
+	// so this OR match is applied in-memory (see getFilteredParticipants).
+	search := strings.TrimSpace(c.Query("search"))
+	// `role` is delegated to the satellite (a frameworkRole claim filter on v3, or
+	// a plain role= on v2, inside fetchPartiesPage); `id` (exact single-field) is
+	// still accepted for direct API callers.
+	partyID := strings.TrimSpace(c.Query("id"))
+	role := strings.TrimSpace(c.Query("role"))
 	activeOnly := c.Query("activeOnly") == "true"
 	certifiedOnly := c.Query("certifiedOnly") == "true"
 	mineOnly := c.Query("mineOnly") == "true"
 
 	// Some filters can't be delegated to the satellite, so we fetch the whole
 	// matching set and filter/paginate in-memory:
+	//   - the name-or-id `search` (an OR across two fields),
 	//   - "mine" (the satellite ignores registrar query params), and
 	//   - active/certified on a v3 claim-model satellite (it ignores
 	//     active_only/certified_only — that state lives in the claims).
+	// Role IS delegated, so it pre-filters the fetched set server-side.
 	claimModel := strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3")
-	if mineOnly || (claimModel && (activeOnly || certifiedOnly)) {
-		return h.getFilteredParticipants(c, page, pageSize, name, activeOnly, certifiedOnly, mineOnly, claimModel)
+	if search != "" || mineOnly || (claimModel && (activeOnly || certifiedOnly)) {
+		return h.getFilteredParticipants(c, page, pageSize, name, search, activeOnly, certifiedOnly, mineOnly, claimModel, role, partyID)
 	}
 
-	data, total, totalPages, err := h.fetchPartiesPage(page, pageSize, name, activeOnly, certifiedOnly)
+	data, total, totalPages, err := h.fetchPartiesPage(page, pageSize, name, activeOnly, certifiedOnly, role, partyID)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -449,7 +460,7 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 //     ignores — that state lives in the claims).
 //
 // The default list (unfiltered, or v2 active/certified) stays a single page.
-func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize int, name string, activeOnly, certifiedOnly, mineOnly, claimModel bool) error {
+func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize int, name, search string, activeOnly, certifiedOnly, mineOnly, claimModel bool, role, partyID string) error {
 	registrar := h.resolveRegistrarId()
 	if mineOnly && registrar == "" {
 		// No registrar configured → we can't identify "our" parties.
@@ -464,7 +475,7 @@ func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize i
 	satActive := activeOnly && !claimModel
 	satCertified := certifiedOnly && !claimModel
 
-	all, err := h.fetchAllSatelliteParties(name, satActive, satCertified)
+	all, err := h.fetchAllSatelliteParties(name, satActive, satCertified, role, partyID)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -473,6 +484,9 @@ func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize i
 	for _, p := range all {
 		m, ok := p.(map[string]interface{})
 		if !ok {
+			continue
+		}
+		if search != "" && !partyMatchesSearch(m, search) {
 			continue
 		}
 		if mineOnly && !partyMatchesRegistrar(m, registrar) {
@@ -507,7 +521,7 @@ func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize i
 	}
 
 	if h.Config.SatelliteDebug {
-		log.Printf("satellite: filtered participants mine=%t active=%t certified=%t claimModel=%t matched=%d of %d page=%d/%d", mineOnly, activeOnly, certifiedOnly, claimModel, total, len(all), page, totalPages)
+		log.Printf("satellite: filtered participants search=%q mine=%t active=%t certified=%t claimModel=%t matched=%d of %d page=%d/%d", search, mineOnly, activeOnly, certifiedOnly, claimModel, total, len(all), page, totalPages)
 	}
 
 	resp := fiber.Map{
@@ -597,13 +611,13 @@ func partyClaims(m map[string]interface{}) []map[string]interface{} {
 // fetchAllSatelliteParties pages through the entire satellite result set for the
 // given satellite-side filters and returns every matching party concatenated.
 // Used only by the "My participants" view, which post-filters by registrar.
-func (h *HandlerRegistry) fetchAllSatelliteParties(name string, activeOnly, certifiedOnly bool) ([]interface{}, error) {
+func (h *HandlerRegistry) fetchAllSatelliteParties(name string, activeOnly, certifiedOnly bool, role, partyID string) ([]interface{}, error) {
 	const pageSize = maxParticipantsPageSize // 100 → fewest round-trips
 	const maxPages = 1000                    // safety valve against a misbehaving satellite
 
 	var all []interface{}
 	for page := 1; page <= maxPages; page++ {
-		data, total, _, err := h.fetchPartiesPage(page, pageSize, name, activeOnly, certifiedOnly)
+		data, total, _, err := h.fetchPartiesPage(page, pageSize, name, activeOnly, certifiedOnly, role, partyID)
 		if err != nil {
 			return nil, err
 		}
@@ -801,6 +815,30 @@ func partyHasID(m map[string]interface{}, id string) bool {
 	return false
 }
 
+// partyMatchesSearch reports whether a free-text query matches a party by EITHER
+// its name OR its id (case-insensitive, substring). This OR-across-fields match
+// is applied in-memory because the satellite can only AND its query filters.
+func partyMatchesSearch(m map[string]interface{}, q string) bool {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(stringField(m, "name", "party_name", "partyName")), q) {
+		return true
+	}
+	if strings.Contains(strings.ToLower(stringField(m, "id", "party_id", "partyId")), q) {
+		return true
+	}
+	if aka, ok := m["alsoKnownAs"].([]interface{}); ok {
+		for _, a := range aka {
+			if s, ok := a.(string); ok && strings.Contains(strings.ToLower(s), q) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // fetchSatelliteParties queries the satellite /parties endpoint (with an
 // optional query string such as "?role=AuthorisationRegistry"), then unwraps
 // the signed parties_token JWT and returns its decoded payload.
@@ -901,7 +939,7 @@ func stringField(raw map[string]interface{}, keys ...string) string {
 // applying the optional name search and active/certified filters server-side.
 // It returns the page's party objects plus the grand total and total page
 // count, deriving the page count (which this satellite omits) from the total.
-func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, activeOnly, certifiedOnly bool) ([]interface{}, int, int, error) {
+func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, activeOnly, certifiedOnly bool, role, partyID string) ([]interface{}, int, int, error) {
 	q := url.Values{}
 	q.Set("page", strconv.Itoa(page))
 	// Send both page-size spellings: this satellite honours snake_case
@@ -922,6 +960,20 @@ func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, acti
 	}
 	if certifiedOnly {
 		q.Set("certified_only", "true")
+	}
+	// Party-id search: the satellite's `id` filter matches the party id, EORI
+	// and DID aliases (contains), so a partial term works.
+	if partyID != "" {
+		q.Set("id", partyID)
+	}
+	// Role filter: a v3 claim-model satellite filters roles via a frameworkRole
+	// claim filter (it ignores a bare `role=`); a v2 satellite accepts `role=`.
+	if role != "" {
+		if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+			q.Set("claimFilter[frameworkRole.roleId]", role)
+		} else {
+			q.Set("role", role)
+		}
 	}
 
 	decoded, err := h.fetchSatelliteParties("?" + q.Encode())
@@ -945,7 +997,7 @@ func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, acti
 	}
 
 	if h.Config.SatelliteDebug {
-		log.Printf("satellite: participants page=%d pageSize=%d name=%q activeOnly=%t certifiedOnly=%t got=%d total=%d totalPages=%d", page, pageSize, name, activeOnly, certifiedOnly, len(data), total, totalPages)
+		log.Printf("satellite: participants page=%d pageSize=%d name=%q id=%q role=%q activeOnly=%t certifiedOnly=%t got=%d total=%d totalPages=%d", page, pageSize, name, partyID, role, activeOnly, certifiedOnly, len(data), total, totalPages)
 	}
 
 	return data, total, totalPages, nil

@@ -90,7 +90,9 @@ const nl = {
     loading: "Deelnemers laden...",
     error: "Kan deelnemers niet laden.",
     empty: "Geen deelnemers gevonden.",
-    search: "Zoek op naam…",
+    search: "Zoek op naam of party-ID…",
+    roleFilterAria: "Filter op rol",
+    roleAll: "Alle rollen",
     filters: {
       all: "Alle deelnemers",
       mine: "Mijn deelnemers",

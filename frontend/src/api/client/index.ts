@@ -490,6 +490,12 @@ export class API {
     page?: number
     pageSize?: number
     name?: string
+    // Free-text term matched against party name OR party id (backend does the OR).
+    search?: string
+    // Party-id search (satellite matches id / EORI / DID, contains).
+    id?: string
+    // Framework-role filter (frameworkRole claim roleId, e.g. "iShareSatellite").
+    role?: string
     activeOnly?: boolean
     certifiedOnly?: boolean
     mineOnly?: boolean
