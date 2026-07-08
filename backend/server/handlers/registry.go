@@ -122,7 +122,7 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
 	}
 
-	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, "/dataspaces"), nil)
+	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/dataspaces"), nil)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
 	}
@@ -193,7 +193,7 @@ func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
 	}
 
-	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, "/frameworks")
+	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/frameworks")
 	values := url.Values{}
 	values.Set("page", strconv.Itoa(page))
 	values.Set("pageSize", strconv.Itoa(pageSize))
@@ -673,7 +673,7 @@ func (h *HandlerRegistry) GetParticipantHistory(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
 	}
 
-	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, "/parties/"+url.PathEscape(id)+"/history"), nil)
+	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/history"), nil)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
 	}
@@ -815,7 +815,7 @@ func (h *HandlerRegistry) fetchSatelliteParties(query string) (map[string]interf
 		return nil, fmt.Errorf("Failed to obtain satellite access token")
 	}
 
-	req, err := http.NewRequest("GET", h.Config.SatelliteBaseUrl+"/parties"+query, nil)
+	req, err := http.NewRequest("GET", h.Config.SatelliteBaseUrl+h.Config.SatelliteV3Prefix()+"/parties"+query, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request")
 	}

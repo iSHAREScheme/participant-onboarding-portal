@@ -397,6 +397,11 @@ func (h *HandlerParty) partiesEndpointForVersion() string {
 	if isSatelliteVersion22(h.Config.SatelliteVersion) && (endpoint == "" || endpoint == "/parties") {
 		return "/v2.2/parties"
 	}
+	// v3 claim-model satellites serve party creation under /v3.0/... — the
+	// unversioned /parties path is legacy 2.x behaviour.
+	if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") && (endpoint == "" || endpoint == "/parties") {
+		return "/v3.0/parties"
+	}
 	if endpoint == "" {
 		return "/parties"
 	}
@@ -503,7 +508,7 @@ func (h *HandlerParty) PatchParty(c *fiber.Ctx) error {
 	if id == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
 	}
-	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id))
+	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id))
 }
 
 // PatchClaim godoc
@@ -526,7 +531,7 @@ func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
 	if id == "" || claimId == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
 	}
-	return h.forwardPartyWrite(c, http.MethodPatch, "/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
+	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
 }
 
 type ProposalData struct {

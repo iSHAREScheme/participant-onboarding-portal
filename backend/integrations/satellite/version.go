@@ -16,8 +16,8 @@ import (
 // DetectFrameworkVersion probes the satellite's version-discovery endpoints and
 // returns the latest supported iSHARE framework version it can determine:
 //
-//   - GET /frameworks responds 200                  → "3.0" (the v3.0 frameworks
-//     endpoint is specific to 3.0)
+//   - GET /v3.0/frameworks responds 200             → "3.0" (the v3.0 frameworks
+//     endpoint is specific to 3.0; it lives under the versioned /v3.0 path)
 //   - GET /versions advertises 2.x/3.x versions      → the greatest one
 //   - GET /capabilities → supported_versions[]       → the greatest 2.x/3.x one
 //
@@ -61,8 +61,11 @@ func DetectFrameworkVersion(cfg *config.Config) (string, bool) {
 		return resp.StatusCode, body
 	}
 
-	// 1) A working /frameworks endpoint is specific to v3.0.
-	if status, _ := get("/frameworks"); status == http.StatusOK {
+	// 1) A working /v3.0/frameworks endpoint is specific to v3.0. (It must be the
+	// versioned path: the satellite keeps the UNVERSIONED endpoints on legacy 2.x
+	// behaviour and has no unversioned /frameworks, so probing /frameworks would
+	// miss a v3 satellite.)
+	if status, _ := get("/v3.0/frameworks"); status == http.StatusOK {
 		return "3.0", true
 	}
 

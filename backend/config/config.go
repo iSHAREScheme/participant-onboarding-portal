@@ -98,6 +98,18 @@ type Config struct {
 	FrameworkRoleCompliancy     string
 }
 
+// SatelliteV3Prefix returns the path prefix for the satellite's versioned public
+// API: "/v3.0" when operating against a v3 (claim-model) satellite, otherwise ""
+// (unversioned = legacy 2.x behaviour). The satellite serves v3 endpoints under
+// /v3.0/... and keeps the unversioned paths on legacy 2.x behaviour, so v3 calls
+// must be explicitly versioned to reach the v3 handlers.
+func (c *Config) SatelliteV3Prefix() string {
+	if strings.HasPrefix(strings.TrimSpace(c.SatelliteVersion), "3") {
+		return "/v3.0"
+	}
+	return ""
+}
+
 func NewConfig() *Config {
 	return &Config{}
 }
