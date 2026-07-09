@@ -118,6 +118,31 @@ func (h *HandlerParty) buildSporSignedRequest(subject string, organizationIdenti
 	)
 }
 
+// buildEpCreationEnvelope wraps an ep_creation party payload in the iSHARE spec
+// envelope { "ep_creation_token": "<JWT>" }, signing the token with the
+// registrar's key/cert. The party is carried under "epRequest" (v2.1.1/v2.2) or
+// "parties_info" (v2.0.1) per the ep_creation flavor. Satellites now require this
+// envelope rather than a raw party object.
+func (h *HandlerParty) buildEpCreationEnvelope(payload interface{}, flavor epCreationFlavor) ([]byte, error) {
+	partyClaimKey := "parties_info"
+	if flavor.UseDidIdentifiers {
+		partyClaimKey = "epRequest"
+	}
+	token, err := utils.CreateEpCreationToken(
+		strings.TrimSpace(h.Config.RegistrarId),
+		strings.TrimSpace(h.Config.SatelliteAud),
+		h.Config.SatelliteX5c,
+		strings.TrimSpace(h.Config.SatellitePrivateKey),
+		partyClaimKey,
+		payload,
+		300,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]string{"ep_creation_token": token})
+}
+
 // CreateParty godoc
 // @Summary      Create party in Satellite
 // @Description  Forwards the party creation request to the iSHARE Satellite.
@@ -224,9 +249,9 @@ func (h *HandlerParty) CreateParty(c *fiber.Ctx) error {
 		payload = satellite.BuildEpCreation201RequestFromRequest(&request, normalizedPartyID, signedRequest)
 	}
 
-	payloadBytes, err := json.Marshal(payload)
+	payloadBytes, err := h.buildEpCreationEnvelope(payload, flavor)
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to prepare request payload.")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to build ep_creation envelope: "+err.Error())
 	}
 
 	req, err := http.NewRequest("POST", joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteEpCreationEndpoint), bytes.NewReader(payloadBytes))
@@ -1280,9 +1305,9 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	}
 
 	// Convert the payload to JSON
-	jsonBody, err := json.Marshal(payload)
+	jsonBody, err := h.buildEpCreationEnvelope(payload, flavor)
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to marshal request body")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to build ep_creation envelope: "+err.Error())
 	}
 
 	// Create a new HTTP client
