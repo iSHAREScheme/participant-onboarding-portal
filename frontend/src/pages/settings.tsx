@@ -280,6 +280,8 @@ const Settings: NextPage = () => {
   const [activeRoles, setActiveRoles] = useState<string[]>([]);
   const [defaultRole, setDefaultRole] = useState("");
   const [autoAcceptProposal, setAutoAcceptProposal] = useState(false);
+  const [requireQualifiedEidasCertificate, setRequireQualifiedEidasCertificate] =
+    useState(false);
   // Agreements (structured: built-in / uploaded PDF / URL with optional fetch auth)
   const [agreements, setAgreements] = useState<AgreementView[]>([]);
   const [agMode, setAgMode] = useState<"file" | "url">("file");
@@ -385,6 +387,9 @@ const Settings: NextPage = () => {
       );
       setDefaultRole(data.defaultRole || "");
       setAutoAcceptProposal(data.autoAcceptProposal === "true");
+      setRequireQualifiedEidasCertificate(
+        data.requireQualifiedEidasCertificate === true
+      );
       setAgreements(Array.isArray(data.agreements) ? data.agreements : []);
       setHideCapabilitiesUrl(Boolean(data.hideCapabilitiesUrl));
       // Seed the theme editor from saved overrides, falling back to brand.
@@ -742,6 +747,7 @@ const Settings: NextPage = () => {
         activeRoles: activeRoles.join(","),
         defaultRole,
         autoAcceptProposal: autoAcceptProposal ? "true" : "false",
+        requireQualifiedEidasCertificate,
         ...sat,
       });
       flash("success", t("settings.messages.saveSuccess"));
@@ -1374,6 +1380,22 @@ const Settings: NextPage = () => {
               </label>
               <p className={styles.helperText}>
                 {t("settings.onboarding.autoAcceptHint")}
+              </p>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={requireQualifiedEidasCertificate}
+                  onChange={(e) =>
+                    setRequireQualifiedEidasCertificate(e.target.checked)
+                  }
+                />
+                {t("settings.onboarding.requireQualifiedEidasCertificate")}
+              </label>
+              <p className={styles.helperText}>
+                {t("settings.onboarding.requireQualifiedEidasCertificateHint")}
               </p>
             </div>
           </section>

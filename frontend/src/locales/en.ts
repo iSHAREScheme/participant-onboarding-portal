@@ -1388,6 +1388,8 @@ const en = {
       skipRolesHint: "Hide the role step entirely (use with a default role).",
       autoAccept: "Auto-accept proposals",
       autoAcceptHint: "Complete proposals automatically on submit, without manual admin approval.",
+      requireQualifiedEidasCertificate: "Require a qualified eIDAS certificate",
+      requireQualifiedEidasCertificateHint: "Require QCCompliance together with a QCP policy or qualified certificate type during eIDAS upload. Certificate parsing, expiry and registry trust checks always remain enabled.",
       dataspaceAuthTitle: "Dataspace & authorization",
       dataspaceAuthHint: "The dataspace applicants join and the authorization registry pre-filled for them."
     },

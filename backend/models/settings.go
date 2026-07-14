@@ -34,14 +34,16 @@ type Settings struct {
 	ActiveTheme string `json:"activeTheme"`
 
 	// Onboarding-flow configuration, admin-editable from the Onboarding settings
-	// tab. Each mirrors a NEXT_PUBLIC_* env var; an empty string means "not
-	// configured — fall back to the env default". Booleans are stored as the
-	// strings "true"/"false" (or "" when unset) so the env fallback is unambiguous.
+	// tab. Legacy boolean settings are stored as strings for compatibility.
 	DefaultAssociationName string `json:"defaultAssociationName"`
 	SkipRoles              string `json:"skipRoles"`
 	ActiveRoles            string `json:"activeRoles"`
 	DefaultRole            string `json:"defaultRole"`
 	AutoAcceptProposal     string `json:"autoAcceptProposal"`
+	// RequireQualifiedEidasCertificate enables the optional ETSI qualified-
+	// certificate rule during eIDAS upload. Its zero value intentionally leaves
+	// that rule disabled while retaining parsing, expiry and registry trust checks.
+	RequireQualifiedEidasCertificate bool `json:"requireQualifiedEidasCertificate"`
 
 	// Satellite connection overrides (non-secret). Each is empty by default, in
 	// which case the matching deploy env var is used; a non-empty value overrides

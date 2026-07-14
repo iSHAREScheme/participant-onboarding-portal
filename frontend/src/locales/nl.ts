@@ -1385,6 +1385,8 @@ const nl = {
       skipRolesHint: "Verberg de rollenstap volledig (gebruik met een standaardrol).",
       autoAccept: "Voorstellen automatisch accepteren",
       autoAcceptHint: "Voltooi voorstellen automatisch bij indienen, zonder handmatige goedkeuring.",
+      requireQualifiedEidasCertificate: "Gekwalificeerd eIDAS-certificaat vereisen",
+      requireQualifiedEidasCertificateHint: "Vereis bij een eIDAS-upload QCCompliance in combinatie met een QCP-beleid of gekwalificeerd certificaattype. Controles op certificaatindeling, vervaldatum en registervertrouwen blijven altijd actief.",
       dataspaceAuthTitle: "Dataspace & autorisatie",
       dataspaceAuthHint: "De dataspace waaraan aanmelders deelnemen en het vooraf ingevulde autorisatieregister."
     },

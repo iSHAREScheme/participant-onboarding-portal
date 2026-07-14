@@ -377,6 +377,7 @@ const Register: NextPage = () => {
     activeRoles: "",
     defaultRole: "",
     autoAccept: "",
+    requireQualifiedEidasCertificate: false,
   })
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
@@ -1012,7 +1013,10 @@ const Register: NextPage = () => {
 
         const eidasFile = data.eidasCert ?? uploadedFile
         if (eidasFile) {
-          if (!(await preValidateEidasCert(eidasFile))) {
+          if (!(await preValidateEidasCert(
+            eidasFile,
+            obSettings.requireQualifiedEidasCertificate
+          ))) {
             setValidationError("register.validation.identityRequired")
             return false
           }
@@ -1107,6 +1111,8 @@ const Register: NextPage = () => {
         activeRoles: settingsData.activeRoles || "",
         defaultRole: settingsData.defaultRole || "",
         autoAccept: settingsData.autoAcceptProposal || "",
+        requireQualifiedEidasCertificate:
+          settingsData.requireQualifiedEidasCertificate === true,
       })
       setAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
@@ -1594,7 +1600,10 @@ const Register: NextPage = () => {
     setUploadError("")
     if (currentStep === steps.idCheck) {
       try {
-        await preValidateEidasCert(file)
+        await preValidateEidasCert(
+          file,
+          obSettings.requireQualifiedEidasCertificate
+        )
 
         // check against trusted list in backend
         const isTrusted = await Api.validateCertificate(file)
