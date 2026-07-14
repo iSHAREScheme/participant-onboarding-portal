@@ -33,6 +33,18 @@ type Settings struct {
 	// (empty means the iSHARE brand default). Its values are mirrored into Theme.
 	ActiveTheme string `json:"activeTheme"`
 
+	// Onboarding-flow configuration, admin-editable from the Onboarding settings
+	// tab. Legacy boolean settings are stored as strings for compatibility.
+	DefaultAssociationName string `json:"defaultAssociationName"`
+	SkipRoles              string `json:"skipRoles"`
+	ActiveRoles            string `json:"activeRoles"`
+	DefaultRole            string `json:"defaultRole"`
+	AutoAcceptProposal     string `json:"autoAcceptProposal"`
+	// RequireQualifiedEidasCertificate enables the optional ETSI qualified-
+	// certificate rule during eIDAS upload. Its zero value intentionally leaves
+	// that rule disabled while retaining parsing, expiry and registry trust checks.
+	RequireQualifiedEidasCertificate bool `json:"requireQualifiedEidasCertificate"`
+
 	// Satellite connection overrides (non-secret). Each is empty by default, in
 	// which case the matching deploy env var is used; a non-empty value overrides
 	// it. The client certificate + private key are NOT here — they stay env-only.
@@ -45,4 +57,13 @@ type Settings struct {
 	SatelliteTokenEndpoint      string `json:"satelliteTokenEndpoint"`
 	SatelliteTokenScope         string `json:"satelliteTokenScope"`
 	DataspaceTitle              string `json:"dataspaceTitle"`
+	// VcIssuerBaseUrl is the external iSHARE VC issuer the dashboard polls for
+	// credential offers. Non-secret URL, admin-editable; overrides the
+	// VC_ISSUER_BASE_URL env default when set. The issuer API key (if any) stays
+	// env-only and is never stored here.
+	VcIssuerBaseUrl string `json:"vcIssuerBaseUrl"`
+	// PrApiBaseUrl is the Participant Registry admin API (SO.api) base URL the
+	// portal proxies admin actions to (forwarding the operator's token). Non-secret,
+	// admin-editable; overrides the PR_API_BASE_URL env default when set.
+	PrApiBaseUrl string `json:"prApiBaseUrl"`
 }

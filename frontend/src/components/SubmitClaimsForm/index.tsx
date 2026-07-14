@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { FormInput, FormSelect, Button } from "components";
 import { useSubmitParty } from "hooks";
 import { useLanguage } from "context/LanguageContext";
+import { API } from "api/client";
 import { extractCertificateFields } from "util/certificate";
 import { md5HexOfFile } from "util/md5";
 import styles from "styles/Submit.module.css";
@@ -18,7 +19,7 @@ import type {
 // the additionalInfo.* fields under `ai_*` keys) so the edit handlers stay
 // uniform; `toClaim` assembles a strict `Claim` on submit.
 type ClaimDraft = {
-  type: ClaimType;
+  type: EditableClaimType;
   registrarId: string;
   status: string;
   startDate: string;
@@ -26,13 +27,170 @@ type ClaimDraft = {
   [key: string]: string;
 };
 
-const newClaimDraft = (type: ClaimType): ClaimDraft => ({
-  type,
-  registrarId: "",
-  status: "active",
-  startDate: "",
-  endDate: "",
+type EditableClaimType = Exclude<ClaimType, "dataspaceAgreement">;
+
+type ClaimDefaults = {
+  registrarId: string;
+  frameworkId: string;
+  frameworkAgreementType: string;
+  frameworkAgreementId: string;
+  frameworkAgreementTitle: string;
+  frameworkRoleId: string;
+  frameworkRoleLoa: Loa;
+  frameworkRoleLegalAdherence: YesNoNa;
+  frameworkRoleCompliancyVerified: YesNoNa;
+  startDate: string;
+  endDate: string;
+};
+
+const DEFAULT_FRAMEWORK_ID = "iSHARE";
+const MINIMUM_CLAIM_TYPES: EditableClaimType[] = [
+  "frameworkCompliance",
+  "frameworkAgreement",
+  "frameworkRole",
+  "x509Certificate",
+];
+
+// Default certificateType for x509 claims.
+const DEFAULT_CERTIFICATE_TYPE = "eSeal";
+
+// iSHARE framework roles. The dropdown shows the human-readable title (label);
+// the roleId (value) is what gets stored in the claim / sent to the backend.
+const FRAMEWORK_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: "ServiceConsumer", label: "Service Consumer" },
+  { value: "ServiceProvider", label: "Service Provider" },
+  { value: "EntitledParty", label: "Entitled Party" },
+  { value: "AuthorisationRegistry", label: "Authorisation Registry" },
+  { value: "IdentityProvider", label: "Identity Provider" },
+  { value: "IdentityBroker", label: "Identity Broker" },
+  { value: "iShareSatellite", label: "iSHARE Satellite" },
+];
+
+const roleTitle = (roleId: string): string =>
+  FRAMEWORK_ROLE_OPTIONS.find((o) => o.value === roleId)?.label || roleId;
+
+const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
+
+const buildInitialDefaults = (): ClaimDefaults => {
+  const start = new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  return {
+    registrarId: "",
+    frameworkId: DEFAULT_FRAMEWORK_ID,
+    frameworkAgreementType: "TermsOfUse",
+    frameworkAgreementId: `${DEFAULT_FRAMEWORK_ID}-tou`,
+    frameworkAgreementTitle: "iSHARE Terms of Use",
+    frameworkRoleId: "EntitledParty",
+    frameworkRoleLoa: "substantial",
+    frameworkRoleLegalAdherence: "yes",
+    frameworkRoleCompliancyVerified: "no",
+    startDate: toDateInputValue(start),
+    endDate: toDateInputValue(end),
+  };
+};
+
+const emptyToDefault = (value: unknown, fallback: string) =>
+  typeof value === "string" && value.trim() !== "" ? value : fallback;
+
+const toLoa = (value: unknown, fallback: Loa): Loa => {
+  if (value === "low" || value === "substantial" || value === "high" || value === "not-applicable") {
+    return value;
+  }
+  return fallback;
+};
+
+const toYesNoNa = (value: unknown, fallback: YesNoNa): YesNoNa => {
+  if (value === "yes" || value === "no" || value === "not-applicable") {
+    return value;
+  }
+  return fallback;
+};
+
+const defaultsFromConnection = (
+  current: ClaimDefaults,
+  connection: Record<string, unknown>
+): ClaimDefaults => ({
+  ...current,
+  registrarId: emptyToDefault(connection.registrarId, current.registrarId),
+  frameworkId: emptyToDefault(connection.frameworkId, current.frameworkId),
+  frameworkAgreementType: emptyToDefault(
+    connection.frameworkAgreementType,
+    current.frameworkAgreementType
+  ),
+  frameworkAgreementId: emptyToDefault(
+    connection.frameworkAgreementId,
+    current.frameworkAgreementId
+  ),
+  frameworkAgreementTitle: emptyToDefault(
+    connection.frameworkAgreementTitle,
+    current.frameworkAgreementTitle
+  ),
+  frameworkRoleId: emptyToDefault(connection.frameworkRoleId, current.frameworkRoleId),
+  frameworkRoleLoa: toLoa(connection.frameworkRoleLoa, current.frameworkRoleLoa),
+  frameworkRoleLegalAdherence: toYesNoNa(
+    connection.frameworkRoleLegalAdherence,
+    current.frameworkRoleLegalAdherence
+  ),
+  frameworkRoleCompliancyVerified: toYesNoNa(
+    connection.frameworkRoleCompliancyVerified,
+    current.frameworkRoleCompliancyVerified
+  ),
 });
+
+const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDraft => {
+  const next: ClaimDraft = {
+    ...claim,
+    registrarId: claim.registrarId || defaults.registrarId,
+    startDate: claim.startDate || defaults.startDate,
+    endDate: claim.endDate || defaults.endDate,
+  };
+
+  switch (claim.type) {
+    case "frameworkCompliance":
+      next.frameworkId = next.frameworkId || defaults.frameworkId;
+      next.ai_publiclyPublishable = next.ai_publiclyPublishable || "false";
+      break;
+    case "frameworkAgreement":
+      next.frameworkId = next.frameworkId || defaults.frameworkId;
+      next.agreementType = next.agreementType || defaults.frameworkAgreementType;
+      next.agreementId = next.agreementId || defaults.frameworkAgreementId;
+      next.title = next.title || defaults.frameworkAgreementTitle;
+      break;
+    case "frameworkRole":
+      next.frameworkId = next.frameworkId || defaults.frameworkId;
+      next.roleId = next.roleId || defaults.frameworkRoleId;
+      next.title = next.title || roleTitle(next.roleId);
+      next.loa = next.loa || defaults.frameworkRoleLoa;
+      next.legalAdherence = next.legalAdherence || defaults.frameworkRoleLegalAdherence;
+      next.compliancyVerified =
+        next.compliancyVerified || defaults.frameworkRoleCompliancyVerified;
+      break;
+    case "x509Certificate":
+      next.certificateType = next.certificateType || DEFAULT_CERTIFICATE_TYPE;
+      break;
+    case "dataspaceMembership":
+      next.legalAdherence = next.legalAdherence || "not-applicable";
+      next.ai_publiclyPublishable = next.ai_publiclyPublishable || "false";
+      break;
+    default:
+      break;
+  }
+
+  return next;
+};
+
+const newClaimDraft = (type: EditableClaimType, defaults: ClaimDefaults): ClaimDraft =>
+  applyClaimDefaults(
+    {
+      type,
+      registrarId: "",
+      status: "active",
+      startDate: "",
+      endDate: "",
+    },
+    defaults
+  );
 
 const buildAdditionalInfo = (d: ClaimDraft): AdditionalInfo => ({
   description: d.ai_description || undefined,
@@ -120,15 +278,39 @@ const toClaim = (d: ClaimDraft): Claim => {
 const SubmitClaimsForm: React.FC = () => {
   const { t } = useLanguage();
   const { submitParty, loading, error, response } = useSubmitParty();
+  const [claimDefaults, setClaimDefaults] =
+    useState<ClaimDefaults>(buildInitialDefaults);
 
   const [partyId, setPartyId] = useState("");
   const [partyName, setPartyName] = useState("");
   const [alsoKnownAs, setAlsoKnownAs] = useState<string[]>([]);
-  const [claims, setClaims] = useState<ClaimDraft[]>([
-    newClaimDraft("frameworkCompliance"),
-  ]);
+  const [claims, setClaims] = useState<ClaimDraft[]>(() =>
+    MINIMUM_CLAIM_TYPES.map((type) => newClaimDraft(type, buildInitialDefaults()))
+  );
   // Tracks which upload zone is currently being dragged over (by zone id).
   const [dragZone, setDragZone] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    new API()
+      .fetchConnection()
+      .then((res) => {
+        if (!mounted) return;
+        const connection = (res?.data || {}) as Record<string, unknown>;
+        const nextDefaults = defaultsFromConnection(buildInitialDefaults(), connection);
+        setClaimDefaults(nextDefaults);
+        setClaims((prev) =>
+          prev.map((claim) => applyClaimDefaults(claim, nextDefaults))
+        );
+      })
+      .catch(() => {
+        // Prefill is a convenience. The required fields remain editable if the
+        // connection endpoint cannot be reached.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Option lists are rebuilt per render so their labels follow the active
   // language. Values stay stable (they map onto the API enums).
@@ -167,11 +349,15 @@ const SubmitClaimsForm: React.FC = () => {
     { value: "false", label: t("submit.booleanOptions.no") },
   ];
 
+  const isMinimumClaim = (index: number) => index < MINIMUM_CLAIM_TYPES.length;
+
   const addClaim = () =>
-    setClaims((prev) => [...prev, newClaimDraft("frameworkCompliance")]);
+    setClaims((prev) => [...prev, newClaimDraft("frameworkCompliance", claimDefaults)]);
 
   const removeClaim = (index: number) =>
-    setClaims((prev) => prev.filter((_, i) => i !== index));
+    setClaims((prev) =>
+      isMinimumClaim(index) ? prev : prev.filter((_, i) => i !== index)
+    );
 
   const updateClaim = (index: number, key: string, value: string) =>
     setClaims((prev) =>
@@ -190,17 +376,20 @@ const SubmitClaimsForm: React.FC = () => {
     );
 
   // Switching type keeps the shared skeleton fields and drops type-specific ones.
-  const changeClaimType = (index: number, type: ClaimType) =>
+  const changeClaimType = (index: number, type: EditableClaimType) =>
     setClaims((prev) =>
       prev.map((c, i) =>
-        i === index
-          ? {
-              type,
-              registrarId: c.registrarId,
-              status: c.status,
-              startDate: c.startDate,
-              endDate: c.endDate,
-            }
+        i === index && !isMinimumClaim(index)
+          ? applyClaimDefaults(
+              {
+                type,
+                registrarId: c.registrarId,
+                status: c.status,
+                startDate: c.startDate,
+                endDate: c.endDate,
+              },
+              claimDefaults
+            )
           : c
       )
     );
@@ -245,6 +434,22 @@ const SubmitClaimsForm: React.FC = () => {
       required={required}
       value={claims[index][key] || ""}
       onChange={(e) => updateClaim(index, key, e.target.value)}
+    />
+  );
+
+  // Read-only static field: still bound (so it is submitted) but not editable —
+  // used for defaults that must not be changed on this screen (registrarId,
+  // start/end dates, frameworkId).
+  const claimStatic = (index: number, key: string, label: string) => (
+    <FormInput
+      label={label}
+      id={`claim-${index}-${key}`}
+      name={`claim-${index}-${key}`}
+      type="text"
+      placeholder=""
+      disabled
+      value={claims[index][key] || ""}
+      onChange={() => {}}
     />
   );
 
@@ -481,7 +686,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkCompliance":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), t("submit.placeholders.framework"), true)}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
             {claimInput(index, "capabilityUrl", t("submit.claim.capabilityUrl"), t("submit.placeholders.url"))}
             {claimInput(index, "ai_description", t("submit.claim.description"))}
             {claimInput(index, "ai_website", t("submit.claim.website"), t("submit.placeholders.url"))}
@@ -507,7 +712,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkAgreement":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), "", true)}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
             {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
             {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
             {claimInput(index, "title", t("submit.claim.title"), "", true)}
@@ -516,9 +721,16 @@ const SubmitClaimsForm: React.FC = () => {
       case "frameworkRole":
         return (
           <>
-            {claimInput(index, "frameworkId", t("submit.claim.frameworkId"), "", true)}
-            {claimInput(index, "roleId", t("submit.claim.roleId"), t("submit.placeholders.roleId"), true)}
-            {claimInput(index, "title", t("submit.claim.title"))}
+            {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
+            <FormSelect
+              label={t("submit.claim.roleId")}
+              options={FRAMEWORK_ROLE_OPTIONS}
+              value={claim.roleId || ""}
+              onChange={(v) =>
+                updateClaimFields(index, { roleId: v, title: roleTitle(v) })
+              }
+              required
+            />
             <FormSelect
               label={t("submit.claim.loa")}
               options={loaOptions}
@@ -587,10 +799,13 @@ const SubmitClaimsForm: React.FC = () => {
             id="party_id"
             name="party_id"
             type="text"
+            prefix="did:ishare:"
             placeholder={t("submit.identity.partyIdPlaceholder")}
             required
             value={partyId}
-            onChange={(e) => setPartyId(e.target.value)}
+            onChange={(e) =>
+              setPartyId(e.target.value.replace(/^\s*did:ishare:/i, ""))
+            }
           />
           <FormInput
             label={t("submit.identity.partyName")}
@@ -656,26 +871,36 @@ const SubmitClaimsForm: React.FC = () => {
         <div className={styles.section} key={index}>
           <div className={styles.sectionBar}></div>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>
-              {t("submit.claim.heading", {
-                index: index + 1,
-                type: t("submit.claimTypes." + claim.type),
-              })}
-            </h2>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => removeClaim(index)}
-            >
-              {t("submit.actions.remove")}
-            </Button>
+            <div className={styles.sectionHeading}>
+              <h2 className={styles.sectionTitle}>
+                {t("submit.claim.heading", {
+                  index: index + 1,
+                  type: t("submit.claimTypes." + claim.type),
+                })}
+              </h2>
+              {isMinimumClaim(index) && (
+                <span className={styles.requiredBadge}>
+                  {t("submit.claim.minimum")}
+                </span>
+              )}
+            </div>
+            {!isMinimumClaim(index) && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => removeClaim(index)}
+              >
+                {t("submit.actions.remove")}
+              </Button>
+            )}
           </div>
           <div className={styles.formGrid}>
             <FormSelect
               label={t("submit.claim.type")}
               options={claimTypeOptions}
               value={claim.type}
-              onChange={(v) => changeClaimType(index, v as ClaimType)}
+              onChange={(v) => changeClaimType(index, v as EditableClaimType)}
+              disabled={isMinimumClaim(index)}
               required
             />
             <FormSelect
@@ -685,9 +910,9 @@ const SubmitClaimsForm: React.FC = () => {
               onChange={(v) => updateClaim(index, "status", v)}
               required
             />
-            {claimInput(index, "registrarId", t("submit.claim.registrarId"), "", true)}
-            {claimInput(index, "startDate", t("submit.claim.startDate"), t("submit.placeholders.date"))}
-            {claimInput(index, "endDate", t("submit.claim.endDate"), t("submit.placeholders.date"))}
+            {claimStatic(index, "registrarId", t("submit.claim.registrarId"))}
+            {claimStatic(index, "startDate", t("submit.claim.startDate"))}
+            {claimStatic(index, "endDate", t("submit.claim.endDate"))}
             {renderTypeFields(claim, index)}
           </div>
           {renderTypeUploads(claim, index)}

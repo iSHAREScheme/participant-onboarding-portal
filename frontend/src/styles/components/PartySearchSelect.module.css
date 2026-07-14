@@ -1,0 +1,120 @@
+.container {
+  position: relative;
+  width: 100%;
+}
+
+.control {
+  position: relative;
+}
+
+/* Matches FormInput: 38px box, neutral border, 8px radius, same fill/typography. */
+.input {
+  width: 100%;
+  height: 38px;
+  padding: 0 2.2rem 0 12px; /* right room for the clear button */
+  box-sizing: border-box;
+  background: var(--input-background, #fff);
+  border: 1px solid #c3cccd;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #013a57;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #757575;
+}
+
+/* Floating label, identical behaviour to FormInput. */
+.label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 400;
+  color: #013a5799;
+  font-size: 18px;
+  transition: all 0.2s ease-in-out;
+  pointer-events: none;
+  z-index: 1;
+  padding: 0 4px;
+}
+
+.labelActive {
+  top: 0;
+  left: 8px;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: #013a57;
+  padding: 0 6px;
+  background: var(--input-background, #fff);
+}
+
+.required {
+  color: #ff3b30;
+  margin-left: 2px;
+}
+
+.clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #757575;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.clear:hover {
+  background: #f0f4f5;
+  color: #013a57;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #c3cccd;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(1, 58, 87, 0.12);
+  z-index: 1000;
+  padding: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.option {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #013a57;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option:hover {
+  background: #f0f4f5;
+}
+
+.optionSelected {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.note {
+  padding: 10px 12px;
+  color: #a0a0a0;
+  font-size: 14px;
+}

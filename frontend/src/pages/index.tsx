@@ -1,4 +1,5 @@
 import type { NextPage } from "next";
+import { useRouter } from "next/router";
 import styles from "../styles/Home.module.css";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
@@ -25,11 +26,12 @@ const Home: NextPage = () => {
   const [agreements, setAgreements] = useState<AgreementView[]>([]);
   const { proposalData, loading: proposalLoading } = useUserProposal();
   const [keycloak] = useKeycloak();
+  const router = useRouter();
   // false on the server + first client render, true after hydration — gates the
   // admin-authored HTML below (DOMPurify needs a DOM) so server/client markup matches.
   const mounted = useHydrated();
 
-  const Api = new API()
+  const [Api] = useState(() => new API())
 
   useEffect(() => {
     const fetchDescription = async () => {
@@ -52,7 +54,16 @@ const Home: NextPage = () => {
     };
 
     fetchDescription();
-  }, [t]);
+  }, [t, Api]);
+
+  // Once admitted to the participant registry, the post-admission home is the
+  // dashboard at /party (party overview + credentials). Send completed users there
+  // instead of the onboarding landing.
+  useEffect(() => {
+    if (!proposalLoading && proposalData?.status === "completed") {
+      router.replace("/party");
+    }
+  }, [proposalLoading, proposalData?.status, router]);
 
   const handleProceed = () => {
     const env = getPublicEnv()
@@ -178,6 +189,20 @@ const Home: NextPage = () => {
   // Show approved content if user's proposal status is approved
   if (proposalData?.status === "approved") {
     return renderApprovedContent();
+  }
+
+  // Admitted: render a brief loader while the effect above redirects to the
+  // dashboard (avoids flashing the onboarding landing).
+  if (proposalData?.status === "completed") {
+    return (
+      <div className={styles.container}>
+        <main className={styles.main}>
+          <div className={styles.leftSection}>
+            <h1 className={styles.title}>Loading...</h1>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   // Show default content for all other cases

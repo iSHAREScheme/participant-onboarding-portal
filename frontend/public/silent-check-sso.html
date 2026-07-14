@@ -6,11 +6,13 @@
   </head>
   <body>
     <script>
-      // This page is loaded inside an iframe by the Keycloak adapter to perform a
-      // silent SSO check. It needs to be on the same domain as the app.
-      // The adapter expects to receive a message back, which is handled internally
-      // by the keycloak-js library.
+      // Loaded in a hidden iframe by the Keycloak adapter to perform a silent SSO
+      // check (onLoad: 'check-sso'). Keycloak redirects this iframe back to itself
+      // with the auth response in the URL; relay that URL to the parent app window
+      // so keycloak-js can complete the cookie-based login WITHOUT persisting any
+      // tokens to web storage. This postMessage call is required — without it the
+      // silent check never completes and the session cannot be restored on reload.
+      parent.postMessage(location.href, location.origin)
     </script>
   </body>
-  </html>
-
+</html>

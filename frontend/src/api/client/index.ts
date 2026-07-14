@@ -1,6 +1,6 @@
 import Axios from "axios"
 import type { AxiosInstance } from "axios"
-import { getStoredAccessToken } from "util/keycloakTokens"
+import { getAccessToken } from "util/authToken"
 
 export interface ProposalData {
   roles: {
@@ -284,16 +284,31 @@ export interface DelegationOverview {
   members: DelegationMember[]
 }
 
+// A realm user as projected by the backend Users endpoints. `roles` lists the
+// realm roles the admin UI cares about (currently just onboarding-admin).
+export interface KeycloakUser {
+  id: string
+  username: string
+  email: string
+  firstName: string
+  lastName: string
+  enabled: boolean
+  createdTimestamp: number
+  roles?: string[]
+}
+
 export class API {
   public client: AxiosInstance
   constructor () {
     // proxy @pages/api/backend
     this.client = Axios.create({ baseURL: '/api/backend' })
 
-    // Attach current Keycloak token to every request (browser only)
-    this.client.interceptors.request.use((config) => {
+    // Attach the current in-memory Keycloak token to every request (browser
+    // only). The provider refreshes the token if it is near expiry; tokens are
+    // never read from web storage.
+    this.client.interceptors.request.use(async (config) => {
       if (typeof window !== 'undefined') {
-        const token = getStoredAccessToken()
+        const token = await getAccessToken()
         if (token) {
           config.headers = config.headers || {}
           // Forward user session token
@@ -370,6 +385,70 @@ export class API {
     return `/api/backend/settings/agreements/${encodeURIComponent(id)}/document`
   }
 
+  // --- Authentication: Keycloak identity providers + SMTP (admin only) -------
+  // The realm's configured IdPs (client secrets redacted): { idps: [...] }.
+  listIdps () {
+    return this.client.get(`/settings/idps`)
+  }
+  // A single IdP representation (secrets redacted): { idp: {...} }.
+  getIdp (alias: string) {
+    return this.client.get(`/settings/idps/${encodeURIComponent(alias)}`)
+  }
+  createIdp (body: Record<string, any>) {
+    return this.client.post(`/settings/idps`, body)
+  }
+  // Update an IdP. Blank secret fields keep the value already stored.
+  updateIdp (alias: string, body: Record<string, any>) {
+    return this.client.put(`/settings/idps/${encodeURIComponent(alias)}`, body)
+  }
+  deleteIdp (alias: string) {
+    return this.client.delete(`/settings/idps/${encodeURIComponent(alias)}`)
+  }
+  // Per-IdP claim mappers (external claim -> Keycloak user attribute).
+  listIdpMappers (alias: string) {
+    return this.client.get(`/settings/idps/${encodeURIComponent(alias)}/mappers`)
+  }
+  createIdpMapper (alias: string, body: { name?: string; claim: string; userAttribute: string }) {
+    return this.client.post(`/settings/idps/${encodeURIComponent(alias)}/mappers`, body)
+  }
+  deleteIdpMapper (alias: string, id: string) {
+    return this.client.delete(`/settings/idps/${encodeURIComponent(alias)}/mappers/${encodeURIComponent(id)}`)
+  }
+  // Realm SMTP settings (password redacted): { smtp: {...}, passwordSet }.
+  getSmtp () {
+    return this.client.get(`/settings/smtp`)
+  }
+  // Save SMTP settings. A blank password keeps the one already stored.
+  updateSmtp (body: Record<string, any>) {
+    return this.client.put(`/settings/smtp`, body)
+  }
+  // Send a real test email to the recipient in `body.to` using the saved settings.
+  testSmtp (body: Record<string, any>) {
+    return this.client.post(`/settings/smtp/test`, body)
+  }
+
+  // Update the current user's OWN Keycloak profile (email / name) via the backend
+  // admin API. The user is identified server-side from the token subject, so it
+  // can only ever change the caller's own account.
+  updateMyProfile (body: { email?: string; firstName?: string; lastName?: string }) {
+    return this.client.put(`/me/profile`, body)
+  }
+
+  // --- Realm user administration (admin Users page) ----------------------
+  // Proxied through the backend so Keycloak's admin API stays private to the edge;
+  // the backend authenticates with its own admin credentials and gates on the
+  // onboarding-admin role.
+  listKeycloakUsers () {
+    return this.client.get<{ users: KeycloakUser[] }>(`/users`)
+  }
+  // Create a user (role "user" | "admin"); the backend also emails a set-password link.
+  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "user" | "admin" }) {
+    return this.client.post(`/users`, body)
+  }
+  deleteKeycloakUser (id: string) {
+    return this.client.delete(`/users/${encodeURIComponent(id)}`)
+  }
+
   fetchRegistry () {
     return this.client.get(`/registry`)
   }
@@ -399,6 +478,11 @@ export class API {
     return this.client.get(`/registry/dataspaces`)
   }
 
+  // Frameworks registered in the Participant Registry: { frameworks, pagination, claims }.
+  fetchFrameworks (params?: { page?: number; pageSize?: number }) {
+    return this.client.get(`/registry/frameworks`, { params })
+  }
+
   // Admin-only: list one page of participants from the satellite registry.
   // Pagination, name search and the active/certified filters are evaluated by
   // the satellite; the backend returns { data, page, pageSize, total, totalPages }.
@@ -406,6 +490,12 @@ export class API {
     page?: number
     pageSize?: number
     name?: string
+    // Free-text term matched against party name OR party id (backend does the OR).
+    search?: string
+    // Party-id search (satellite matches id / EORI / DID, contains).
+    id?: string
+    // Framework-role filter (frameworkRole claim roleId, e.g. "iShareSatellite").
+    role?: string
     activeOnly?: boolean
     certifiedOnly?: boolean
     mineOnly?: boolean
@@ -419,6 +509,124 @@ export class API {
     return this.client.get(`/registry/participants/detail`, {
       params: { eori: id },
     })
+  }
+
+  fetchParticipantHistory (id: string) {
+    return this.client.get(`/registry/participants/history`, {
+      params: { eori: id },
+    })
+  }
+
+  // The applicant's OWN registered party (scoped server-side to their proposal):
+  // { status, partyId, partyName, data }. `data` is null until admitted to the PR.
+  getMyParty () {
+    return this.client.get(`/registry/me/party`)
+  }
+
+  // Verifiable-credential offers for the caller's own party, polled from the
+  // external iSHARE VC issuer (the portal relays; it never signs). Returns
+  // { issuerConfigured, status: pending|processing|ready|failed|unavailable|none,
+  //   results: [{ credential_type, action, credential_offer_uri?, offer_expires_at? }],
+  //   generated_at?, error? }. Scoped server-side to the caller's proposal.
+  getMyCredentialOffers () {
+    return this.client.get(`/registry/me/credentials`)
+  }
+
+  // Request on-demand issuance of specific credential types for the caller's party.
+  // Issuance is portal-driven: the issuer builds only the requested types that are
+  // buildable from the party's claims and exposes offers. Returns the issuer's job
+  // ack ({ status:"accepted", job_id, ... }); poll getMyCredentialOffers afterwards.
+  requestMyCredentials (credentialTypes: string[]) {
+    return this.client.post(`/registry/me/credentials/request`, { credentialTypes })
+  }
+
+  // Ask the issuer to mint fresh offer URIs for already-issued credentials
+  // (used when offers have expired) without revoking or rebuilding them.
+  refreshMyCredentialOffers () {
+    return this.client.post(`/registry/me/credentials/refresh`)
+  }
+
+  // Re-trigger the issuer's reconcile for the caller's party (recovery when a
+  // previous poll ended in "failed").
+  reprocessMyCredentials () {
+    return this.client.post(`/registry/me/credentials/reprocess`)
+  }
+
+  // Participant Registry admin (co-deployed only): latest network/ledger health.
+  // The backend forwards the operator's token to the PR /api/* surface and relays
+  // the result; returns 501 when PR_API_BASE_URL is unset (standalone deployment).
+  getNetworkHealth () {
+    return this.client.get(`/pr/network-health`)
+  }
+
+  // PR admin: list party-transfer requests.
+  getTransferRequests () {
+    return this.client.get(`/pr/transfer/requests`)
+  }
+
+  // PR admin: request transfer of a party to another registry (TransferModel
+  // body: { partyId, transferTo, … }). Returns the registry's FinalResponse.
+  createTransfer (body: Record<string, any>) {
+    return this.client.post(`/pr/transfer`, body)
+  }
+
+  // PR admin: list scheduled jobs ({ count, data:[…] }).
+  getSchedulers () {
+    return this.client.get(`/pr/scheduler`)
+  }
+
+  // PR admin: create a scheduled job (scheduler config body). Returns FinalResponse.
+  createScheduler (body: Record<string, any>) {
+    return this.client.post(`/pr/scheduler`, body)
+  }
+
+  // PR admin: update a scheduled job (scheduler config body). Returns FinalResponse.
+  updateScheduler (body: Record<string, any>) {
+    return this.client.put(`/pr/scheduler`, body)
+  }
+
+  // --- Issuer-integration webhooks ------------------------------------------
+  // The PR's issuer-webhook subscriber registry + delivery outbox
+  // (ISSUER_INTEGRATION_CONTRACT.md). Subscriber signing secrets are
+  // write/rotate-only — returned once on create/rotate, never read back.
+
+  // PR admin: list issuer-webhook subscribers → { subscribers:[…] }.
+  listIssuerSubscribers () {
+    return this.client.get(`/pr/issuer/subscribers`)
+  }
+  // PR admin: one subscriber → { subscriber:{…} }.
+  getIssuerSubscriber (id: string) {
+    return this.client.get(`/pr/issuer/subscribers/${encodeURIComponent(id)}`)
+  }
+  // PR admin: register a subscriber. Response carries the generated { secret } once.
+  createIssuerSubscriber (body: Record<string, any>) {
+    return this.client.post(`/pr/issuer/subscribers`, body)
+  }
+  // PR admin: edit a subscriber (url / eventFilter / replayProtection / enabled).
+  updateIssuerSubscriber (id: string, body: Record<string, any>) {
+    return this.client.patch(`/pr/issuer/subscribers/${encodeURIComponent(id)}`, body)
+  }
+  // PR admin: delete a subscriber.
+  deleteIssuerSubscriber (id: string) {
+    return this.client.delete(`/pr/issuer/subscribers/${encodeURIComponent(id)}`)
+  }
+  // PR admin: rotate a subscriber's signing secret; returns the new { secret } once.
+  // Optional overlapSeconds keeps the prior secret valid for a window.
+  rotateIssuerSubscriberSecret (id: string, overlapSeconds?: number) {
+    const body = overlapSeconds === undefined ? undefined : { overlapSeconds }
+    return this.client.post(`/pr/issuer/subscribers/${encodeURIComponent(id)}/rotate-secret`, body)
+  }
+  // PR admin: list webhook deliveries (outbox / dead-letter) → { deliveries:[…] }.
+  listIssuerDeliveries (params?: { status?: string; partyId?: string; subscriberId?: string; limit?: number }) {
+    return this.client.get(`/pr/issuer/deliveries`, { params })
+  }
+  // PR admin: requeue a failed/dead delivery for immediate retry.
+  redeliverIssuerDelivery (id: string) {
+    return this.client.post(`/pr/issuer/deliveries/${encodeURIComponent(id)}/redeliver`)
+  }
+  // PR admin: re-emit a party.updated event for a party (manual reconcile trigger).
+  reemitPartyEvents (partyId: string) {
+    return this.client.post(`/pr/issuer/parties/${encodeURIComponent(partyId)}/reemit`)
   }
 
   // Admin-only party updates (proxied to the satellite).

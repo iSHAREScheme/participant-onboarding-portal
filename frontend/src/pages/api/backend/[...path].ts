@@ -10,7 +10,10 @@ const PUBLIC_GET_PATHS = new Set([
   '/settings/public',
   '/settings/logo',
   '/settings/favicon',
-  '/settings/agreements',
+  // NOTE: '/settings/agreements' (the full list) is admin-only; the landing page
+  // reads the minimal agreement subset from '/settings/public'. Only the public
+  // per-document downloads (/settings/agreements/<id>/document) stay open — see
+  // isPublicAgreementDoc below.
   '/registry',
 ])
 
@@ -83,6 +86,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (typeof fwdAuth === 'string' && fwdAuth) headers['Authorization'] = fwdAuth
     if (typeof userToken === 'string' && userToken) headers['X-User-Token'] = userToken
+
+    // Forward the real client IP so the backend can rate-limit per visitor —
+    // all proxied requests otherwise originate from this server's address. Prefer
+    // an existing X-Forwarded-For (set by an upstream proxy), else the socket peer.
+    const priorXff = req.headers['x-forwarded-for']
+    const clientIp =
+      (Array.isArray(priorXff) ? priorXff[0] : priorXff) || req.socket?.remoteAddress || ''
+    if (clientIp) headers['X-Forwarded-For'] = String(clientIp)
 
     // Block direct navigation to API endpoints (address bar / page loads),
     // EXCEPT public agreement documents which are intentionally opened in a new

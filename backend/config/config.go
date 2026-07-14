@@ -35,6 +35,23 @@ type Config struct {
 	OIDCDisable                 bool
 	SporSignedRequestPath       string
 	SporSignedRequestBase64     string
+	// VcIssuerBaseUrl is the base URL of the external iSHARE VC issuer the portal
+	// polls for credential offers (its ObP API, e.g. http://ishare-vc-issuer:8080).
+	// Empty = credential issuance is not configured and the dashboard says so.
+	VcIssuerBaseUrl string
+	// VcIssuerApiKey is the shared bearer token the issuer's ObP API ("obp.api_key"
+	// on the issuer) requires on every /v1 request. Sent as Authorization: Bearer
+	// on the credential-offer poll. A secret — supplied via env only, never stored
+	// in settings or returned to the UI. Empty when the issuer runs auth-disabled.
+	VcIssuerApiKey string
+	// PrApiBaseUrl is the base URL of the Participant Registry admin API ("SO.api").
+	// It is reached server-to-server by forwarding the operator's OIDC bearer token
+	// (the same token the portal authenticated the admin with), so the PR must trust
+	// the portal's realm/issuer (scope so.api). Empty = PR-admin features disabled.
+	PrApiBaseUrl string
+	// CorsAllowedOrigins is a comma-separated allow-list of browser origins
+	// permitted to call the API cross-origin. Empty = no CORS headers emitted.
+	CorsAllowedOrigins string
 
 	// Inbound API auth (JWT)
 	AuthPublicKeyPath string
@@ -58,6 +75,12 @@ type Config struct {
 	KeycloakRealm         string
 	KeycloakAdminUsername string
 	KeycloakAdminPassword string
+	// KeycloakClientID is the public frontend client (NEXT_PUBLIC_KEYCLOAK_CLIENT_ID),
+	// used as the client_id when emailing a newly-created user their set-password link.
+	KeycloakClientID string
+	// FrontendDomain is the portal's public origin (NEXT_PUBLIC_FRONTEND_DOMAIN); the
+	// new-user action email redirects back here once the required actions are done.
+	FrontendDomain string
 	// KeycloakIdp is the eHerkenning identity-provider alias (shared with the
 	// frontend via NEXT_PUBLIC_KEYCLOAK_IDP) used to verify eHerkenning signing.
 	KeycloakIdp string
@@ -73,6 +96,18 @@ type Config struct {
 	FrameworkRoleLoa            string
 	FrameworkRoleLegalAdherence string
 	FrameworkRoleCompliancy     string
+}
+
+// SatelliteV3Prefix returns the path prefix for the satellite's versioned public
+// API: "/v3.0" when operating against a v3 (claim-model) satellite, otherwise ""
+// (unversioned = legacy 2.x behaviour). The satellite serves v3 endpoints under
+// /v3.0/... and keeps the unversioned paths on legacy 2.x behaviour, so v3 calls
+// must be explicitly versioned to reach the v3 handlers.
+func (c *Config) SatelliteV3Prefix() string {
+	if strings.HasPrefix(strings.TrimSpace(c.SatelliteVersion), "3") {
+		return "/v3.0"
+	}
+	return ""
 }
 
 func NewConfig() *Config {
@@ -183,6 +218,17 @@ func (config *Config) LoadEnvironment() error {
 		config.SporSignedRequestBase64 = base64.StdEncoding.EncodeToString(data)
 	}
 
+	// External iSHARE VC issuer (ObP polling API). Server-to-server base URL; the
+	// offer URIs it returns carry the issuer's own public base URL for wallets.
+	config.VcIssuerBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_ISSUER_BASE_URL")), "/")
+	// Shared bearer the issuer's /v1 ObP API requires (matches the issuer's
+	// obp.api_key). Secret → env only.
+	config.VcIssuerApiKey = strings.TrimSpace(os.Getenv("VC_ISSUER_API_KEY"))
+
+	// Participant Registry admin API (SO.api). Server-to-server base URL; auth is
+	// the forwarded operator token, so no credential is configured here.
+	config.PrApiBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("PR_API_BASE_URL")), "/")
+
 	// Inbound auth configuration
 	config.AuthPublicKeyPath = os.Getenv("AUTH_PUBLIC_KEY_PATH")
 	config.AuthIssuer = os.Getenv("AUTH_ISSUER")
@@ -220,10 +266,18 @@ func (config *Config) LoadEnvironment() error {
 	config.KeycloakRealm = os.Getenv("NEXT_PUBLIC_KEYCLOAK_REALM")
 	config.KeycloakAdminUsername = os.Getenv("KEYCLOAK_ADMIN_USERNAME")
 	config.KeycloakAdminPassword = os.Getenv("KEYCLOAK_ADMIN_PASSWORD")
+	config.KeycloakClientID = os.Getenv("NEXT_PUBLIC_KEYCLOAK_CLIENT_ID")
+	config.FrontendDomain = strings.TrimRight(os.Getenv("NEXT_PUBLIC_FRONTEND_DOMAIN"), "/")
 	config.KeycloakIdp = os.Getenv("NEXT_PUBLIC_KEYCLOAK_IDP")
 
 	config.SatelliteDebug = os.Getenv("SATELLITE_DEBUG") == "true"
 	config.OIDCDisable = os.Getenv("OIDC_DISABLE") == "true"
+
+	// Browser origins allowed to call the API cross-origin (comma-separated).
+	// Empty = emit no CORS headers; the browser same-origin policy then blocks
+	// cross-origin reads. The app's own frontend reaches the API through a
+	// same-origin proxy, so this is only needed for extra trusted browser origins.
+	config.CorsAllowedOrigins = strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
 
 	return nil
 }
@@ -262,4 +316,6 @@ func (config *Config) OverlaySatelliteSettings(s *models.Settings) {
 	set(&config.RegistrarId, s.RegistrarId)
 	set(&config.DataspaceId, s.DataspaceId)
 	set(&config.DataspaceTitle, s.DataspaceTitle)
+	set(&config.VcIssuerBaseUrl, s.VcIssuerBaseUrl)
+	set(&config.PrApiBaseUrl, s.PrApiBaseUrl)
 }

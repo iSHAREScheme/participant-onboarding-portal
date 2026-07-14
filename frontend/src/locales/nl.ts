@@ -1,5 +1,5 @@
 
-export default {
+const nl = {
   common: {
     login: "Inloggen",
     logout: "Uitloggen",
@@ -17,6 +17,7 @@ export default {
     required: "Verplicht",
     edit: "Bewerken",
     delete: "Verwijderen",
+    restore: "Herstellen",
     cancel: "Annuleren",
     confirm: "Bevestigen",
     next: "Volgende",
@@ -24,7 +25,21 @@ export default {
     profile: "Profiel",
     participants: "Deelnemers",
     organizationAccess: "Organisatietoegang",
-    menu: "Menu"
+    myParty: "Mijn partij",
+    networkHealth: "Netwerkstatus",
+    revoke: "Intrekken",
+    transfer: "Overdragen",
+    lifecycle: "Levenscyclus",
+    dataspaces: "Dataspaces",
+    frameworks: "Frameworks",
+    trustedList: "Vertrouwde lijst",
+    issuerWebhooks: "Issuer-webhooks",
+    yes: "Ja",
+    no: "Nee",
+    menu: "Menu",
+    clear: "Wissen",
+    searching: "Zoeken…",
+    noMatches: "Geen overeenkomende deelnemers"
   },
   organizationAccess: {
     title: "Organisatietoegang",
@@ -75,7 +90,9 @@ export default {
     loading: "Deelnemers laden...",
     error: "Kan deelnemers niet laden.",
     empty: "Geen deelnemers gevonden.",
-    search: "Zoek op naam…",
+    search: "Zoek op naam of party-ID…",
+    roleFilterAria: "Filter op rol",
+    roleAll: "Alle rollen",
     filters: {
       all: "Alle deelnemers",
       mine: "Mijn deelnemers",
@@ -103,6 +120,9 @@ export default {
       error: "Kan deelnemer niet laden.",
       notFound: "Deelnemer niet gevonden.",
       schemaLabel: "Schema",
+      projectionLabel: "Geprojecteerd als",
+      projectionHint:
+        "Het record van deze partij is opgeslagen onder een ouder schema en wordt hier getoond in het nieuwere claim-model. Voor partijen die niet zijn gemigreerd, zijn de claims afgeleid van de opgeslagen gegevens en alleen voor weergave.",
       viewMore: "Meer bekijken",
       close: "Sluiten",
       sections: {
@@ -113,11 +133,13 @@ export default {
         authRegistries: "Autorisatieregisters",
         certificates: "Certificaten",
         additionalInfo: "Aanvullende informatie",
-        claims: "Claims"
+        claims: "Claims",
+        history: "Geschiedenis"
       },
       fields: {
         partyId: "Party ID",
         name: "Naam",
+        alsoKnownAs: "Ook bekend als",
         registrarId: "Registrar ID",
         capabilityUrl: "Capability URL",
         schemaVersion: "Schemaversie",
@@ -151,18 +173,559 @@ export default {
         authRegistries: "Geen autorisatieregisters.",
         certificates: "Geen certificaten."
       },
+      history: {
+        loading: "Geschiedenis laden…",
+        error: "Geschiedenis is momenteel niet beschikbaar.",
+        empty: "Geen geschiedenis gevonden.",
+        emptyEdited: "Nog geen veldwijzigingen vastgelegd.",
+        object: "Object",
+        actor: "Actor",
+        noFieldChanges: "Geen veldwijzigingen beschikbaar.",
+        more: "Nog {{count}} wijzigingen",
+        show: "Wijzigingen tonen ({{count}})",
+        hide: "Wijzigingen verbergen",
+        changesLabel: "{{count}} veldwijzigingen",
+        by: "door {{party}}"
+      },
       edit: {
         button: "Bewerken",
         title: "Deelnemer bewerken",
+        partyInfoTitle: "Partijgegevens",
+        partyInfoHint: "Alleen partijgegevens worden hier bewerkt. Elke claim wordt afzonderlijk via zijn kaart bewerkt.",
+        editClaim: "Claim bewerken",
+        editClaimTitle: "Claim bewerken",
+        noEditableClaimFields: "Dit claimtype heeft geen bewerkbare velden — de waarden worden bij uitgifte vastgelegd.",
         save: "Opslaan",
         saving: "Opslaan…",
         saveClaim: "Claim opslaan",
         cancel: "Annuleren",
         saved: "Opgeslagen.",
         saveError: "Kan wijzigingen niet opslaan.",
+        noComplianceClaim: "Deze deelnemer heeft geen bewerkbare compliance-claim.",
         claimsTitle: "Claims"
+      },
+      projectionWarn: {
+        incompleteTitle: "Onvolledige v3-deelnemer",
+        incompleteBody:
+          "Deze deelnemer voldoet nog niet aan de v3-onboardingvereisten, dus het register behandelt de deelnemer nog als een verouderd (v2) record en de getoonde claims kunnen afgeleid zijn uit de verouderde gegevens. Voeg de onderstaande ontbrekende claim(s) toe om de migratie naar v3 te voltooien.",
+        missingLabel: "Ontbrekende verplichte claims:",
+        unmigratedTitle: "Nog niet gemigreerd naar v3",
+        unmigratedBody:
+          "De gegevens van deze deelnemer lijken volledig, maar zijn nog niet opgeslagen als native v3-claims — de getoonde claims zijn afgeleid uit het verouderde record en dienen alleen ter weergave. Voer de v3-claimmigratie uit om ze op te slaan.",
+        req: {
+          certOrIdp: "X.509-certificaat of IdP-assertie",
+          x509ForRole: "X.509-certificaat (vereist voor de framework-rol)"
+        }
       }
     }
+  },
+  party: {
+    back: "Terug naar home",
+    admitted: "Toegelaten",
+    refresh: "Vernieuwen",
+    start: "Onboarding starten",
+    loadError: "Kan uw partijgegevens niet laden.",
+    none: {
+      title: "Nog geen onboarding",
+      message: "U bent nog niet met onboarding gestart. Zodra u een registratie indient en deze is goedgekeurd, verschijnen uw partijgegevens hier."
+    },
+    processing: {
+      title: "Onboarding in behandeling",
+      message: "Uw registratie wordt verwerkt. Uw partijgegevens verschijnen hier zodra uw organisatie is toegelaten tot het deelnemersregister."
+    },
+    rejected: {
+      title: "Registratie niet goedgekeurd",
+      message: "Uw registratie is niet goedgekeurd. Neem contact op met de vereniging voor meer informatie of start een nieuwe registratie."
+    },
+    welcome: {
+      title: "Onboarding voltooid, {{name}}!",
+      message: "Uw organisatie is toegelaten tot het deelnemersregister. Hieronder vindt u uw partijgegevens en de credentials die u kunt aanvragen."
+    },
+    credentials: {
+      title: "Credentials",
+      description: "Voeg de verifieerbare credentials van uw organisatie toe aan een wallet. Scan een QR-code met uw wallet-app, of open deze op dit apparaat.",
+      vcLabel: "Verifieerbare credential",
+      notConfigured: "Het uitgeven van credentials is nog niet geconfigureerd. Neem contact op met uw vereniging.",
+      empty: "Er zijn nog geen credentials beschikbaar voor uw partij.",
+      unavailable: "De credential-uitgever is tijdelijk niet beschikbaar. Probeer het zo meteen opnieuw.",
+      addToWallet: "Aan wallet toevoegen",
+      scanHint: "Scan met uw wallet-app",
+      copyOffer: "Offerlink kopiëren",
+      copied: "Gekopieerd",
+      refresh: "Offers vernieuwen",
+      refreshing: "Bezig met vernieuwen…",
+      retry: "Opnieuw proberen",
+      retrying: "Bezig met opnieuw proberen…",
+      checkAgain: "Opnieuw controleren",
+      checking: "Bezig met controleren…",
+      expires: "Offer verloopt {{when}}",
+      expired: "Deze offer is verlopen — vernieuw om een nieuwe te krijgen.",
+      preparing: {
+        title: "Uw credentials worden voorbereid…",
+        message: "Uw verifieerbare credentials worden uitgegeven. Dit kan na toelating even duren."
+      },
+      failed: {
+        title: "Uitgifte van credentials niet voltooid",
+        message: "Er is iets misgegaan bij het uitgeven van uw credentials. U kunt het opnieuw proberen."
+      },
+      request: "Aanvragen",
+      requesting: "Bezig met aanvragen…",
+      requestSectionTitle: "Beschikbare credentials",
+      requestSectionHint: "Vraag de verifieerbare credentials aan waar uw organisatie recht op heeft. Voeg ze na uitgifte toe aan een wallet.",
+      notAvailable: "Niet beschikbaar voor uw partij.",
+      issued: "Deze credential is uitgegeven.",
+      getWalletLink: "Wallet-link ophalen",
+      gettingLink: "Bezig met ophalen…",
+      noWalletLink: "Kan op dit moment geen wallet-link genereren — probeer het later opnieuw.",
+      types: {
+        PartyCredential: "Partij-credential",
+        iSHAREParticipantCredential: "iSHARE-deelnemerscredential",
+        DataspaceParticipantCredential: "Dataspace-deelnemerscredential"
+      },
+      typeDescriptions: {
+        PartyCredential: "Bewijst de identiteit van uw organisatie (partij-id en naam).",
+        iSHAREParticipantCredential: "Bewijst uw actieve deelname aan het iSHARE-framework.",
+        DataspaceParticipantCredential: "Bewijst uw lidmaatschap van een dataspace."
+      }
+    }
+  },
+  tour: {
+    aria: "Rondleiding beheerportaal",
+    skip: "Overslaan",
+    back: "Vorige",
+    next: "Volgende",
+    done: "Afronden",
+    step: "Stap {{current}} van {{total}}",
+    replay: "Rondleiding starten",
+    steps: {
+      welcome: {
+        title: "Welkom in uw beheerportaal",
+        body: "We lopen de belangrijkste onderdelen langs en navigeren voor u tussen de pagina's. Overslaan kan altijd, en u start de rondleiding later opnieuw via uw accountmenu."
+      },
+      proposalsList: {
+        title: "Voorstellen",
+        body: "Elke onboarding-aanvraag met de bijbehorende status. Open er een om te beoordelen, goed- of af te keuren en de ondertekende overeenkomsten te downloaden."
+      },
+      proposalsCreate: {
+        title: "Partij registreren",
+        body: "Handmatig een deelnemer toevoegen? Start hier een nieuwe registratie."
+      },
+      participantsList: {
+        title: "Deelnemers",
+        body: "Organisaties die zijn toegelaten tot het register. Open er een voor de partijgegevens, rollen en claims."
+      },
+      participantsSearch: {
+        title: "Deelnemers zoeken",
+        body: "Zoek en filter de lijst om snel een organisatie te vinden."
+      },
+      usersList: {
+        title: "Gebruikers",
+        body: "De gebruikersaccounts van het portaal en de rollen die bepalen waartoe zij toegang hebben."
+      },
+      usersCreate: {
+        title: "Gebruiker toevoegen",
+        body: "Nodig een nieuwe portaalgebruiker uit en wijs hier een rol toe."
+      },
+      settingsTabs: {
+        title: "Instellingen",
+        body: "Branding en content, de onboarding-flow, het thema en authenticatie — identity providers, e-mail (SMTP) en de uitgever van verifieerbare credentials."
+      },
+      finish: {
+        title: "U bent klaar",
+        body: "Dat was de rondleiding. Start hem opnieuw via “Rondleiding starten” in uw accountmenu."
+      }
+    }
+  },
+  revoke: {
+    title: "Intrekken",
+    titleCombined: "Levenscyclus",
+    description: "Trek een partij in bij het register, of draag deze over aan een ander deelnemersregister.",
+    form: {
+      heading: "Levenscyclusactie",
+      revokingOrg: "In te trekken organisatie",
+      fromRegistry: "Vanuit register",
+      orgPlaceholder: "Organisatie-id",
+      partyId: "Partij-ID",
+      participant: "Deelnemer",
+      noParties: "U heeft geen deelnemers om te beheren.",
+      noSatellites: "Er zijn nog geen andere satellieten in het netwerk beschikbaar.",
+      type: "Actie",
+      transferTo: "Overdragen aan partij-ID",
+      hint: "Kies de deelnemer die u uit het register wilt intrekken.",
+      submit: "Intrekken starten",
+      submitting: "Bezig met verzenden…",
+      required: "Voer een partij of organisatie in om in te trekken.",
+      success: "Intrekkingsverzoek verzonden.",
+      error: "Kan het intrekkingsverzoek niet verzenden."
+    },
+    types: {
+      revoke: "Intrekken",
+      transfer: "Overdragen"
+    },
+    confirm: {
+      title: "Partij intrekken",
+      message: "“{{target}}” intrekken bij het register? Dit kan niet ongedaan worden gemaakt.",
+      button: "Intrekken"
+    },
+    list: {
+      heading: "Intrekkingsverzoeken",
+      refresh: "Vernieuwen",
+      org: "Organisatie",
+      party: "Partij",
+      type: "Actie",
+      status: "Status",
+      date: "Aangemaakt",
+      empty: "Geen intrekkingsverzoeken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan intrekkingsverzoeken niet laden."
+    }
+  },
+  transfer: {
+    title: "Overdragen",
+    description: "Draag het eigendom van een partij over aan een ander deelnemersregister.",
+    form: {
+      heading: "Overdracht aanvragen",
+      partyId: "Partij-ID",
+      participant: "Deelnemer",
+      fromRegistry: "Vanuit register",
+      noParties: "U heeft geen deelnemers om over te dragen.",
+      noSatellites: "Er zijn nog geen andere deelnemersregisters beschikbaar in het netwerk.",
+      transferTo: "Overdragen aan register",
+      transferToPlaceholder: "Id van doelregister",
+      hint: "Geef de over te dragen partij op en het deelnemersregister waaraan deze moet worden overgedragen.",
+      submit: "Overdracht aanvragen",
+      submitting: "Bezig met verzenden…",
+      required: "Voer zowel de partij als het doelregister in.",
+      success: "Overdrachtsverzoek verzonden.",
+      error: "Kan het overdrachtsverzoek niet verzenden."
+    },
+    confirm: {
+      title: "Partij overdragen",
+      message: "“{{party}}” overdragen aan “{{target}}”? Het doelregister moet het verzoek goedkeuren.",
+      button: "Overdracht aanvragen"
+    },
+    list: {
+      heading: "Overdrachtsverzoeken",
+      refresh: "Vernieuwen",
+      party: "Partij",
+      from: "Van",
+      to: "Naar",
+      status: "Status",
+      date: "Aangevraagd",
+      empty: "Geen overdrachtsverzoeken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan overdrachtsverzoeken niet laden."
+    }
+  },
+  dataspaces: {
+    title: "Dataspaces",
+    description: "Beheer de dataspaces die in het deelnemersregister zijn geregistreerd.",
+    form: {
+      createHeading: "Dataspace aanmaken",
+      editHeading: "Dataspace bewerken ({{id}})",
+      subject: "Naam",
+      subjectPlaceholder: "Naam van de dataspace",
+      dataspaceId: "Dataspace-ID",
+      status: "Status",
+      country: "Land van registratie",
+      countryPlaceholder: "bijv. Nederland",
+      definitionUrl: "Definitie-URL",
+      website: "Website",
+      countriesOfOperation: "Landen van werking",
+      sectorIndustry: "Sector / branche",
+      tags: "Labels",
+      tagsPlaceholder: "Komma-gescheiden labels",
+      specificAgreements: "Specifieke overeenkomsten",
+      listPlaceholder: "Komma-gescheiden waarden",
+      listHint: "Landen van werking, sector/branche en specifieke overeenkomsten accepteren meerdere komma-gescheiden waarden.",
+      create: "Dataspace aanmaken",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      required: "Een naam en dataspace-ID zijn verplicht.",
+      created: "Dataspace aangemaakt.",
+      updated: "Dataspace bijgewerkt.",
+      loadError: "Kan de dataspace niet laden.",
+      error: "Kan de dataspace niet opslaan."
+    },
+    status: {
+      new: "Nieuw",
+      inProgress: "In behandeling",
+      active: "Actief",
+      notActive: "Niet actief"
+    },
+    list: {
+      heading: "Dataspaces",
+      refresh: "Vernieuwen",
+      subject: "Naam",
+      id: "Dataspace-ID",
+      status: "Status",
+      country: "Land",
+      actions: "Acties",
+      edit: "Bewerken",
+      empty: "Geen dataspaces.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan dataspaces niet laden."
+    }
+  },
+  frameworks: {
+    title: "Frameworks",
+    description: "Bekijk de frameworks die het v3-endpoint van het deelnemersregister aanbiedt.",
+    refresh: "Vernieuwen",
+    refreshing: "Vernieuwen…",
+    pageSize: "Paginagrootte",
+    empty: "Geen frameworks gevonden.",
+    unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+    error: "Kan frameworks niet laden.",
+    notConfigured: "Het deelnemersregister is niet geconfigureerd voor deze deployment.",
+    untitled: "Framework zonder titel",
+    showRaw: "Details tonen",
+    hideRaw: "Details verbergen",
+    issuer: "Issuer: {{issuer}}",
+    fields: {
+      version: "Versie",
+      validFrom: "Geldig vanaf",
+      validUntil: "Geldig tot",
+      updated: "Bijgewerkt"
+    },
+    pagination: {
+      summary: "{{first}}–{{last}} van {{total}} frameworks"
+    }
+  },
+  subscribers: {
+    title: "Issuer-webhooks",
+    description: "Registreer de issuer-/adapter-endpoints die party-levenscyclusgebeurtenissen ontvangen, beheer hun ondertekeningssleutels en bekijk of verstuur de webhook-outbox opnieuw.",
+    tabs: {
+      subscribers: "Abonnees",
+      deliveries: "Verzendingen"
+    },
+    form: {
+      createHeading: "Abonnee registreren",
+      editHeading: "Abonnee bewerken ({{name}})",
+      name: "Naam",
+      namePlaceholder: "bijv. iSHARE VC issuer",
+      url: "Webhook-URL",
+      eventFilter: "Gebeurtenisfilter",
+      eventFilterHint: "Laat leeg voor de standaardstroom (party.created, party.updated). Voor gedetailleerde gebeurtenissen, geef ze komma-gescheiden op: claim.created, claim.updated, claim.revoked, party.revoked.",
+      secret: "Ondertekeningssleutel (optioneel)",
+      secretPlaceholder: "Laat leeg om automatisch te genereren",
+      secretHint: "Stel dit alleen in bij het koppelen van een reeds uitgerolde issuer met een vaste HMAC-sleutel — plak die sleutel hier. Laat leeg en het register genereert er een (eenmalig getoond). Gebruik “Sleutel roteren” om hem later te wijzigen.",
+      replayProtection: "Replay-bescherming (onderteken tijdstempel + body)",
+      enabled: "Ingeschakeld",
+      create: "Abonnee registreren",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Opslaan…",
+      nameRequired: "Een naam is verplicht.",
+      urlRequired: "Een webhook-URL is verplicht.",
+      urlHttps: "De webhook-URL moet https gebruiken.",
+      created: "Abonnee geregistreerd.",
+      updated: "Abonnee bijgewerkt.",
+      error: "Kan de abonnee niet opslaan."
+    },
+    secret: {
+      heading: "Ondertekeningssleutel voor {{name}} — eenmalig getoond, kopieer deze nu",
+      dismiss: "Sluiten"
+    },
+    status: {
+      notConfigured: "De beheer-API van het deelnemersregister is niet geconfigureerd voor dit portaal (PR_API_BASE_URL ontbreekt). Vraag een beheerder dit te configureren.",
+      unauthorized: "Het deelnemersregister heeft je sessie geweigerd — je bent niet geautoriseerd voor de beheer-API. Log uit en weer in; blijft dit bestaan, dan mist je account mogelijk de vereiste rol.",
+      unavailable: "Het deelnemersregister is tijdelijk niet beschikbaar — het start mogelijk (opnieuw) op.",
+      error: "Er ging iets mis bij het laden van deze gegevens.",
+      retry: "Opnieuw proberen"
+    },
+    list: {
+      heading: "Abonnees",
+      refresh: "Vernieuwen",
+      name: "Naam",
+      url: "Webhook-URL",
+      events: "Gebeurtenissen",
+      eventsDefault: "standaardstroom",
+      enabled: "Ingeschakeld",
+      lastStatus: "Laatste verzending",
+      actions: "Acties",
+      edit: "Bewerken",
+      rotate: "Sleutel roteren",
+      delete: "Verwijderen",
+      empty: "Geen abonnees geregistreerd.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan abonnees niet laden.",
+      rotateConfirm: "De ondertekeningssleutel van deze abonnee roteren? De nieuwe sleutel wordt eenmalig getoond.",
+      rotated: "Sleutel geroteerd.",
+      rotateError: "Kan de sleutel niet roteren.",
+      deleteConfirm: "Deze abonnee verwijderen? Hij ontvangt dan geen gebeurtenissen meer.",
+      deleted: "Abonnee verwijderd.",
+      deleteError: "Kan de abonnee niet verwijderen."
+    },
+    deliveries: {
+      heading: "Verzendingen",
+      reemitHeading: "Gebeurtenissen voor een party opnieuw versturen",
+      reemitHint: "Plaats een party.updated-gebeurtenis in de wachtrij zodat abonnees deze party opnieuw ophalen en afstemmen — een handmatige hersteltrigger.",
+      reemit: "Opnieuw versturen",
+      reemitRequired: "Een party-id is verplicht.",
+      reemitted: "Verstuurd naar {{count}} abonnee(s).",
+      reemitError: "Kan gebeurtenissen niet opnieuw versturen.",
+      created: "Aangemaakt",
+      event: "Gebeurtenis",
+      party: "Party-id",
+      partyFilter: "Party-id",
+      subscriber: "Abonnee",
+      status: "Status",
+      attempts: "Pogingen",
+      actions: "Acties",
+      redeliver: "Opnieuw verzenden",
+      redelivered: "Verzending opnieuw in wachtrij geplaatst.",
+      redeliverError: "Kan de verzending niet opnieuw in de wachtrij plaatsen.",
+      empty: "Geen verzendingen.",
+      error: "Kan verzendingen niet laden.",
+      applyFilters: "Toepassen",
+      allSubscribers: "Alle abonnees",
+      statuses: {
+        all: "Alle statussen",
+        pending: "In behandeling",
+        failed: "Mislukt",
+        delivered: "Afgeleverd",
+        dead: "Dead-letter"
+      }
+    }
+  },
+  trusted: {
+    title: "Vertrouwde lijst",
+    description: "Beheer de certificaatautoriteiten die door het deelnemersregister worden vertrouwd.",
+    form: {
+      addHeading: "Certificaatautoriteit toevoegen",
+      editHeading: "Bewerken ({{subject}})",
+      certificate: "Certificaat",
+      validating: "Certificaat valideren…",
+      valid: "Geldig",
+      invalid: "Ongeldig",
+      subject: "Onderwerp",
+      subjectPlaceholder: "Upload een certificaat om in te vullen",
+      fingerprint: "Vingerafdruk",
+      type: "Type",
+      status: "Status",
+      hint: "Upload een certificaat (.cer, .crt, .der, .pem, .pfx, .key) om het te valideren en kies vervolgens een type voordat u het toevoegt.",
+      create: "Toevoegen aan vertrouwde lijst",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      badFile: "Ongeldig bestandstype. Upload een certificaatbestand.",
+      validateError: "Kan het certificaat niet valideren.",
+      typeRequired: "Selecteer een certificaattype.",
+      certRequired: "Upload en valideer eerst een certificaat.",
+      created: "Certificaatautoriteit toegevoegd.",
+      updated: "Certificaatautoriteit bijgewerkt.",
+      deleted: "Certificaatautoriteit verwijderd.",
+      error: "Kan de certificaatautoriteit niet opslaan.",
+      deleteError: "Kan de certificaatautoriteit niet verwijderen."
+    },
+    types: {
+      pkio: "PKIo",
+      ishareTest: "iSHARE Test",
+      eidas: "eIDAS"
+    },
+    statuses: {
+      granted: "Verleend",
+      withdrawn: "Ingetrokken",
+      supervisionCeased: "Toezicht beëindigd",
+      underSupervision: "Onder toezicht"
+    },
+    confirm: {
+      title: "Certificaatautoriteit verwijderen",
+      message: "“{{target}}” uit de vertrouwde lijst verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      button: "Verwijderen"
+    },
+    list: {
+      heading: "Vertrouwde certificaatautoriteiten",
+      refresh: "Vernieuwen",
+      subject: "Onderwerp",
+      type: "Type",
+      validity: "Geldigheid",
+      status: "Status",
+      actions: "Acties",
+      edit: "Bewerken",
+      delete: "Verwijderen",
+      empty: "Geen vertrouwde certificaatautoriteiten.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan de vertrouwde lijst niet laden."
+    }
+  },
+  scheduler: {
+    title: "Planner",
+    description: "Plan terugkerende taken voor het deelnemersregister, zoals netwerkstatuscontroles.",
+    form: {
+      createHeading: "Taak plannen",
+      editHeading: "Taak bewerken ({{name}})",
+      type: "Taaktype",
+      typePlaceholder: "Selecteer een taaktype",
+      process: "Procesnaam",
+      processPlaceholder: "Een naam om deze taak te herkennen",
+      frequency: "Frequentie",
+      frequencyPlaceholder: "Selecteer een frequentie",
+      every: "Elke",
+      startDate: "Startdatum",
+      startTime: "Starttijd",
+      emails: "Notificatie-e-mails",
+      emailsPlaceholder: "Komma-gescheiden e-mailadressen",
+      enable: "Deze planning inschakelen",
+      hint: "Frequenties in seconden/minuten/uren draaien op het gekozen interval; dagelijks en wekelijks draaien eenmaal per periode. Notificaties worden naar de vermelde adressen verzonden.",
+      create: "Taak plannen",
+      update: "Wijzigingen opslaan",
+      cancel: "Annuleren",
+      submitting: "Bezig met opslaan…",
+      required: "Taaktype, procesnaam, frequentie en ten minste één e-mail zijn verplicht.",
+      created: "Taak gepland.",
+      updated: "Planning bijgewerkt.",
+      error: "Kan de planning niet opslaan."
+    },
+    types: {
+      networkHealth: "Netwerkstatuscontrole"
+    },
+    units: {
+      sec: "Seconde",
+      min: "Minuut",
+      hr: "Uur"
+    },
+    frequency: {
+      every: "Elke {{value}} {{unit}}",
+      daily: "Dagelijks eenmaal",
+      weekly: "Wekelijks eenmaal"
+    },
+    list: {
+      heading: "Geplande taken",
+      refresh: "Vernieuwen",
+      process: "Proces",
+      type: "Type",
+      frequency: "Frequentie",
+      enabled: "Ingeschakeld",
+      actions: "Acties",
+      edit: "Bewerken",
+      yes: "Ja",
+      no: "Nee",
+      empty: "Geen geplande taken.",
+      unavailable: "Het deelnemersregister is momenteel niet beschikbaar.",
+      error: "Kan geplande taken niet laden."
+    }
+  },
+  networkHealth: {
+    title: "Netwerkstatus",
+    description: "Live status van het ledger-netwerk van het deelnemersregister. Beschikbaar wanneer het portaal samen met het register is uitgerold.",
+    refresh: "Vernieuwen",
+    refreshing: "Bezig met vernieuwen…",
+    overall: "Algemene status",
+    lastExecution: "Laatste uitvoering",
+    notificationStatus: "E-mailnotificatiestatus",
+    org: "Organisatie",
+    health: "Gezondheid",
+    peers: "Peers",
+    peerName: "Peer",
+    blockNo: "Bloknr.",
+    status: "Status",
+    explorer: "Explorer",
+    notConfigured: "Netwerkstatus is alleen beschikbaar wanneer het portaal samen met het deelnemersregister is uitgerold.",
+    unavailable: "Het deelnemersregister is momenteel niet beschikbaar. Probeer het zo meteen opnieuw.",
+    loadError: "Kan netwerkstatus niet laden.",
+    empty: "Er zijn geen organisatiegegevens gerapporteerd."
   },
   home: {
     title: "Titel",
@@ -710,7 +1273,122 @@ export default {
     },
     tabs: {
       general: "Algemeen",
+      onboarding: "Onboarding",
+      authentication: "Authenticatie",
       theme: "Thema"
+    },
+    auth: {
+      loading: "Laden…",
+      save: "Opslaan",
+      saving: "Opslaan…",
+      cancel: "Annuleren",
+      secretKept: "•••••••• (laat leeg om te behouden)",
+      vcIssuer: {
+        title: "Uitgever van verifieerbare credentials",
+        hint: "De externe iSHARE VC-uitgever die het deelnemersdashboard pollt voor credential-offers. Laat leeg om de credentials-sectie uit te schakelen.",
+        urlLabel: "Basis-URL van de uitgever",
+        urlPlaceholder: "https://issuer.example.com",
+        urlHint: "Server-naar-server basis-URL van de poll-API van de uitgever. Overschrijft de VC_ISSUER_BASE_URL-omgevingswaarde. Een eventuele API-sleutel van de uitgever wordt uitsluitend via de omgeving geconfigureerd, nooit hier.",
+        saved: "Credential-uitgever opgeslagen",
+        saveFailed: "Kan de credential-uitgever niet opslaan"
+      },
+      idp: {
+        title: "Verbonden identity providers",
+        hint: "Identity providers die in dit realm zijn geconfigureerd. Voeg de brokers toe waarmee gebruikers kunnen inloggen, of bewerk/verwijder ze.",
+        add: "Identity provider toevoegen",
+        addTitle: "Nieuwe identity provider",
+        editTitle: "“{{alias}}” bewerken",
+        empty: "Nog geen identity providers geconfigureerd.",
+        loadError: "Kon identity providers niet laden.",
+        enabled: "Ingeschakeld",
+        disabled: "Uitgeschakeld",
+        edit: "Bewerken",
+        delete: "Verwijderen",
+        deleteTitle: "Identity provider verwijderen",
+        deleteConfirm: "De identity provider “{{alias}}” verwijderen? Gebruikers kunnen er dan niet meer mee inloggen.",
+        deleteConfirmLabel: "Verwijderen",
+        deleted: "Identity provider verwijderd",
+        deleteFailed: "Verwijderen van identity provider mislukt",
+        created: "Identity provider aangemaakt",
+        updated: "Identity provider bijgewerkt",
+        saveFailed: "Opslaan van identity provider mislukt",
+        aliasProviderRequired: "Alias en providertype zijn verplicht",
+        alias: "Alias",
+        displayName: "Weergavenaam",
+        providerId: "Providertype",
+        enabledLabel: "Ingeschakeld",
+        trustEmail: "E-mail vertrouwen",
+        config: "Configuratie",
+        configHint: "Providerinstellingen (bijv. clientId, clientSecret, authorizationUrl). Geheime waarden zijn verborgen — laat ze leeg om de opgeslagen waarde te behouden.",
+        configKey: "Sleutel",
+        configValue: "Waarde",
+        addField: "Veld toevoegen",
+        mappers: {
+          title: "Claim-mappings",
+          hint: "Koppel de claims van deze provider aan Keycloak-gebruikersattributen. Dit portaal leest legalSubjectId, kvkNumber, companyName en email uit het token.",
+          empty: "Nog geen claim-mappings.",
+          saveFirst: "Sla de identity provider eerst op en heropen deze om claim-mappings toe te voegen.",
+          claimPlaceholder: "Bronclaim (bijv. kvkNumber)",
+          attrPlaceholder: "Gebruikersattribuut (bijv. kvkNumber)",
+          add: "Mapping toevoegen",
+          remove: "Verwijderen",
+          preset: "Veelgebruikte iSHARE-claims koppelen",
+          required: "Voer zowel de bronclaim als het doelattribuut in",
+          addFailed: "Toevoegen van claim-mapping mislukt",
+          removeFailed: "Verwijderen van claim-mapping mislukt",
+          presetDone: "Veelgebruikte iSHARE-claims gekoppeld",
+          presetNone: "De veelgebruikte iSHARE-claims zijn al gekoppeld"
+        }
+      },
+      smtp: {
+        title: "E-mail (SMTP)",
+        hint: "De mailserver die Keycloak gebruikt voor accountmails (verificatie, wachtwoordherstel, uitnodigingen).",
+        host: "Host",
+        port: "Poort",
+        from: "Afzender",
+        fromDisplayName: "Weergavenaam afzender",
+        replyTo: "Antwoordadres",
+        ssl: "SSL gebruiken",
+        starttls: "StartTLS gebruiken",
+        auth: "Server vereist authenticatie",
+        user: "Gebruikersnaam",
+        password: "Wachtwoord",
+        saved: "SMTP-instellingen opgeslagen",
+        saveFailed: "Opslaan van SMTP-instellingen mislukt",
+        test: "Testmail versturen",
+        testing: "Versturen…",
+        testTo: "Test versturen naar",
+        testToPlaceholder: "jij@voorbeeld.nl",
+        testToHint: "We sturen een testbericht naar dit adres met de instellingen hierboven.",
+        recipientRequired: "Voer een ontvanger-e-mailadres in voor de test",
+        testOk: "Testmail verstuurd naar {{to}}",
+        testFailed: "SMTP-test mislukt"
+      }
+    },
+    onboarding: {
+      flowTitle: "Onboarding-flow",
+      flowHint: "Bepaal hoe aanmelders door de onboarding-wizard gaan.",
+      associationName: "Naam van de vereniging",
+      associationNamePlaceholder: "bijv. iSHARE Demo Association",
+      associationNameHint: "Wordt getoond in de portaalheader. Laat leeg voor de standaardwaarde.",
+      activeRoles: "Selecteerbare rollen",
+      activeRolesHint: "Welke rollen aanmelders tijdens de onboarding kunnen kiezen.",
+      roles: {
+        dataconsumer: "Dataconsument",
+        dataowner: "Data-eigenaar",
+        dataprovider: "Dataprovider"
+      },
+      defaultRole: "Standaardrol",
+      defaultRoleNone: "Geen standaard (aanmelder kiest)",
+      defaultRoleHint: "Selecteert deze rol vooraf in de rollenstap.",
+      skipRoles: "Sla de rolkeuzestap over",
+      skipRolesHint: "Verberg de rollenstap volledig (gebruik met een standaardrol).",
+      autoAccept: "Voorstellen automatisch accepteren",
+      autoAcceptHint: "Voltooi voorstellen automatisch bij indienen, zonder handmatige goedkeuring.",
+      requireQualifiedEidasCertificate: "Gekwalificeerd eIDAS-certificaat vereisen",
+      requireQualifiedEidasCertificateHint: "Vereis bij een eIDAS-upload QCCompliance in combinatie met een QCP-beleid of gekwalificeerd certificaattype. Controles op certificaatindeling, vervaldatum en registervertrouwen blijven altijd actief.",
+      dataspaceAuthTitle: "Dataspace & autorisatie",
+      dataspaceAuthHint: "De dataspace waaraan aanmelders deelnemen en het vooraf ingevulde autorisatieregister."
     },
     theme: {
       title: "Kleuren & lettertypen",
@@ -834,7 +1512,8 @@ export default {
       firstName: "Voornaam",
       lastName: "Achternaam",
       newPassword: "Nieuw Wachtwoord (optioneel)",
-      confirmPassword: "Bevestig Wachtwoord"
+      confirmPassword: "Bevestig Wachtwoord",
+      language: "Taal"
     },
     linkedAccounts: {
       title: "Inlogmethoden",
@@ -870,7 +1549,7 @@ export default {
     identity: {
       heading: "Identiteit deelnemer",
       partyId: "Partij-ID",
-      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyIdPlaceholder: "EU.EORI.NL000000000",
       partyName: "Naam partij",
       partyNamePlaceholder: "Naam rechtspersoon",
       alsoKnownAs: "Ook bekend als",
@@ -907,7 +1586,8 @@ export default {
       certificateType: "Type certificaat",
       x5c: "Certificaat (x5c, base64 DER)",
       x5t: "Vingerafdruk (x5t#S256)",
-      assertion: "Assertie"
+      assertion: "Assertie",
+      minimum: "Vereist voor v3-partij"
     },
     claimTypes: {
       frameworkCompliance: "Framework-naleving",
@@ -970,6 +1650,43 @@ export default {
       agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
       certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
       agreementReadError: "Kon het PDF-bestand niet lezen."
+    },
+    v2: {
+      sections: {
+        participant: "Deelnemergegevens",
+        certificate: "Certificaat",
+        authRegistries: "Autorisatieregisters",
+        additionalInfo: "Aanvullende deelnemergegevens",
+        agreements: "Overeenkomsten (minimaal 2)",
+        roles: "Rollen (minimaal 1)",
+        spor: "SPOR"
+      },
+      fields: {
+        dataspaceTitle: "Dataspace-titel",
+        logo: "Logo-URL",
+        companyPhone: "Telefoonnummer bedrijf",
+        tags: "Labels",
+        signDate: "Datum van ondertekening",
+        expiryDate: "Vervaldatum",
+        framework: "Framework",
+        contractFile: "Contractbestand",
+        role: "Rol",
+        signedRequest: "Ondertekend verzoek"
+      },
+      actions: {
+        addAuthRegistry: "Autorisatieregister toevoegen",
+        addAgreement: "Overeenkomst toevoegen",
+        addRole: "Rol toevoegen",
+        cancel: "Annuleren",
+        save: "Opslaan",
+        back: "Terug"
+      },
+      placeholders: {
+        partyId: "EU.EORI.NL000000000",
+        registrarId: "EU.EORI.NL000000000"
+      }
     }
   }
-};
+}
+
+export default nl

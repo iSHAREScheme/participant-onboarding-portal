@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
-import { loadStoredKeycloakTokens } from 'util/keycloakTokens'
 
+// Keycloak init config. The session is restored on reload via silent check-sso
+// (an iframe that reads the Keycloak SSO cookie) — never from web storage — so
+// the access/refresh tokens are never persisted where an XSS could read them.
 const useKeycloakInitConfig = () => {
-  const storedTokens = useMemo(() => loadStoredKeycloakTokens(), [])
-
   return useMemo(
     () => ({
       onLoad: 'check-sso' as const,
@@ -13,12 +13,9 @@ const useKeycloakInitConfig = () => {
         typeof window !== 'undefined'
           ? `${window.location.origin}/silent-check-sso.html`
           : undefined,
-      token: storedTokens?.token,
-      refreshToken: storedTokens?.refreshToken,
-      idToken: storedTokens?.idToken,
       checkLoginIframe: false,
     }),
-    [storedTokens?.idToken, storedTokens?.refreshToken, storedTokens?.token]
+    []
   )
 }
 

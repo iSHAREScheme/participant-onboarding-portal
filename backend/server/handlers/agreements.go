@@ -330,6 +330,38 @@ func viewAgreements(list []models.Agreement) []agreementView {
 	return out
 }
 
+// publicAgreementView is the minimal, unauthenticated projection of an agreement:
+// only what the public landing/onboarding needs to list documents and link to
+// them (via the /document endpoint). It deliberately omits the source URL and the
+// fetch-auth config (even with secrets redacted, the basic-auth username, OAuth
+// client id, token URL and scope are admin-only configuration, not public info).
+type publicAgreementView struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Version     string `json:"version"`
+	Type        string `json:"type"`
+	HasDocument bool   `json:"hasDocument"`
+}
+
+func publicViewAgreement(a models.Agreement) publicAgreementView {
+	full := viewAgreement(a)
+	return publicAgreementView{
+		ID:          full.ID,
+		Title:       full.Title,
+		Version:     full.Version,
+		Type:        full.Type,
+		HasDocument: full.HasDocument,
+	}
+}
+
+func publicViewAgreements(list []models.Agreement) []publicAgreementView {
+	out := make([]publicAgreementView, 0, len(list))
+	for _, a := range list {
+		out = append(out, publicViewAgreement(a))
+	}
+	return out
+}
+
 // ListAgreements returns all configured agreements with secrets redacted.
 // Public: the onboarding flow needs the list of documents to sign.
 func (h *HandlerAgreements) ListAgreements(c *fiber.Ctx) error {

@@ -1,26 +1,20 @@
 import { NextPage } from "next";
 import { useState, useCallback } from "react";
-import { useKeycloak } from "@react-keycloak/web";
 import AdminRoute from "components/AdminRoute";
 import Pagination from "components/Pagination";
 import { useFitRows } from "hooks";
 import styles from "styles/Users.module.css";
 import { useLanguage } from "../context/LanguageContext";
-import { getPublicEnv } from "config/publicEnv";
+import API, { KeycloakUser } from "api/client";
 
-interface KeycloakUser {
-  id: string;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  enabled: boolean;
-  createdTimestamp: number;
-  roles?: string[];
-}
+// Extracts the backend's error message ({ error }) from an Axios failure.
+const apiError = (e: unknown, fallback: string): string => {
+  const data = (e as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+  return data?.error || data?.message || (e instanceof Error ? e.message : fallback);
+};
 
 const Users: NextPage = () => {
-  const [keycloak] = useKeycloak();
+  const [Api] = useState(() => new API());
   const [users, setUsers] = useState<KeycloakUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +31,6 @@ const Users: NextPage = () => {
     firstName: "",
     lastName: "",
   });
-  const env = getPublicEnv();
   const [page, setPage] = useState<number>(1);
 
   // Fill the viewport: how many rows fit decides the client-side page size.
@@ -49,74 +42,27 @@ const Users: NextPage = () => {
   });
 
   const fetchData = useCallback(() => {
-    fetch(`${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${keycloak.token}`,
-        "Content-Type": "application/json",
-      },
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(t("users.messages.error.fetch"));
-        }
-        const users = await response.json();
-
-        const usersWithRoles = await Promise.all(
-          users.map(async (user: KeycloakUser) => {
-            const rolesResponse = await fetch(
-              `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${user.id}/role-mappings/realm`,
-              {
-                headers: {
-                  Authorization: `Bearer ${keycloak.token}`,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-
-            if (rolesResponse.ok) {
-              const roles = await rolesResponse.json();
-              return {
-                ...user,
-                roles: roles.map((role: { name: string }) => role.name),
-              };
-            }
-            return user;
-          })
-        );
-
+    setIsLoading(true);
+    Api.listKeycloakUsers()
+      .then((response) => {
         setError("");
-        setUsers(usersWithRoles);
+        setUsers(response.data.users || []);
         setPage(1);
       })
       .catch((error) => {
-        setError(error.message);
+        setError(apiError(error, t("users.messages.error.fetch")));
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, [keycloak.authServerUrl, keycloak.realm, keycloak.token, t]);
+  }, [Api, t]);
 
   const deleteUser = async (userId: string) => {
-    const response = await fetch(
-      `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${userId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${keycloak.token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    if (response.ok) {
+    try {
+      await Api.deleteKeycloakUser(userId);
       fetchData();
-    } else {
-      const errorData = await response.json();
-      console.error(
-        t("users.messages.error.delete"),
-        response.status,
-        errorData
-      );
+    } catch (error) {
+      setError(apiError(error, t("users.messages.error.delete")));
     }
   };
 
@@ -156,118 +102,20 @@ const Users: NextPage = () => {
     if (!validateForm()) {
       return;
     }
-
-    const trimmedEmail = newUserData.email.trim();
-    const trimmedFirstName = newUserData.firstName.trim();
-    const trimmedLastName = newUserData.lastName.trim();
-    const requiredActions = ["VERIFY_EMAIL", "UPDATE_PASSWORD"];
-    const newUser = {
-      username: trimmedEmail,
-      enabled: true,
-      emailVerified: false,
-      firstName: trimmedFirstName,
-      lastName: trimmedLastName,
-      email: trimmedEmail,
-      requiredActions,
-    };
-
     try {
-      // Create user
-      const response = await fetch(
-        `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${keycloak.token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(newUser),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(t("users.messages.error.create"));
-      }
-
-      // Get the user ID from the Location header
-      const locationHeader = response.headers.get("Location");
-      const userId = locationHeader?.split("/").pop();
-      if (!userId) {
-        throw new Error(t("users.messages.error.create"));
-      }
-
-      const assignRealmRole = async (roleName: string) => {
-        const rolesResponse = await fetch(
-          `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/roles/${roleName}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${keycloak.token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!rolesResponse.ok) {
-          throw new Error(t("users.messages.error.roleNotFound"));
-        }
-
-        const roleDetails = await rolesResponse.json();
-
-        const roleResponse = await fetch(
-          `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${userId}/role-mappings/realm`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${keycloak.token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify([
-              {
-                id: roleDetails.id,
-                name: roleName,
-              },
-            ]),
-          }
-        );
-
-        if (!roleResponse.ok) {
-          throw new Error(t("users.messages.error.roleAssignment"));
-        }
-      };
-
-      if (newUserData.role === "admin") {
-        await assignRealmRole("onboarding-admin");
-      }
-
-      const redirectBase = env.NEXT_PUBLIC_FRONTEND_DOMAIN;
-      const redirectUri = redirectBase ? `${redirectBase}/register` : "";
-      const clientId = env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID;
-      const params = new URLSearchParams();
-      if (clientId) params.set("client_id", clientId);
-      if (redirectUri) params.set("redirect_uri", redirectUri);
-      const inviteUrl =
-        `${keycloak.authServerUrl}/admin/realms/${keycloak.realm}/users/${userId}/execute-actions-email` +
-        (params.toString() ? `?${params.toString()}` : "");
-
-      const inviteResponse = await fetch(inviteUrl, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${keycloak.token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requiredActions),
+      // The backend creates the user, optionally assigns onboarding-admin, and
+      // emails the verify-email + set-password invitation.
+      await Api.createKeycloakUser({
+        email: newUserData.email.trim(),
+        firstName: newUserData.firstName.trim(),
+        lastName: newUserData.lastName.trim(),
+        role: newUserData.role === "admin" ? "admin" : "user",
       });
-
-      if (!inviteResponse.ok) {
-        throw new Error(t("users.messages.error.invite"));
-      }
-
       fetchData();
       setIsDialogOpen(false);
       setNewUserData({ email: "", firstName: "", lastName: "", role: "user" });
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(apiError(error, t("users.messages.error.create")));
     }
   };
 
@@ -298,9 +146,9 @@ const Users: NextPage = () => {
     <AdminRoute fetchData={fetchData}>
       <div className={styles.container}>
         <div className={styles.headerSection}>
-          <h1 className={styles.title}>{t("users.title")}</h1>
           <button
             className={styles.createButton}
+            data-tour="users-create"
             onClick={() => setIsDialogOpen(true)}
           >
             {t("users.actions.create")}
@@ -396,7 +244,7 @@ const Users: NextPage = () => {
 
         {/* The scroll container always renders so useFitRows can measure the real
             available height (its clientHeight) even before the first row loads. */}
-        <div ref={fitRef} className={styles.tableWrap}>
+        <div ref={fitRef} className={styles.tableWrap} data-tour="users-table">
           {isLoading && (
             <div className={styles.loading}>{t("users.loading")}</div>
           )}

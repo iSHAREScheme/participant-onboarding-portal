@@ -3,7 +3,6 @@ package satellite
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"onboardingportal/models"
@@ -56,7 +55,7 @@ type epCreationAdditionalInfo211 struct {
 	Website             *string   `json:"website"`
 	CompanyPhone        *string   `json:"company_phone"`
 	CompanyEmail        *string   `json:"company_email"`
-	PubliclyPublishable string    `json:"publicly_publishable"`
+	PubliclyPublishable bool      `json:"publicly_publishable"`
 	CountriesOperation  *[]string `json:"countries_operation"`
 	SectorIndustry      *[]string `json:"sector_industry"`
 	Tags                *string   `json:"tags"`
@@ -105,7 +104,7 @@ type epCreation201Request struct {
 	CapabilityUrl  *string                      `json:"capability_url,omitempty"`
 	RegistrarId    string                       `json:"registrar_id"`
 	Adherence      epCreationAdherence          `json:"adherence"`
-	AuthRegistries []epCreationAuthRegistry     `json:"authregistries,omitempty"`
+	AuthRegistries []epCreationAuthRegistry     `json:"auth_registries,omitempty"`
 	AdditionalInfo *epCreationAdditionalInfo201 `json:"additional_info,omitempty"`
 	Agreements     []epCreationAgreement201     `json:"agreements,omitempty"`
 	Spor           epCreationSpor               `json:"spor"`
@@ -120,7 +119,7 @@ type epCreation211Request struct {
 	CapabilityUrl  *string                      `json:"capability_url,omitempty"`
 	RegistrarId    string                       `json:"registrar_id"`
 	Adherence      epCreationAdherence          `json:"adherence"`
-	AuthRegistries []epCreationAuthRegistry     `json:"authregistries,omitempty"`
+	AuthRegistries []epCreationAuthRegistry     `json:"auth_registries,omitempty"`
 	AdditionalInfo *epCreationAdditionalInfo211 `json:"additional_info,omitempty"`
 	Agreements     []epCreationAgreement211     `json:"agreements,omitempty"`
 	Spor           epCreationSpor               `json:"spor"`
@@ -493,7 +492,7 @@ func buildAdditionalInfo211FromRequest(request *requests.PartyCreateRequest) *ep
 		Website:             request.AdditionalInfo.Website,
 		CompanyPhone:        request.AdditionalInfo.CompanyPhone,
 		CompanyEmail:        request.AdditionalInfo.CompanyEmail,
-		PubliclyPublishable: strconv.FormatBool(publiclyPublishable),
+		PubliclyPublishable: publiclyPublishable,
 		CountriesOperation:  request.AdditionalInfo.CountriesOperation,
 		SectorIndustry:      request.AdditionalInfo.SectorIndustry,
 		Tags:                request.AdditionalInfo.Tags,
@@ -581,7 +580,7 @@ func buildAdditionalInfo211FromProposal(proposal *models.Proposal) *epCreationAd
 		Website:             stringPtr(normalizeWebsiteURL(proposal.Website)),
 		CompanyPhone:        stringPtr(proposal.ContactPhone),
 		CompanyEmail:        stringPtr(proposal.ContactEmail),
-		PubliclyPublishable: "false",
+		PubliclyPublishable: false,
 	}
 }
 

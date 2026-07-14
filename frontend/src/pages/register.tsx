@@ -369,11 +369,23 @@ const Register: NextPage = () => {
   // Memoized so env-derived values keep a stable identity for the memos/effects
   // below; the public env is fixed after startup, so resolving it once is correct.
   const env = useMemo(() => getPublicEnv(), [])
+  // Onboarding-flow config from admin settings (fetched in fetchSettings below);
+  // "" means "use the NEXT_PUBLIC_* env default", so the initial render matches
+  // the env-only behaviour until settings load.
+  const [obSettings, setObSettings] = useState({
+    skipRoles: "",
+    activeRoles: "",
+    defaultRole: "",
+    autoAccept: "",
+    requireQualifiedEidasCertificate: false,
+  })
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
   const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
-  const autoAcceptProposal = parseBoolEnv(env.NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL)
-  const skipRoleStep = parseBoolEnv(env.NEXT_PUBLIC_SKIP_ROLES)
+  // Onboarding-flow flags come from DB settings (Settings → Onboarding); an unset
+  // value defaults to false. They are no longer mirrored into window.__ENV.
+  const autoAcceptProposal = obSettings.autoAccept === "true"
+  const skipRoleStep = obSettings.skipRoles === "true"
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const eherkenningAlias =
@@ -388,10 +400,14 @@ const Register: NextPage = () => {
   )
 
   const steps = alwaysM2M ? StepsV2 : StepsV1
-  const activeRoles = env.NEXT_PUBLIC_ACTIVE_ROLES
-    ? env.NEXT_PUBLIC_ACTIVE_ROLES.split(",").map((t) => t.trim()).filter(Boolean)
-    : ["dataowner", "dataconsumer", "dataprovider"]
-  const defaultRoleValue = env.NEXT_PUBLIC_DEFAULT_ROLE
+  const activeRoles = (
+    obSettings.activeRoles ||
+    "dataowner,dataconsumer,dataprovider"
+  )
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+  const defaultRoleValue = obSettings.defaultRole
   const defaultRoles = useMemo(
     () => ({
       dataOwner: defaultRoleValue === "dataowner",
@@ -766,7 +782,7 @@ const Register: NextPage = () => {
         },
       };
     }));
-  }, [currentStep, useAutoAcceptProposal]);
+  }, [currentStep, useAutoAcceptProposal, steps.confirm]);
 
 
   // useEffect(() => {
@@ -997,7 +1013,10 @@ const Register: NextPage = () => {
 
         const eidasFile = data.eidasCert ?? uploadedFile
         if (eidasFile) {
-          if (!(await preValidateEidasCert(eidasFile))) {
+          if (!(await preValidateEidasCert(
+            eidasFile,
+            obSettings.requireQualifiedEidasCertificate
+          ))) {
             setValidationError("register.validation.identityRequired")
             return false
           }
@@ -1087,6 +1106,14 @@ const Register: NextPage = () => {
       // Store registrarId in form data
       setRegistrarId(settingsData.registrarId || "")
       setHideCapabilitiesUrlField(Boolean(settingsData.hideCapabilitiesUrl))
+      setObSettings({
+        skipRoles: settingsData.skipRoles || "",
+        activeRoles: settingsData.activeRoles || "",
+        defaultRole: settingsData.defaultRole || "",
+        autoAccept: settingsData.autoAcceptProposal || "",
+        requireQualifiedEidasCertificate:
+          settingsData.requireQualifiedEidasCertificate === true,
+      })
       setAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
       )
@@ -1227,9 +1254,11 @@ const Register: NextPage = () => {
           return;
         }
 
-        // If status is completed, show the completed step
+        // If admitted (completed), the post-admission home is the dashboard at
+        // /party (party overview + credentials) — send them there instead of the
+        // static success step.
         if (proposalData.status === "completed") {
-          setCurrentStep(steps.completed); // Index of completed step
+          router.replace("/party");
           return;
         }
 
@@ -1388,7 +1417,8 @@ const Register: NextPage = () => {
 
         const createdProposal = submitted.data
 
-        // NOTE: if NEXT_PUBLIC_AUTO_ACCEPT_PROPOSAL is set, immediately call /party/proposals/${id}/complete
+        // When auto-accept is enabled (Settings → Onboarding), immediately
+        // complete the proposal via /party/proposals/${id}/complete.
         if (useAutoAcceptProposal) {
           const proposalId = String(createdProposal?.id || '')
 
@@ -1570,7 +1600,10 @@ const Register: NextPage = () => {
     setUploadError("")
     if (currentStep === steps.idCheck) {
       try {
-        await preValidateEidasCert(file)
+        await preValidateEidasCert(
+          file,
+          obSettings.requireQualifiedEidasCertificate
+        )
 
         // check against trusted list in backend
         const isTrusted = await Api.validateCertificate(file)
@@ -2956,7 +2989,7 @@ const Register: NextPage = () => {
                                 }));
                               }}
                             >
-                              <img src="/icons/revert.svg" />
+                              <img src="/icons/revert.svg" alt={t("common.restore")} />
 
                             </button>
                             <button
@@ -2975,7 +3008,7 @@ const Register: NextPage = () => {
                                 }));
                               }}
                             >
-                              <img src="/icons/delete.svg" />
+                              <img src="/icons/delete.svg" alt={t("common.delete")} />
 
                             </button>
                           </div>

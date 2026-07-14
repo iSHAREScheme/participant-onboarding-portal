@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
+import ClaimEditModal from "components/ClaimEditModal";
 import { Skeleton } from "components";
 import API from "api/client";
 import { cacheParticipants, getCachedParticipant } from "util/participantCache";
@@ -30,6 +31,42 @@ const humanize = (s: string): string =>
     .replace(/[_-]+/g, " ")
     .replace(/^./, (c) => c.toUpperCase())
     .trim();
+
+// A framework role other than ServiceConsumer/EntitledParty additionally
+// requires an x509 certificate. Mirrors PR-MW isV3M2MCertificateRequiredRole.
+const v3CertRequiredRole = (roleId: string): boolean => {
+  const n = str(roleId)
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+  return n !== "serviceconsumer" && n !== "entitledparty";
+};
+
+// Given a party's claims (native or projected), return the ordered requirement
+// keys it still lacks to validate as a complete v3 participant; empty means the
+// set satisfies onboarding. Mirrors PR-MW utils/v3_claim_validation.go
+// `ValidateV3PartyOnboardingClaims` and is kept in sync by hand (same convention
+// as ClaimEditModal's mutable/immutable maps) — update both when the middleware's
+// onboarding requirements change. This surfaces the concrete gap (e.g. a party
+// whose agreements are all dataspace-scoped ends up with no frameworkAgreement)
+// instead of a generic "needs migration" banner.
+const missingV3Requirements = (claims: any[]): string[] => {
+  const list = asArray(claims);
+  const has = (type: string) => list.some((c) => str(c?.type) === type);
+  const missing: string[] = [];
+  if (!has("frameworkCompliance")) missing.push("frameworkCompliance");
+  if (!has("frameworkAgreement")) missing.push("frameworkAgreement");
+  if (!has("frameworkRole")) missing.push("frameworkRole");
+  if (!has("x509Certificate") && !has("idpAssertion")) missing.push("certOrIdp");
+  // Only flag the role-specific x509 rule when a role id is actually present, so
+  // a projected claim without a role id never produces a false positive.
+  const roleNeedsCert = list.some((c) => {
+    if (str(c?.type) !== "frameworkRole") return false;
+    const rid = str(c?.roleId ?? c?.role_id);
+    return rid !== "" && v3CertRequiredRole(rid);
+  });
+  if (roleNeedsCert && !has("x509Certificate")) missing.push("x509ForRole");
+  return missing;
+};
 
 // Merge a freshly fetched party over the cached one, taking incoming values only
 // where they actually carry data. The satellite's single-party (?eori=) lookup
@@ -100,7 +137,40 @@ interface ClaimView {
   type: string; // key under submit.claimTypes.*
   status?: string;
   fields: { label: string; value: ReactNode; raw?: string }[];
+  claim?: any; // the underlying real claim (present for id-bearing v3 claims → editable)
 }
+
+interface HistoryChange {
+  field: string;
+  before?: any;
+  after?: any;
+}
+
+interface HistoryEntry {
+  ledgerId?: string;
+  transactionId?: string;
+  timestamp?: number;
+  actor?: {
+    mspId?: string;
+    commonName?: string;
+  };
+  objectType: string;
+  objectId: string;
+  claimType?: string;
+  action: string;
+  changes?: HistoryChange[];
+}
+
+const formatHistoryValue = (value: any): string => {
+  if (value === undefined || value === null || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+// Who made a history entry: the transaction submitter's common name, falling
+// back to its MSP id. Empty when the ledger mirror didn't capture a creator.
+const historyActor = (entry: HistoryEntry): string =>
+  str(entry.actor?.commonName) || str(entry.actor?.mspId);
 
 // Humanise a claim field key for display ("capabilityUrl" → "Capability Url").
 const claimFieldLabel = (k: string): string =>
@@ -136,7 +206,7 @@ const claimViewFromReal = (c: any): ClaimView => {
   if (c?.additionalInfo && typeof c.additionalInfo === "object") {
     Object.entries(c.additionalInfo).forEach(([k, v]) => push(k, v));
   }
-  return { type: str(c?.type), status: str(c?.status), fields };
+  return { type: str(c?.type), status: str(c?.status), fields, claim: c };
 };
 
 const ParticipantDetail: NextPage = () => {
@@ -152,6 +222,12 @@ const ParticipantDetail: NextPage = () => {
   const [editing, setEditing] = useState(false);
   // Claim whose full data is shown in the modal (e.g. a long x509 certificate).
   const [openClaim, setOpenClaim] = useState<ClaimView | null>(null);
+  const [editClaim, setEditClaim] = useState<any | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [diffEntry, setDiffEntry] = useState<HistoryEntry | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -198,6 +274,23 @@ const ParticipantDetail: NextPage = () => {
     }
   }, [id]);
 
+  const loadHistory = useCallback(async () => {
+    if (!id) return;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    try {
+      const api = new API();
+      const res = await api.fetchParticipantHistory(id);
+      const items = res?.data?.data?.items;
+      setHistory(Array.isArray(items) ? items : []);
+    } catch {
+      setHistory([]);
+      setHistoryError(true);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [id]);
+
   // AdminRoute flips this once the admin is authorized; fetching is driven by
   // the effect below (which also waits for the dynamic route id to hydrate).
   const onAuthorized = useCallback(() => setAuthorized(true), []);
@@ -209,16 +302,58 @@ const ParticipantDetail: NextPage = () => {
     if (authorized && id) queueMicrotask(load);
   }, [authorized, id, load]);
 
+  useEffect(() => {
+    if (authorized && id) queueMicrotask(loadHistory);
+  }, [authorized, id, loadHistory]);
+
   // Adhere to the schema the satellite actually returned for THIS party: a real
   // v3 party carries a `claims` array. Fall back to the configured version so a
   // party-shaped payload still renders.
   const hasClaims = Array.isArray(party?.claims) && party.claims.length > 0;
   const claimModel = hasClaims || usesClaimModel(getSatelliteVersion());
   const version = hasClaims ? str(party?.schemaVersion) || "3.0" : getSatelliteVersion();
-  // Editing is available from 2.2 onward (PUT) and on 3.0 (PATCH).
-  const canEdit = version.startsWith("3") || version.startsWith("2.2");
+  // The satellite can PROJECT a party stored under an older schema into a newer
+  // display model (e.g. an unmigrated v2 party surfaced as v3 claims). It signals
+  // this with `displaySchemaVersion`; show it next to the stored schema when the
+  // two differ, so the reader knows the claims shown are a projection rather than
+  // the party's stored representation.
+  const displayVersion = str(party?.displaySchemaVersion);
+  const normalizeVer = (v: string) => v.trim().toLowerCase().replace(/^v/, "");
+  const isProjected =
+    !!displayVersion && normalizeVer(displayVersion) !== normalizeVer(version);
+  // When projected, the concrete required claim(s) the party still lacks. Empty
+  // on a projected party means its data is complete but not yet persisted as
+  // native claims (pure migration lag) rather than incomplete onboarding.
+  const missingReqs = isProjected ? missingV3Requirements(party?.claims) : [];
+  // Editing: on a v3 satellite every write goes through the claim model, so a
+  // party is editable only when it carries a REAL (persisted, id-bearing)
+  // frameworkCompliance claim — this excludes derived/projected display claims
+  // (no id) on unmigrated parties, which can't be PATCHed. On a legacy v2.x
+  // satellite, the v2.2 full-PUT path applies instead.
+  const satelliteIsV3 = getSatelliteVersion().trim().startsWith("3");
+  const hasRealComplianceClaim =
+    Array.isArray(party?.claims) &&
+    party.claims.some(
+      (c: any) => c?.type === "frameworkCompliance" && str(c?.id)
+    );
+  const canEdit = satelliteIsV3 ? hasRealComplianceClaim : version.startsWith("2.2");
   const partyName = party ? str(party.party_name ?? party.name) : "";
   const partyId = party ? str(party.party_id ?? party.id) : "";
+  // EORI/DID aliases (v3 `alsoKnownAs`; tolerate snake_case / aka). Drop blanks
+  // and the primary id so it isn't repeated as its own alias.
+  const aliases: string[] = asArray(
+    party?.alsoKnownAs ?? party?.also_known_as ?? party?.aka
+  )
+    .map(str)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((a) => a !== partyId);
+  // Registrar id: v3 keeps it per-claim, so fall back to the first claim's value.
+  const claimRegistrarId = Array.isArray(party?.claims)
+    ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
+    : "";
+  const registrarId = party ? str(party.registrar_id) || claimRegistrarId : "";
+  const capabilityUrl = party ? str(party.capability_url) : "";
 
   const f = (k: string) => t(`participants.detail.fields.${k}`);
   const sec = (k: string) => t(`participants.detail.sections.${k}`);
@@ -229,6 +364,12 @@ const ParticipantDetail: NextPage = () => {
     const label = t(key);
     return label === key ? humanize(type) : label;
   };
+  // Label for a missing-requirement key: real claim types reuse their claim-type
+  // label; the two compound requirements have their own strings.
+  const reqLabel = (r: string): string =>
+    r === "certOrIdp" || r === "x509ForRole"
+      ? t(`participants.detail.projectionWarn.req.${r}`)
+      : claimTypeLabel(r);
 
   // --- 3.0 claim cards. A real v3 party carries a `claims` array; older or
   //     party-shaped payloads are reorganised from the flat fields below. ----
@@ -330,24 +471,8 @@ const ParticipantDetail: NextPage = () => {
   const renderClaimView = () => {
     if (!party) return null;
     const claims = deriveClaims(party);
-    // v3 stores registrarId per claim, not at the party root — surface the
-    // party's registrar in the identity section by falling back to the claims.
-    const claimRegistrar = Array.isArray(party.claims)
-      ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
-      : "";
-    const identityRegistrarId = str(party.registrar_id) || claimRegistrar;
     return (
       <>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{sec("identity")}</h2>
-          <div className={styles.grid}>
-            <Row label={f("partyId")}>{val(partyId)}</Row>
-            <Row label={f("name")}>{val(partyName)}</Row>
-            <Row label={f("registrarId")}>{val(identityRegistrarId)}</Row>
-            <Row label={f("schemaVersion")}>{version}</Row>
-          </div>
-        </section>
-
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{sec("claims")}</h2>
           <div className={styles.cards}>
@@ -370,15 +495,26 @@ const ParticipantDetail: NextPage = () => {
                       </Row>
                     ))}
                   </div>
-                  {hasLong && (
-                    <button
-                      type="button"
-                      className={styles.viewMore}
-                      onClick={() => setOpenClaim(c)}
-                    >
-                      {t("participants.detail.viewMore")}
-                    </button>
-                  )}
+                  <div className={styles.claimCardActions}>
+                    {satelliteIsV3 && c.claim?.id && (
+                      <button
+                        type="button"
+                        className={styles.claimEditBtn}
+                        onClick={() => setEditClaim(c.claim)}
+                      >
+                        {t("participants.detail.edit.editClaim")}
+                      </button>
+                    )}
+                    {hasLong && (
+                      <button
+                        type="button"
+                        className={styles.viewMore}
+                        onClick={() => setOpenClaim(c)}
+                      >
+                        {t("participants.detail.viewMore")}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -400,18 +536,6 @@ const ParticipantDetail: NextPage = () => {
 
     return (
       <>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>{sec("identity")}</h2>
-          <div className={styles.grid}>
-            <Row label={f("partyId")}>{val(partyId)}</Row>
-            <Row label={f("name")}>{val(partyName)}</Row>
-            <Row label={f("registrarId")}>{val(str(party.registrar_id))}</Row>
-            <Row label={f("capabilityUrl")}>
-              {renderLink(str(party.capability_url))}
-            </Row>
-          </div>
-        </section>
-
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>{sec("adherence")}</h2>
           <div className={styles.grid}>
@@ -552,6 +676,84 @@ const ParticipantDetail: NextPage = () => {
     );
   };
 
+  // History is collapsed by default. Expanding shows only entries that actually
+  // changed fields; clicking one opens the full before→after diff in a popup.
+  const renderHistory = () => {
+    const edited = history.filter((h) => (h.changes?.length ?? 0) > 0);
+    return (
+      <section className={styles.section}>
+        <div className={styles.historyHeader}>
+          <h2 className={styles.sectionTitle}>{sec("history")}</h2>
+          <button
+            type="button"
+            className={styles.historyToggle}
+            onClick={() => setHistoryOpen((o) => !o)}
+            aria-expanded={historyOpen}
+          >
+            {historyOpen
+              ? t("participants.detail.history.hide")
+              : t("participants.detail.history.show", { count: edited.length })}
+          </button>
+        </div>
+        {historyOpen &&
+          (historyLoading ? (
+            <p className={styles.loading}>
+              {t("participants.detail.history.loading")}
+            </p>
+          ) : historyError ? (
+            <p className={styles.errorInline}>
+              {t("participants.detail.history.error")}
+            </p>
+          ) : edited.length ? (
+            <div className={styles.historyList}>
+              {edited.map((entry, index) => {
+                const titleParts = [
+                  humanize(entry.action),
+                  entry.objectType === "claim" && entry.claimType
+                    ? claimTypeLabel(entry.claimType)
+                    : humanize(entry.objectType),
+                ].filter(Boolean);
+                return (
+                  <button
+                    type="button"
+                    className={styles.historyRow}
+                    key={`${entry.ledgerId}-${index}`}
+                    onClick={() => setDiffEntry(entry)}
+                  >
+                    <span className={styles.historyRowTitle}>
+                      {titleParts.join(" ")}
+                    </span>
+                    <span className={styles.historyRowMeta}>
+                      {t("participants.detail.history.changesLabel", {
+                        count: entry.changes?.length ?? 0,
+                      })}
+                      {entry.timestamp
+                        ? ` · ${new Date(
+                            entry.timestamp * 1000
+                          ).toLocaleString()}`
+                        : ""}
+                      {historyActor(entry)
+                        ? ` · ${t("participants.detail.history.by", {
+                            party: historyActor(entry),
+                          })}`
+                        : ""}
+                    </span>
+                    <span className={styles.historyRowLedger}>
+                      #{entry.ledgerId || entry.transactionId || index + 1}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={styles.empty}>
+              {t("participants.detail.history.emptyEdited")}
+            </p>
+          ))}
+      </section>
+    );
+  };
+
   return (
     <AdminRoute fetchData={onAuthorized}>
       <div className={styles.container}>
@@ -612,25 +814,113 @@ const ParticipantDetail: NextPage = () => {
 
         {!isLoading && !errorKey && party && (
           <>
-            <div className={styles.titleRow}>
-              <div className={styles.titleBlock}>
-                <h1 className={styles.title}>{partyName || partyId || "—"}</h1>
-                {partyId && <div className={styles.subtitle}>{partyId}</div>}
+            <header className={styles.summary}>
+              <div className={styles.summaryTop}>
+                <div className={styles.titleBlock}>
+                  <h1 className={styles.title}>{partyName || partyId || "—"}</h1>
+                  {partyId && <code className={styles.idValue}>{partyId}</code>}
+                </div>
+                <div className={styles.titleActions}>
+                  <span className={styles.schema}>
+                    {t("participants.detail.schemaLabel")}: {version}
+                  </span>
+                  {isProjected && (
+                    <span
+                      className={styles.projection}
+                      title={t("participants.detail.projectionHint")}
+                    >
+                      {t("participants.detail.projectionLabel")}: {displayVersion}
+                    </span>
+                  )}
+                  {canEdit && !editing && (
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => setEditing(true)}
+                    >
+                      {t("participants.detail.edit.button")}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className={styles.titleActions}>
-                <span className={styles.schema}>
-                  {t("participants.detail.schemaLabel")}: {version}
+
+              {aliases.length > 0 && (
+                <div className={styles.akaRow}>
+                  <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
+                  <div className={styles.chips}>
+                    {aliases.map((a, i) => (
+                      <span className={styles.chip} key={i} title={a}>
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(registrarId || capabilityUrl) && (
+                <div className={styles.keyFacts}>
+                  {registrarId && (
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>{f("registrarId")}</span>
+                      <span className={styles.factValue}>{registrarId}</span>
+                    </div>
+                  )}
+                  {capabilityUrl && (
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>
+                        {f("capabilityUrl")}
+                      </span>
+                      <span className={styles.factValue}>
+                        {renderLink(capabilityUrl)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </header>
+
+            {isProjected && (
+              <div className={styles.projectionWarning} role="alert">
+                <span
+                  className={styles.projectionWarnIcon}
+                  aria-hidden="true"
+                >
+                  ⚠
                 </span>
-                {canEdit && !editing && (
-                  <button
-                    className={styles.editBtn}
-                    onClick={() => setEditing(true)}
-                  >
-                    {t("participants.detail.edit.button")}
-                  </button>
-                )}
+                <div>
+                  {missingReqs.length > 0 ? (
+                    <>
+                      <strong>
+                        {t("participants.detail.projectionWarn.incompleteTitle")}
+                      </strong>
+                      <p className={styles.projectionWarnBody}>
+                        {t("participants.detail.projectionWarn.incompleteBody")}
+                      </p>
+                      <div className={styles.projectionWarnMissing}>
+                        <span className={styles.projectionWarnMissingLabel}>
+                          {t("participants.detail.projectionWarn.missingLabel")}
+                        </span>
+                        <ul className={styles.projectionWarnList}>
+                          {missingReqs.map((r) => (
+                            <li key={r} className={styles.projectionWarnItem}>
+                              {reqLabel(r)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        {t("participants.detail.projectionWarn.unmigratedTitle")}
+                      </strong>
+                      <p className={styles.projectionWarnBody}>
+                        {t("participants.detail.projectionWarn.unmigratedBody")}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {editing ? (
               <ParticipantEditForm
@@ -639,12 +929,14 @@ const ParticipantDetail: NextPage = () => {
                 onSaved={() => {
                   setEditing(false);
                   load();
+                  loadHistory();
                 }}
                 onCancel={() => setEditing(false)}
               />
             ) : (
               <div className={styles.body}>
                 {claimModel ? renderClaimView() : renderPartyView()}
+                {renderHistory()}
               </div>
             )}
           </>
@@ -686,6 +978,90 @@ const ParticipantDetail: NextPage = () => {
                       {fld.raw || "—"}
                     </span>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editClaim && (
+        <ClaimEditModal
+          partyId={partyId}
+          claim={editClaim}
+          onSaved={() => {
+            setEditClaim(null);
+            load();
+            loadHistory();
+          }}
+          onClose={() => setEditClaim(null)}
+        />
+      )}
+
+      {diffEntry && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDiffEntry(null)}
+        >
+          <div className={styles.modalPanel} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <span className={styles.claimType}>
+                {[
+                  humanize(diffEntry.action),
+                  diffEntry.objectType === "claim" && diffEntry.claimType
+                    ? claimTypeLabel(diffEntry.claimType)
+                    : humanize(diffEntry.objectType),
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              </span>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setDiffEntry(null)}
+                aria-label={t("participants.detail.close")}
+              >
+                &times;
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.historyMeta}>
+                <span>
+                  {t("participants.detail.history.object")}: {diffEntry.objectId}
+                </span>
+                {diffEntry.timestamp ? (
+                  <span>
+                    {new Date(diffEntry.timestamp * 1000).toLocaleString()}
+                  </span>
+                ) : null}
+                {historyActor(diffEntry) ? (
+                  <span>
+                    {t("participants.detail.history.by", {
+                      party: historyActor(diffEntry),
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              {(diffEntry.changes ?? []).map((change, i) => (
+                <div className={styles.diffRow} key={`${change.field}-${i}`}>
+                  <div className={styles.diffField}>{change.field}</div>
+                  <div className={styles.diffValues}>
+                    <span
+                      className={styles.historyBefore}
+                      title={formatHistoryValue(change.before)}
+                    >
+                      {formatHistoryValue(change.before)}
+                    </span>
+                    <span className={styles.historyArrow}>→</span>
+                    <span
+                      className={styles.historyAfter}
+                      title={formatHistoryValue(change.after)}
+                    >
+                      {formatHistoryValue(change.after)}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

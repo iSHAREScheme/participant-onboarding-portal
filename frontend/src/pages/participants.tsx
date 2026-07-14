@@ -85,6 +85,19 @@ const normalize = (p: any): ParticipantRow => {
 
 type FilterMode = "all" | "mine" | "active" | "certified";
 
+// iSHARE framework roles offered in the role filter. Mirrors
+// FRAMEWORK_ROLE_OPTIONS in SubmitClaimsForm — keep in sync if the role set
+// changes. `value` is the frameworkRole claim's roleId the backend filters on.
+const ROLE_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "ServiceConsumer", label: "Service Consumer" },
+  { value: "ServiceProvider", label: "Service Provider" },
+  { value: "EntitledParty", label: "Entitled Party" },
+  { value: "AuthorisationRegistry", label: "Authorisation Registry" },
+  { value: "IdentityProvider", label: "Identity Provider" },
+  { value: "IdentityBroker", label: "Identity Broker" },
+  { value: "iShareSatellite", label: "iSHARE Satellite" },
+];
+
 const SEARCH_DEBOUNCE_MS = 350;
 
 // "+N" badge for the roles beyond the first one shown. Its hover/focus tooltip
@@ -151,9 +164,13 @@ const Participants: NextPage = () => {
   const [search, setSearch] = useState<string>(
     () => getParticipantsListState()?.search ?? ""
   );
-  // Debounced, applied search term.
-  const [name, setName] = useState<string>(
-    () => getParticipantsListState()?.name ?? ""
+  // Debounced, applied search term — matched against party name OR party id.
+  const [appliedTerm, setAppliedTerm] = useState<string>(
+    () => getParticipantsListState()?.term ?? ""
+  );
+  // Framework-role filter ("" = all roles).
+  const [role, setRole] = useState<string>(
+    () => getParticipantsListState()?.role ?? ""
   );
   const [filter, setFilter] = useState<FilterMode>(
     () => (getParticipantsListState()?.filter as FilterMode) ?? "all"
@@ -187,7 +204,7 @@ const Participants: NextPage = () => {
     }
     const term = search.trim();
     const id = setTimeout(() => {
-      setName(term);
+      setAppliedTerm(term);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(id);
@@ -195,8 +212,8 @@ const Participants: NextPage = () => {
 
   // Remember the view state for the SPA session so it's restored on return.
   useEffect(() => {
-    saveParticipantsListState({ page, name, search, filter });
-  }, [page, name, search, filter]);
+    saveParticipantsListState({ page, term: appliedTerm, search, role, filter });
+  }, [page, appliedTerm, search, role, filter]);
 
   // When the fitted page size changes (e.g. the viewport was resized), restart at
   // page 1 — the satellite's page boundaries move with the page size.
@@ -214,7 +231,7 @@ const Participants: NextPage = () => {
 
   const load = useCallback(async () => {
     if (!pageSize) return;
-    const cacheKey = `${page}|${pageSize}|${name}|${filter}`;
+    const cacheKey = `${page}|${pageSize}|${appliedTerm}|${role}|${filter}`;
     const cached = getCachedParticipantsList(cacheKey);
     const reqId = ++reqIdRef.current;
     // Render instantly from the last cached result for this query (e.g. when
@@ -232,10 +249,13 @@ const Participants: NextPage = () => {
     }
     try {
       const api = new API();
+      const term = appliedTerm.trim() || undefined;
       const res = await api.fetchParticipants({
         page,
         pageSize,
-        name: name || undefined,
+        // Single term matched against name OR party id (server does the OR).
+        search: term,
+        role: role || undefined,
         activeOnly: filter === "active" || undefined,
         certifiedOnly: filter === "certified" || undefined,
         mineOnly: filter === "mine" || undefined,
@@ -263,7 +283,7 @@ const Participants: NextPage = () => {
     } finally {
       if (reqId === reqIdRef.current) setIsLoading(false);
     }
-  }, [page, name, filter, pageSize]);
+  }, [page, appliedTerm, role, filter, pageSize]);
 
   // AdminRoute calls this once the admin is authorized (stable identity so it
   // doesn't retrigger AdminRoute's effect); fetching is driven by the effect
@@ -271,7 +291,7 @@ const Participants: NextPage = () => {
   const onAuthorized = useCallback(() => setAuthorized(true), []);
 
   // Fetch whenever we're authorized and have a measured page size; load's
-  // identity changes with page/search/filter/pageSize.
+  // identity changes with page/search term/search field/role/filter/pageSize.
   // load() optimistically sets state synchronously (instant cache render / loading
   // flag) before it awaits, so scheduling it in a microtask keeps that out of the
   // effect body (react-hooks/set-state-in-effect) while still running before paint.
@@ -297,11 +317,16 @@ const Participants: NextPage = () => {
     setPage(1); // a different result set starts at page 1
   };
 
+  const changeRole = (value: string) => {
+    setRole(value);
+    setPage(1); // a different result set starts at page 1
+  };
+
   const openDetail = (partyId: string) => {
     if (partyId) router.push(`/participants/${encodeURIComponent(partyId)}`);
   };
 
-  const hasQuery = name.length > 0 || filter !== "all";
+  const hasQuery = appliedTerm.length > 0 || filter !== "all" || role !== "";
   // Controls are available as soon as we're authorized (even while loading or
   // when a search yields zero rows), so the user can always adjust or refresh.
   const showToolbar = authorized;
@@ -319,10 +344,24 @@ const Participants: NextPage = () => {
             <input
               type="text"
               className={styles.searchInput}
+              data-tour="participants-search"
               placeholder={t("participants.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <select
+              className={styles.statusSelect}
+              aria-label={t("participants.roleFilterAria")}
+              value={role}
+              onChange={(e) => changeRole(e.target.value)}
+            >
+              <option value="">{t("participants.roleAll")}</option>
+              {ROLE_FILTER_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
             <select
               className={styles.statusSelect}
               value={filter}
@@ -363,7 +402,7 @@ const Participants: NextPage = () => {
 
         {/* The scroll container always renders so useFitRows can measure the real
             available height (its clientHeight) even before the first row loads. */}
-        <div ref={fitRef} className={styles.tableWrap}>
+        <div ref={fitRef} className={styles.tableWrap} data-tour="participants-table">
           {showInitialLoading && (
             <table className={styles.table} aria-busy="true">
               <thead>

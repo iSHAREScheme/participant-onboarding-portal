@@ -43,16 +43,17 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 	if result.Error != nil {
 		// If no settings found, return empty description
 		return c.JSON(fiber.Map{
-			"description":         "",
-			"registrarId":         os.Getenv("SATELLITE_ISS"),
-			"dataspaceId":         "",
-			"prefillAuthRegistry": false,
-			"agreements":          []string{},
-			"logoPath":            "",
-			"faviconPath":         "",
-			"theme":               nil,
-			"themes":              nil,
-			"activeTheme":         "",
+			"description":                      "",
+			"registrarId":                      os.Getenv("SATELLITE_ISS"),
+			"dataspaceId":                      "",
+			"prefillAuthRegistry":              false,
+			"agreements":                       []string{},
+			"logoPath":                         "",
+			"faviconPath":                      "",
+			"theme":                            nil,
+			"themes":                           nil,
+			"activeTheme":                      "",
+			"requireQualifiedEidasCertificate": false,
 		})
 	}
 
@@ -78,14 +79,19 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 // @Router       /settings/public [get]
 func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 	var settings models.Settings
+	// Whether the portal is co-deployed with a Participant Registry admin API.
+	// Non-secret topology flag used by the UI to show/hide the PR-admin features.
+	prConfigured := strings.TrimSpace(h.Config.PrApiBaseUrl) != ""
 	if h.Server.DB.First(&settings).Error != nil {
 		return c.JSON(fiber.Map{
-			"description": "",
-			"theme":       nil,
-			"logoPath":    "",
-			"faviconPath": "",
-			"activeTheme": "",
-			"agreements":  []agreementView{},
+			"description":                      "",
+			"theme":                            nil,
+			"logoPath":                         "",
+			"faviconPath":                      "",
+			"activeTheme":                      "",
+			"agreements":                       []publicAgreementView{},
+			"prConfigured":                     prConfigured,
+			"requireQualifiedEidasCertificate": false,
 		})
 	}
 	// Deliberately a curated allowlist of public fields — never spread the whole
@@ -96,7 +102,17 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"logoPath":    settings.LogoPath,
 		"faviconPath": settings.FaviconPath,
 		"activeTheme": settings.ActiveTheme,
-		"agreements":  viewAgreements(decodeAgreements(settings.Agreements)),
+		"agreements":  publicViewAgreements(decodeAgreements(settings.Agreements)),
+		// Onboarding-flow config consumed by the public landing/header and the
+		// (authenticated) register flow.
+		"defaultAssociationName":           settings.DefaultAssociationName,
+		"skipRoles":                        settings.SkipRoles,
+		"activeRoles":                      settings.ActiveRoles,
+		"defaultRole":                      settings.DefaultRole,
+		"autoAcceptProposal":               settings.AutoAcceptProposal,
+		"requireQualifiedEidasCertificate": settings.RequireQualifiedEidasCertificate,
+		// Topology flag — gates the registry-admin features in the UI.
+		"prConfigured": prConfigured,
 	})
 }
 
@@ -141,6 +157,16 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		SatelliteTokenEndpoint      *string `json:"satelliteTokenEndpoint"`
 		SatelliteTokenScope         *string `json:"satelliteTokenScope"`
 		DataspaceTitle              *string `json:"dataspaceTitle"`
+		VcIssuerBaseUrl             *string `json:"vcIssuerBaseUrl"`
+		PrApiBaseUrl                *string `json:"prApiBaseUrl"`
+
+		// Onboarding-flow configuration.
+		DefaultAssociationName           *string `json:"defaultAssociationName"`
+		SkipRoles                        *string `json:"skipRoles"`
+		ActiveRoles                      *string `json:"activeRoles"`
+		DefaultRole                      *string `json:"defaultRole"`
+		AutoAcceptProposal               *string `json:"autoAcceptProposal"`
+		RequireQualifiedEidasCertificate *bool   `json:"requireQualifiedEidasCertificate"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -206,6 +232,30 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.DataspaceTitle != nil {
 		settings.DataspaceTitle = strings.TrimSpace(*input.DataspaceTitle)
+	}
+	if input.VcIssuerBaseUrl != nil {
+		settings.VcIssuerBaseUrl = strings.TrimSpace(*input.VcIssuerBaseUrl)
+	}
+	if input.PrApiBaseUrl != nil {
+		settings.PrApiBaseUrl = strings.TrimSpace(*input.PrApiBaseUrl)
+	}
+	if input.DefaultAssociationName != nil {
+		settings.DefaultAssociationName = strings.TrimSpace(*input.DefaultAssociationName)
+	}
+	if input.SkipRoles != nil {
+		settings.SkipRoles = strings.TrimSpace(*input.SkipRoles)
+	}
+	if input.ActiveRoles != nil {
+		settings.ActiveRoles = strings.TrimSpace(*input.ActiveRoles)
+	}
+	if input.DefaultRole != nil {
+		settings.DefaultRole = strings.TrimSpace(*input.DefaultRole)
+	}
+	if input.AutoAcceptProposal != nil {
+		settings.AutoAcceptProposal = strings.TrimSpace(*input.AutoAcceptProposal)
+	}
+	if input.RequireQualifiedEidasCertificate != nil {
+		settings.RequireQualifiedEidasCertificate = *input.RequireQualifiedEidasCertificate
 	}
 
 	if creating {

@@ -28,6 +28,7 @@
     "keycloak-js": "^26",
     "next": "^16.2.9",
     "pkijs": "^3",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.4.1",

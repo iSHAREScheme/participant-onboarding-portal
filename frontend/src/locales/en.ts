@@ -1,6 +1,6 @@
 import OnboardingStatus from "components/OnboardingStatus";
 
-export default {
+const en = {
   common: {
     login: "Login",
     logout: "Logout",
@@ -18,6 +18,7 @@ export default {
     required: "Required",
     edit: "Edit",
     delete: "Delete",
+    restore: "Restore",
     cancel: "Cancel",
     confirm: "Confirm",
     next: "Next",
@@ -25,7 +26,21 @@ export default {
     profile: "Profile",
     participants: "Participants",
     organizationAccess: "Organization access",
-    menu: "Menu"
+    myParty: "My party",
+    networkHealth: "Network health",
+    revoke: "Revoke",
+    transfer: "Transfer",
+    lifecycle: "Lifecycle",
+    dataspaces: "Dataspaces",
+    frameworks: "Frameworks",
+    trustedList: "Trusted list",
+    issuerWebhooks: "Issuer webhooks",
+    yes: "Yes",
+    no: "No",
+    menu: "Menu",
+    clear: "Clear",
+    searching: "Searching…",
+    noMatches: "No matching participants"
   },
   organizationAccess: {
     title: "Organization access",
@@ -76,7 +91,9 @@ export default {
     loading: "Loading participants...",
     error: "Failed to load participants.",
     empty: "No participants found.",
-    search: "Search by name…",
+    search: "Search by name or party ID…",
+    roleFilterAria: "Filter by role",
+    roleAll: "All roles",
     filters: {
       all: "All participants",
       mine: "My participants",
@@ -104,6 +121,9 @@ export default {
       error: "Failed to load participant.",
       notFound: "Participant not found.",
       schemaLabel: "Schema",
+      projectionLabel: "Projected as",
+      projectionHint:
+        "This party's record is stored under an older schema and is shown here in the newer claim model. For parties that have not been migrated, the claims are derived from the stored data for display only.",
       viewMore: "View more",
       close: "Close",
       sections: {
@@ -114,11 +134,13 @@ export default {
         authRegistries: "Authorisation registries",
         certificates: "Certificates",
         additionalInfo: "Additional information",
-        claims: "Claims"
+        claims: "Claims",
+        history: "History"
       },
       fields: {
         partyId: "Party ID",
         name: "Name",
+        alsoKnownAs: "Also known as",
         registrarId: "Registrar ID",
         capabilityUrl: "Capability URL",
         schemaVersion: "Schema version",
@@ -152,18 +174,559 @@ export default {
         authRegistries: "No authorisation registries.",
         certificates: "No certificates."
       },
+      history: {
+        loading: "Loading history…",
+        error: "History is currently unavailable.",
+        empty: "No history found.",
+        emptyEdited: "No field changes recorded yet.",
+        object: "Object",
+        actor: "Actor",
+        noFieldChanges: "No field-level changes available.",
+        more: "{{count}} more changes",
+        show: "Show changes ({{count}})",
+        hide: "Hide changes",
+        changesLabel: "{{count}} field changes",
+        by: "by {{party}}"
+      },
       edit: {
         button: "Edit",
         title: "Edit participant",
+        partyInfoTitle: "Party information",
+        partyInfoHint: "Only party-level fields are edited here. Each claim is edited individually from its card.",
+        editClaim: "Edit claim",
+        editClaimTitle: "Edit claim",
+        noEditableClaimFields: "This claim type has no editable fields — its values are set at issuance.",
         save: "Save",
         saving: "Saving…",
         saveClaim: "Save claim",
         cancel: "Cancel",
         saved: "Saved.",
         saveError: "Failed to save changes.",
+        noComplianceClaim: "This participant has no editable compliance claim.",
         claimsTitle: "Claims"
+      },
+      projectionWarn: {
+        incompleteTitle: "Incomplete v3 participant",
+        incompleteBody:
+          "This participant does not yet meet the v3 onboarding requirements, so the registry still treats it as a legacy (v2) record and the claims shown may be projected from its legacy data. Add the missing claim(s) to complete its migration to v3.",
+        missingLabel: "Missing required claims:",
+        unmigratedTitle: "Not yet migrated to v3",
+        unmigratedBody:
+          "This participant's data looks complete but isn't stored as native v3 claims yet — the claims shown are projected from its legacy record for display only. Run the v3 claim migration to persist them.",
+        req: {
+          certOrIdp: "X.509 certificate or IdP assertion",
+          x509ForRole: "X.509 certificate (required for its framework role)"
+        }
       }
     }
+  },
+  party: {
+    back: "Back to home",
+    admitted: "Admitted",
+    refresh: "Refresh",
+    start: "Start onboarding",
+    loadError: "Failed to load your party details.",
+    none: {
+      title: "No onboarding yet",
+      message: "You have not started onboarding. Once you submit a registration and it is approved, your party details will appear here."
+    },
+    processing: {
+      title: "Onboarding in progress",
+      message: "Your registration is being processed. Your party details will appear here once your organisation has been admitted to the participant registry."
+    },
+    rejected: {
+      title: "Registration not approved",
+      message: "Your registration was not approved. Please contact the association for more information or start a new registration."
+    },
+    welcome: {
+      title: "Onboarding complete, {{name}}!",
+      message: "Your organisation has been admitted to the participant registry. Below is your party information and the credentials you can request."
+    },
+    credentials: {
+      title: "Credentials",
+      description: "Add your organisation's verifiable credentials to a wallet. Scan a QR code with your wallet app, or open it on this device.",
+      vcLabel: "Verifiable credential",
+      notConfigured: "Credential issuance is not configured yet. Please contact your association.",
+      empty: "No credentials are available for your party yet.",
+      unavailable: "The credential issuer is temporarily unavailable. Please try again in a moment.",
+      addToWallet: "Add to wallet",
+      scanHint: "Scan with your wallet app",
+      copyOffer: "Copy offer link",
+      copied: "Copied",
+      refresh: "Refresh offers",
+      refreshing: "Refreshing…",
+      retry: "Retry",
+      retrying: "Retrying…",
+      checkAgain: "Check again",
+      checking: "Checking…",
+      expires: "Offer expires {{when}}",
+      expired: "This offer has expired — refresh to get a new one.",
+      preparing: {
+        title: "Preparing your credentials…",
+        message: "Your verifiable credentials are being issued. This can take a moment after admission."
+      },
+      failed: {
+        title: "Credential issuance didn't complete",
+        message: "Something went wrong while issuing your credentials. You can retry."
+      },
+      request: "Request",
+      requesting: "Requesting…",
+      requestSectionTitle: "Available credentials",
+      requestSectionHint: "Request the verifiable credentials your organisation is entitled to. Once issued, add them to a wallet.",
+      notAvailable: "Not available for your party.",
+      issued: "This credential has been issued.",
+      getWalletLink: "Get wallet link",
+      gettingLink: "Getting link…",
+      noWalletLink: "Couldn't generate a wallet link right now — please try again later.",
+      types: {
+        PartyCredential: "Party credential",
+        iSHAREParticipantCredential: "iSHARE participant credential",
+        DataspaceParticipantCredential: "Dataspace participant credential"
+      },
+      typeDescriptions: {
+        PartyCredential: "Proves your organisation's identity (its party id and name).",
+        iSHAREParticipantCredential: "Proves your active iSHARE framework participation.",
+        DataspaceParticipantCredential: "Proves your membership of a data space."
+      }
+    }
+  },
+  tour: {
+    aria: "Admin portal tour",
+    skip: "Skip",
+    back: "Back",
+    next: "Next",
+    done: "Finish",
+    step: "Step {{current}} of {{total}}",
+    replay: "Take a tour",
+    steps: {
+      welcome: {
+        title: "Welcome to your admin portal",
+        body: "Let's walk through the main areas. We'll move between pages for you — skip anytime, and replay later from your account menu."
+      },
+      proposalsList: {
+        title: "Proposals",
+        body: "Every onboarding request and its status. Open one to review it, approve or reject, and download the signed agreements."
+      },
+      proposalsCreate: {
+        title: "Register a party",
+        body: "Need to add a participant manually? Start a new registration from here."
+      },
+      participantsList: {
+        title: "Participants",
+        body: "Organisations admitted to the registry. Open one to see its party details, roles and claims."
+      },
+      participantsSearch: {
+        title: "Find participants",
+        body: "Search and filter the list to quickly locate an organisation."
+      },
+      usersList: {
+        title: "Users",
+        body: "The portal's user accounts and the roles that control what they can access."
+      },
+      usersCreate: {
+        title: "Add a user",
+        body: "Invite a new portal user and assign their role here."
+      },
+      settingsTabs: {
+        title: "Settings",
+        body: "Branding and content, the onboarding flow, the theme, and authentication — identity providers, email (SMTP) and the verifiable-credential issuer."
+      },
+      finish: {
+        title: "You're all set",
+        body: "That's the tour. Replay it anytime via “Take a tour” in your account menu."
+      }
+    }
+  },
+  revoke: {
+    title: "Revoke",
+    titleCombined: "Lifecycle",
+    description: "Revoke a party from the registry, or transfer it to another participant registry.",
+    form: {
+      heading: "Lifecycle action",
+      revokingOrg: "Revoking organisation",
+      fromRegistry: "From registry",
+      orgPlaceholder: "Organisation id",
+      partyId: "Party ID",
+      participant: "Participant",
+      noParties: "You have no participants to manage.",
+      noSatellites: "No other satellites are available in the network yet.",
+      type: "Action",
+      transferTo: "Transfer to party ID",
+      hint: "Choose the participant to revoke from the registry.",
+      submit: "Initiate revoke",
+      submitting: "Submitting…",
+      required: "Enter a party or organisation to revoke.",
+      success: "Revoke request submitted.",
+      error: "Failed to submit the revoke request."
+    },
+    types: {
+      revoke: "Revoke",
+      transfer: "Transfer"
+    },
+    confirm: {
+      title: "Revoke party",
+      message: "Revoke “{{target}}” from the registry? This cannot be undone.",
+      button: "Revoke"
+    },
+    list: {
+      heading: "Revoke requests",
+      refresh: "Refresh",
+      org: "Organisation",
+      party: "Party",
+      type: "Action",
+      status: "Status",
+      date: "Created",
+      empty: "No revoke requests.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load revoke requests."
+    }
+  },
+  transfer: {
+    title: "Transfer",
+    description: "Transfer a party's ownership to another participant registry.",
+    form: {
+      heading: "Request transfer",
+      partyId: "Party ID",
+      participant: "Participant",
+      fromRegistry: "From registry",
+      noParties: "You have no participants to transfer.",
+      noSatellites: "No other participant registries are available in the network yet.",
+      transferTo: "Transfer to registry",
+      transferToPlaceholder: "Destination registry id",
+      hint: "Provide the party to move and the participant registry it should be transferred to.",
+      submit: "Request transfer",
+      submitting: "Submitting…",
+      required: "Enter both the party and the destination registry.",
+      success: "Transfer request submitted.",
+      error: "Failed to submit the transfer request."
+    },
+    confirm: {
+      title: "Transfer party",
+      message: "Transfer “{{party}}” to “{{target}}”? The destination registry must approve the request.",
+      button: "Request transfer"
+    },
+    list: {
+      heading: "Transfer requests",
+      refresh: "Refresh",
+      party: "Party",
+      from: "From",
+      to: "To",
+      status: "Status",
+      date: "Requested",
+      empty: "No transfer requests.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load transfer requests."
+    }
+  },
+  dataspaces: {
+    title: "Dataspaces",
+    description: "Manage the dataspaces registered in the participant registry.",
+    form: {
+      createHeading: "Create dataspace",
+      editHeading: "Edit dataspace ({{id}})",
+      subject: "Name",
+      subjectPlaceholder: "Dataspace name",
+      dataspaceId: "Dataspace ID",
+      status: "Status",
+      country: "Country of registration",
+      countryPlaceholder: "e.g. Netherlands",
+      definitionUrl: "Definition URL",
+      website: "Website",
+      countriesOfOperation: "Countries of operation",
+      sectorIndustry: "Sector / industry",
+      tags: "Tags",
+      tagsPlaceholder: "Comma-separated tags",
+      specificAgreements: "Specific agreements",
+      listPlaceholder: "Comma-separated values",
+      listHint: "Countries of operation, sector/industry and specific agreements accept multiple comma-separated values.",
+      create: "Create dataspace",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      required: "A name and dataspace ID are required.",
+      created: "Dataspace created.",
+      updated: "Dataspace updated.",
+      loadError: "Failed to load the dataspace.",
+      error: "Failed to save the dataspace."
+    },
+    status: {
+      new: "New",
+      inProgress: "In progress",
+      active: "Active",
+      notActive: "Not active"
+    },
+    list: {
+      heading: "Dataspaces",
+      refresh: "Refresh",
+      subject: "Name",
+      id: "Dataspace ID",
+      status: "Status",
+      country: "Country",
+      actions: "Actions",
+      edit: "Edit",
+      empty: "No dataspaces.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load dataspaces."
+    }
+  },
+  frameworks: {
+    title: "Frameworks",
+    description: "Browse the frameworks exposed by the participant registry v3 endpoint.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    pageSize: "Page size",
+    empty: "No frameworks found.",
+    unavailable: "The participant registry is currently unavailable.",
+    error: "Failed to load frameworks.",
+    notConfigured: "The participant registry is not configured for this deployment.",
+    untitled: "Untitled framework",
+    showRaw: "Show details",
+    hideRaw: "Hide details",
+    issuer: "Issuer: {{issuer}}",
+    fields: {
+      version: "Version",
+      validFrom: "Valid from",
+      validUntil: "Valid until",
+      updated: "Updated"
+    },
+    pagination: {
+      summary: "Showing {{first}}–{{last}} of {{total}} frameworks"
+    }
+  },
+  subscribers: {
+    title: "Issuer webhooks",
+    description: "Register the issuer/adapter endpoints that receive party lifecycle events, manage their signing secrets, and inspect or redeliver the webhook outbox.",
+    tabs: {
+      subscribers: "Subscribers",
+      deliveries: "Deliveries"
+    },
+    form: {
+      createHeading: "Register subscriber",
+      editHeading: "Edit subscriber ({{name}})",
+      name: "Name",
+      namePlaceholder: "e.g. iSHARE VC issuer",
+      url: "Webhook URL",
+      eventFilter: "Event filter",
+      eventFilterHint: "Leave empty for the default stream (party.created, party.updated). To also receive fine-grained events, list them comma-separated: claim.created, claim.updated, claim.revoked, party.revoked.",
+      secret: "Signing secret (optional)",
+      secretPlaceholder: "Leave blank to auto-generate",
+      secretHint: "Only set this when connecting an already-deployed issuer that has a fixed HMAC secret — paste that secret here. Leave blank and the registry generates one (shown once). Use “Rotate secret” to change it later.",
+      replayProtection: "Replay protection (sign timestamp + body)",
+      enabled: "Enabled",
+      create: "Register subscriber",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      nameRequired: "A name is required.",
+      urlRequired: "A webhook URL is required.",
+      urlHttps: "The webhook URL must use https.",
+      created: "Subscriber registered.",
+      updated: "Subscriber updated.",
+      error: "Failed to save the subscriber."
+    },
+    secret: {
+      heading: "Signing secret for {{name}} — shown once, copy it now",
+      dismiss: "Dismiss"
+    },
+    status: {
+      notConfigured: "The participant registry admin API is not configured for this portal (PR_API_BASE_URL is unset). Ask an administrator to configure it.",
+      unauthorized: "The participant registry rejected your session — you're not authorized for its admin API. Try signing out and back in; if it persists, your account may lack the required role.",
+      unavailable: "The participant registry is temporarily unavailable — it may be starting up or restarting.",
+      error: "Something went wrong loading this data.",
+      retry: "Retry"
+    },
+    list: {
+      heading: "Subscribers",
+      refresh: "Refresh",
+      name: "Name",
+      url: "Webhook URL",
+      events: "Events",
+      eventsDefault: "default stream",
+      enabled: "Enabled",
+      lastStatus: "Last delivery",
+      actions: "Actions",
+      edit: "Edit",
+      rotate: "Rotate secret",
+      delete: "Delete",
+      empty: "No subscribers registered.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load subscribers.",
+      rotateConfirm: "Rotate this subscriber's signing secret? The new secret is shown once.",
+      rotated: "Secret rotated.",
+      rotateError: "Failed to rotate the secret.",
+      deleteConfirm: "Delete this subscriber? It will stop receiving events.",
+      deleted: "Subscriber deleted.",
+      deleteError: "Failed to delete the subscriber."
+    },
+    deliveries: {
+      heading: "Deliveries",
+      reemitHeading: "Re-emit events for a party",
+      reemitHint: "Enqueue a party.updated event so subscribers re-fetch and reconcile this party — a manual recovery trigger.",
+      reemit: "Re-emit",
+      reemitRequired: "A party id is required.",
+      reemitted: "Re-emitted to {{count}} subscriber(s).",
+      reemitError: "Failed to re-emit events.",
+      created: "Created",
+      event: "Event",
+      party: "Party ID",
+      partyFilter: "Party ID",
+      subscriber: "Subscriber",
+      status: "Status",
+      attempts: "Attempts",
+      actions: "Actions",
+      redeliver: "Redeliver",
+      redelivered: "Delivery requeued.",
+      redeliverError: "Failed to requeue the delivery.",
+      empty: "No deliveries.",
+      error: "Failed to load deliveries.",
+      applyFilters: "Apply",
+      allSubscribers: "All subscribers",
+      statuses: {
+        all: "All statuses",
+        pending: "Pending",
+        failed: "Failed",
+        delivered: "Delivered",
+        dead: "Dead-lettered"
+      }
+    }
+  },
+  trusted: {
+    title: "Trusted list",
+    description: "Manage the certificate authorities trusted by the participant registry.",
+    form: {
+      addHeading: "Add certificate authority",
+      editHeading: "Edit ({{subject}})",
+      certificate: "Certificate",
+      validating: "Validating certificate…",
+      valid: "Valid",
+      invalid: "Invalid",
+      subject: "Subject",
+      subjectPlaceholder: "Upload a certificate to populate",
+      fingerprint: "Fingerprint",
+      type: "Type",
+      status: "Status",
+      hint: "Upload a certificate (.cer, .crt, .der, .pem, .pfx, .key) to validate it, then choose a type before adding it.",
+      create: "Add to trusted list",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      badFile: "Invalid file type. Upload a certificate file.",
+      validateError: "Failed to validate the certificate.",
+      typeRequired: "Select a certificate type.",
+      certRequired: "Upload and validate a certificate first.",
+      created: "Certificate authority added.",
+      updated: "Certificate authority updated.",
+      deleted: "Certificate authority removed.",
+      error: "Failed to save the certificate authority.",
+      deleteError: "Failed to remove the certificate authority."
+    },
+    types: {
+      pkio: "PKIo",
+      ishareTest: "iSHARE Test",
+      eidas: "eIDAS"
+    },
+    statuses: {
+      granted: "Granted",
+      withdrawn: "Withdrawn",
+      supervisionCeased: "Supervision ceased",
+      underSupervision: "Under supervision"
+    },
+    confirm: {
+      title: "Remove certificate authority",
+      message: "Remove “{{target}}” from the trusted list? This cannot be undone.",
+      button: "Remove"
+    },
+    list: {
+      heading: "Trusted certificate authorities",
+      refresh: "Refresh",
+      subject: "Subject",
+      type: "Type",
+      validity: "Validity",
+      status: "Status",
+      actions: "Actions",
+      edit: "Edit",
+      delete: "Remove",
+      empty: "No trusted certificate authorities.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load the trusted list."
+    }
+  },
+  scheduler: {
+    title: "Scheduler",
+    description: "Schedule recurring participant-registry jobs, such as network health checks.",
+    form: {
+      createHeading: "Schedule a job",
+      editHeading: "Edit job ({{name}})",
+      type: "Job type",
+      typePlaceholder: "Select a job type",
+      process: "Process name",
+      processPlaceholder: "A name to identify this job",
+      frequency: "Frequency",
+      frequencyPlaceholder: "Select a frequency",
+      every: "Run every",
+      startDate: "Start date",
+      startTime: "Start time",
+      emails: "Notification emails",
+      emailsPlaceholder: "Comma-separated email addresses",
+      enable: "Enable this schedule",
+      hint: "Second/minute/hour frequencies run on the chosen interval; daily and weekly run once per period. Notifications are sent to the listed addresses.",
+      create: "Schedule job",
+      update: "Save changes",
+      cancel: "Cancel",
+      submitting: "Saving…",
+      required: "Job type, process name, frequency and at least one email are required.",
+      created: "Job scheduled.",
+      updated: "Schedule updated.",
+      error: "Failed to save the schedule."
+    },
+    types: {
+      networkHealth: "Network Health Check"
+    },
+    units: {
+      sec: "Second",
+      min: "Minute",
+      hr: "Hour"
+    },
+    frequency: {
+      every: "Every {{value}} {{unit}}",
+      daily: "Daily once",
+      weekly: "Weekly once"
+    },
+    list: {
+      heading: "Scheduled jobs",
+      refresh: "Refresh",
+      process: "Process",
+      type: "Type",
+      frequency: "Frequency",
+      enabled: "Enabled",
+      actions: "Actions",
+      edit: "Edit",
+      yes: "Yes",
+      no: "No",
+      empty: "No scheduled jobs.",
+      unavailable: "The participant registry is currently unavailable.",
+      error: "Failed to load scheduled jobs."
+    }
+  },
+  networkHealth: {
+    title: "Network health",
+    description: "Live status of the participant registry's ledger network. Available when the portal is co-deployed with the registry.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    overall: "Overall status",
+    lastExecution: "Last execution",
+    notificationStatus: "Email notification status",
+    org: "Organisation",
+    health: "Health",
+    peers: "Peers",
+    peerName: "Peer",
+    blockNo: "Block no.",
+    status: "Status",
+    explorer: "Explorer",
+    notConfigured: "Network health is only available when the portal is co-deployed with the participant registry.",
+    unavailable: "The participant registry is currently unavailable. Please try again in a moment.",
+    loadError: "Failed to load network health.",
+    empty: "No organisation details were reported."
   },
   home: {
     title: "Onboarding",
@@ -713,7 +1276,122 @@ export default {
     },
     tabs: {
       general: "General",
+      onboarding: "Onboarding",
+      authentication: "Authentication",
       theme: "Theme"
+    },
+    auth: {
+      loading: "Loading…",
+      save: "Save",
+      saving: "Saving…",
+      cancel: "Cancel",
+      secretKept: "•••••••• (leave blank to keep)",
+      vcIssuer: {
+        title: "Verifiable credential issuer",
+        hint: "The external iSHARE VC issuer the participant dashboard polls for credential offers. Leave blank to disable the credentials section.",
+        urlLabel: "Issuer base URL",
+        urlPlaceholder: "https://issuer.example.com",
+        urlHint: "Server-to-server base URL of the issuer's polling API. Overrides the VC_ISSUER_BASE_URL environment default. Any issuer API key is configured via environment only, never here.",
+        saved: "Credential issuer saved",
+        saveFailed: "Failed to save the credential issuer"
+      },
+      idp: {
+        title: "Connected identity providers",
+        hint: "Identity providers configured in this realm. Add, edit or remove the brokers users can sign in through.",
+        add: "Add identity provider",
+        addTitle: "New identity provider",
+        editTitle: "Edit “{{alias}}”",
+        empty: "No identity providers configured yet.",
+        loadError: "Could not load identity providers.",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        edit: "Edit",
+        delete: "Remove",
+        deleteTitle: "Remove identity provider",
+        deleteConfirm: "Remove the identity provider “{{alias}}”? Users will no longer be able to sign in through it.",
+        deleteConfirmLabel: "Remove",
+        deleted: "Identity provider removed",
+        deleteFailed: "Failed to remove identity provider",
+        created: "Identity provider created",
+        updated: "Identity provider updated",
+        saveFailed: "Failed to save identity provider",
+        aliasProviderRequired: "Alias and provider type are required",
+        alias: "Alias",
+        displayName: "Display name",
+        providerId: "Provider type",
+        enabledLabel: "Enabled",
+        trustEmail: "Trust email",
+        config: "Configuration",
+        configHint: "Provider settings (e.g. clientId, clientSecret, authorizationUrl). Secret values are hidden — leave them blank to keep the stored value.",
+        configKey: "Key",
+        configValue: "Value",
+        addField: "Add field",
+        mappers: {
+          title: "Claim mappings",
+          hint: "Map this provider's claims to Keycloak user attributes. This portal reads legalSubjectId, kvkNumber, companyName and email from the token.",
+          empty: "No claim mappings yet.",
+          saveFirst: "Save the identity provider first, then reopen it to add claim mappings.",
+          claimPlaceholder: "Source claim (e.g. kvkNumber)",
+          attrPlaceholder: "User attribute (e.g. kvkNumber)",
+          add: "Add mapping",
+          remove: "Remove",
+          preset: "Map common iSHARE claims",
+          required: "Enter both the source claim and the target attribute",
+          addFailed: "Failed to add claim mapping",
+          removeFailed: "Failed to remove claim mapping",
+          presetDone: "Mapped the common iSHARE claims",
+          presetNone: "The common iSHARE claims are already mapped"
+        }
+      },
+      smtp: {
+        title: "Email (SMTP)",
+        hint: "The mail server Keycloak uses to send account emails (verification, password reset, invitations).",
+        host: "Host",
+        port: "Port",
+        from: "From address",
+        fromDisplayName: "From display name",
+        replyTo: "Reply-to",
+        ssl: "Use SSL",
+        starttls: "Use StartTLS",
+        auth: "Server requires authentication",
+        user: "Username",
+        password: "Password",
+        saved: "SMTP settings saved",
+        saveFailed: "Failed to save SMTP settings",
+        test: "Send test email",
+        testing: "Sending…",
+        testTo: "Send test to",
+        testToPlaceholder: "you@example.com",
+        testToHint: "We'll send a test message to this address using the settings above.",
+        recipientRequired: "Enter a recipient email address for the test",
+        testOk: "Test email sent to {{to}}",
+        testFailed: "SMTP test failed"
+      }
+    },
+    onboarding: {
+      flowTitle: "Onboarding flow",
+      flowHint: "Control how applicants move through the onboarding wizard.",
+      associationName: "Association name",
+      associationNamePlaceholder: "e.g. iSHARE Demo Association",
+      associationNameHint: "Shown in the portal header. Leave empty to use the deployment default.",
+      activeRoles: "Selectable roles",
+      activeRolesHint: "Which roles applicants can choose during onboarding.",
+      roles: {
+        dataconsumer: "Data consumer",
+        dataowner: "Data owner",
+        dataprovider: "Data provider"
+      },
+      defaultRole: "Default role",
+      defaultRoleNone: "No default (let the applicant choose)",
+      defaultRoleHint: "Pre-selects this role on the role step.",
+      skipRoles: "Skip the role-selection step",
+      skipRolesHint: "Hide the role step entirely (use with a default role).",
+      autoAccept: "Auto-accept proposals",
+      autoAcceptHint: "Complete proposals automatically on submit, without manual admin approval.",
+      requireQualifiedEidasCertificate: "Require a qualified eIDAS certificate",
+      requireQualifiedEidasCertificateHint: "Require QCCompliance together with a QCP policy or qualified certificate type during eIDAS upload. Certificate parsing, expiry and registry trust checks always remain enabled.",
+      dataspaceAuthTitle: "Dataspace & authorization",
+      dataspaceAuthHint: "The dataspace applicants join and the authorization registry pre-filled for them."
     },
     theme: {
       title: "Colours & fonts",
@@ -837,7 +1515,8 @@ export default {
       firstName: "First Name",
       lastName: "Last Name",
       newPassword: "New Password (optional)",
-      confirmPassword: "Confirm Password"
+      confirmPassword: "Confirm Password",
+      language: "Language"
     },
     linkedAccounts: {
       title: "Login methods",
@@ -873,7 +1552,7 @@ export default {
     identity: {
       heading: "Participant Identity",
       partyId: "Party ID",
-      partyIdPlaceholder: "did:ishare:EU.EORI.NL000000000",
+      partyIdPlaceholder: "EU.EORI.NL000000000",
       partyName: "Party Name",
       partyNamePlaceholder: "Legal entity name",
       alsoKnownAs: "Also Known As",
@@ -910,7 +1589,8 @@ export default {
       certificateType: "Certificate Type",
       x5c: "Certificate (x5c, base64 DER)",
       x5t: "Thumbprint (x5t#S256)",
-      assertion: "Assertion"
+      assertion: "Assertion",
+      minimum: "Required for v3 party"
     },
     claimTypes: {
       frameworkCompliance: "Framework Compliance",
@@ -973,6 +1653,43 @@ export default {
       agreementTooLarge: "PDF exceeds the 10 MB limit.",
       certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
       agreementReadError: "Could not read the PDF file."
+    },
+    v2: {
+      sections: {
+        participant: "Participant details",
+        certificate: "Certificate",
+        authRegistries: "Authorisation registries",
+        additionalInfo: "Participant additional details",
+        agreements: "Agreements (minimum 2)",
+        roles: "Roles (minimum 1)",
+        spor: "SPOR"
+      },
+      fields: {
+        dataspaceTitle: "Dataspace title",
+        logo: "Logo URL",
+        companyPhone: "Company phone",
+        tags: "Tags",
+        signDate: "Date of signing",
+        expiryDate: "Date of expiry",
+        framework: "Framework",
+        contractFile: "Contract file",
+        role: "Role",
+        signedRequest: "Signed request"
+      },
+      actions: {
+        addAuthRegistry: "Add authorisation registry",
+        addAgreement: "Add agreement",
+        addRole: "Add role",
+        cancel: "Cancel",
+        save: "Save",
+        back: "Back"
+      },
+      placeholders: {
+        partyId: "EU.EORI.NL000000000",
+        registrarId: "EU.EORI.NL000000000"
+      }
     }
   }
-};
+}
+
+export default en

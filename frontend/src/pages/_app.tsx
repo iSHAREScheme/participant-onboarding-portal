@@ -13,7 +13,8 @@ import { Poppins } from 'next/font/google'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/router'
 import { getPublicEnv } from 'config/publicEnv'
-import { storeKeycloakTokens } from 'util/keycloakTokens'
+import { clearStoredKeycloakTokens } from 'util/keycloakTokens'
+import { setAccessTokenProvider } from 'util/authToken'
 import { clearStoredIdpActionState, setCompletedIdpAction } from 'util/idpActionState'
 import { setKeycloakUserInfo } from 'util/keycloakUserInfo'
 
@@ -79,6 +80,20 @@ function MyApp({ Component, pageProps }: AppProps) {
         }
       }
     }
+
+    // Tokens live only in memory. Purge any tokens persisted by older builds, and
+    // feed the live access token to the Axios client (refreshing near expiry).
+    clearStoredKeycloakTokens()
+    setAccessTokenProvider(async () => {
+      if (!instance.authenticated) return undefined
+      try {
+        await instance.updateToken(30)
+      } catch {
+        return undefined
+      }
+      return instance.token
+    })
+
     return instance
   }, [isBrowser, keycloakUrl, keycloakRealm, keycloakClientId])
   
@@ -105,17 +120,15 @@ function MyApp({ Component, pageProps }: AppProps) {
             const isAdmin = roles.includes('onboarding-admin')
             const target = isAdmin ? '/admin' : '/register'
 
-            // Only redirect if current path is not already appropriate for the role
-            const path = router.pathname
-            const isOnAdminArea = /^\/(admin|users|settings|participants)(\/|$)/.test(path)
-            const isOnUserArea = /^\/(?:register|profile|organization-access)(?:\/|$)/.test(path)
-
-            const shouldRedirect = isAdmin ? !isOnAdminArea : !isOnUserArea
-            if (shouldRedirect && path !== target) router.replace(target)
+            // Steer the freshly-authenticated user to their role's home ONLY from the
+            // post-login landing — the Keycloak login redirect returns to "/". On any
+            // real route (e.g. a browser refresh of a deep page, which re-runs SSO and
+            // re-fires onAuthSuccess) leave them exactly where they are; per-page route
+            // guards enforce access control regardless.
+            if (router.pathname === '/') {
+              router.replace(target)
+            }
           }}}
-        onTokens={(tokens) => {
-          storeKeycloakTokens(tokens as Record<string, unknown>)
-        }}
       >
         <LanguageProvider>
           <SettingsProvider>

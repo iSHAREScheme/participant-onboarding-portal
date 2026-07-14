@@ -10,7 +10,15 @@ import {
   QC_TYPE_WEB_OID 
 } from 'const/cert'
 
-export default async function preValidateEidasCert (file: File) {
+/**
+ * Validate an uploaded X.509 certificate before sending it to the registry.
+ * Qualified-certificate statements are optional unless explicitly required by
+ * the deployment's onboarding settings.
+ */
+export default async function preValidateEidasCert (
+  file: File,
+  requireQualifiedCertificate = false
+) {
   if (!(file.type === 'application/pkix-cert' || file.type === 'application/x-x509-ca-cert' || file.type === '')) {
     const n = file.name.toLowerCase()
     const allowed = n.endsWith('.cer') || n.endsWith('.crt') || n.endsWith('.der') || n.endsWith('.pem')
@@ -122,8 +130,9 @@ export default async function preValidateEidasCert (file: File) {
       oid === QC_TYPE_ESIGN_OID || oid === QC_TYPE_ESEAL_OID || oid === QC_TYPE_WEB_OID
     )
 
-    // Decision rule
-    if (!(hasQcCompliance && (hasQualifiedPolicy || hasQualifiedType))) {
+    // Optional qualified-certificate rule. Basic parsing, expiry and registry
+    // trust validation remain active when this stricter rule is disabled.
+    if (requireQualifiedCertificate && !(hasQcCompliance && (hasQualifiedPolicy || hasQualifiedType))) {
       throw Error("The uploaded certificate is not an EU Qualified (eIDAS) certificate at substantial/high level. Please provide a Qualified certificate (with QCCompliance and QCP/QCType).")
     }
 

@@ -3,78 +3,133 @@
   width: 100%;
 }
 
-.label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  color: #333;
-  text-transform: uppercase;
-}
-
-.required {
-  color: #ff0000;
-  margin-left: 4px;
-}
-
-.select {
+.control {
   position: relative;
+}
+
+/* Mirrors FormInput's field: neutral border, 8px radius, same fill/typography,
+   so a select reads as a sibling of the text inputs rather than a primary button. */
+.select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  padding: 15px 16px;
-  background: #fff;
-  border: 1px solid var(--button-primary, #0088cc);
-  border-radius: 2px;
+  /* Match FormInput exactly: fixed 38px box (border-box) with only horizontal
+     padding — flex centres the value + caret vertically, so the select lines up
+     flush with the text inputs instead of growing taller from vertical padding. */
+  height: 38px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  background: var(--input-background, #fff);
+  border: 1px solid #c3cccd;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--button-primary, #0088cc);
-  font-size: 15px;
-  font-weight: 550;
+  transition: border-color 0.2s ease;
+  color: #013a57;
+  font-size: 18px;
+  font-weight: 500;
 }
 
 .select:hover {
-  background: var(--button-primary, #0088cc);
-  color: white;
+  border-color: #757575;
 }
 
 .select.active {
-  background: white;
-  color: var(--button-primary, #0088cc);
+  border-color: #757575;
+  outline: none;
 }
 
-.selectedValue {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.disabled {
+  background: #f5f7f7;
+  color: #a0a0a0;
+  cursor: not-allowed;
+  border-color: #e0e5e5;
 }
 
-.dot {
-  width: 13px;
-  height: 13px;
-  background: currentColor;
-  border-radius: 50%;
+.disabled:hover {
+  border-color: #e0e5e5;
+}
+
+.value {
+  flex: 1 1 auto;
+  min-height: 1.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret {
+  flex: 0 0 auto;
+  color: #757575;
+  transition: transform 0.2s ease;
+}
+
+.caretOpen {
+  transform: rotate(180deg);
+}
+
+/* Floating label identical to FormInput: centred placeholder when empty, floated
+   into a notch cut from the top border once active. */
+.label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 400;
+  color: #013a5799;
+  font-size: 18px;
+  transition: all 0.2s ease-in-out;
+  pointer-events: none;
+  padding: 0 4px;
+  z-index: 1;
+}
+
+.labelActive {
+  top: 0;
+  left: 8px;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: #013a57;
+  font-weight: 400;
+  padding: 0 6px;
+  background: var(--input-background, #fff);
+}
+
+.required {
+  color: #ff3b30;
+  margin-left: 2px;
 }
 
 .dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.3);
+  background: #fff;
+  border: 1px solid #c3cccd;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(1, 58, 87, 0.12);
   z-index: 1000;
-  padding: 0.5rem 0.75rem;
+  padding: 4px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .option {
-  padding: 12px 16px;
+  padding: 10px 12px;
   cursor: pointer;
-  color: var(--button-primary, #0088cc);
-  font-size: 15px;
+  color: #013a57;
+  font-size: 16px;
   font-weight: 500;
+  border-radius: 6px;
 }
 
 .option:hover {
-  background: var(--button-primary, #0088cc);
-  color: white;
+  background: #f0f4f5;
+}
+
+.optionSelected {
+  background: #eef2ff;
+  color: #3730a3;
 }
