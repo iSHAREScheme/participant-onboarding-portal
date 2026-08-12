@@ -116,53 +116,23 @@ func (h *HandlerRegistry) TestConnection(c *fiber.Ctx) error {
 // @Success      200  {object}  map[string]interface{}
 // @Router       /registry/dataspaces [get]
 func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
-	client := &http.Client{}
-	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	// v3 satellites paginate the dataspaces list (default pageSize 10). This is a
+	// selector, so request a single large page to return the full set rather than
+	// only the first page; unversioned 2.x satellites simply ignore the params.
+	query := url.Values{}
+	query.Set("page", "1")
+	query.Set("pageSize", "100")
+
+	// The wrapper key differs by satellite version: v3 uses dataspacesToken,
+	// legacy 2.x uses dataspace_list_token (dataspaces_token is tolerated as an
+	// alternate spelling).
+	claims, status, errMsg := h.fetchSatelliteSignedClaims("/dataspaces", "dataspaces", query,
+		"dataspacesToken", "dataspaces_token", "dataspace_list_token")
+	if errMsg != "" {
+		return responses.ErrorResponse(c, status, errMsg)
 	}
 
-	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/dataspaces"), nil)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
-	}
-	req.Header.Add("Authorization", "Bearer "+accessToken)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to fetch dataspaces")
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: GET /dataspaces status=%d", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return responses.ErrorResponse(c, resp.StatusCode, "satellite dataspaces request failed")
-	}
-
-	// The response wraps a signed JWT (dataspacesToken / dataspaces_token) whose
-	// payload carries the dataspace list; unwrap and flatten to {id, title}.
-	var wrapper map[string]interface{}
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to parse dataspaces response")
-	}
-	token, _ := wrapper["dataspacesToken"].(string)
-	if token == "" {
-		token, _ = wrapper["dataspaces_token"].(string)
-	}
-
-	dataspaces := []fiber.Map{}
-	if parts := strings.Split(token, "."); len(parts) == 3 {
-		if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-			var claims map[string]interface{}
-			if json.Unmarshal(payload, &claims) == nil {
-				dataspaces = extractDataspaces(claims)
-			}
-		}
-	}
-
-	return c.JSON(fiber.Map{"dataspaces": dataspaces})
+	return c.JSON(fiber.Map{"dataspaces": extractDataspaces(claims)})
 }
 
 // GetFrameworks godoc
@@ -187,52 +157,18 @@ func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	client := &http.Client{}
-	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
+	query := url.Values{}
+	query.Set("page", strconv.Itoa(page))
+	query.Set("pageSize", strconv.Itoa(pageSize))
+
+	// The wrapper key differs by satellite version: v3 uses frameworksToken,
+	// legacy 2.x uses frameworks_token.
+	claims, status, errMsg := h.fetchSatelliteSignedClaims("/frameworks", "frameworks", query,
+		"frameworksToken", "frameworks_token")
+	if errMsg != "" {
+		return responses.ErrorResponse(c, status, errMsg)
 	}
 
-	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/frameworks")
-	values := url.Values{}
-	values.Set("page", strconv.Itoa(page))
-	values.Set("pageSize", strconv.Itoa(pageSize))
-	endpoint += "?" + values.Encode()
-
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
-	}
-	req.Header.Add("Authorization", "Bearer "+accessToken)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to fetch frameworks")
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if h.Config.SatelliteDebug {
-		log.Printf("satellite: GET /frameworks status=%d", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return responses.ErrorResponse(c, resp.StatusCode, "satellite frameworks request failed")
-	}
-
-	var wrapper map[string]interface{}
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to parse frameworks response")
-	}
-	token, _ := wrapper["frameworksToken"].(string)
-	if token == "" {
-		token, _ = wrapper["frameworks_token"].(string)
-	}
-
-	claims := map[string]interface{}{}
-	if parts := strings.Split(token, "."); len(parts) == 3 {
-		if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-			_ = json.Unmarshal(payload, &claims)
-		}
-	}
 	frameworks, pagination := extractFrameworks(claims)
 	if len(pagination) == 0 {
 		pagination["currentPage"] = page
@@ -247,17 +183,40 @@ func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
 	})
 }
 
+// firstString returns the first non-empty string value found among the given
+// keys, so callers can tolerate version-dependent field naming in one lookup.
+func firstString(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 // extractDataspaces defensively pulls {id, title} entries out of a decoded
-// dataspacesToken payload, tolerating the different nestings the satellite may
-// use (dataspacesInfo as an array, or wrapping a `dataspaces` array).
+// dataspaces token payload, tolerating the two satellite dialects:
+//   - v3 (camelCase): container "dataspacesInfo", items {id, title}
+//   - legacy 2.x (snake_case): container "dataspace_info", items
+//     {dataspace_id, dataspace_title}
+//
+// In both dialects the container may be a bare array or a paginated object
+// whose rows live under "data" (older builds used "dataspaces").
 func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 	out := []fiber.Map{}
 	var arr []interface{}
-	switch v := claims["dataspacesInfo"].(type) {
+
+	container := claims["dataspacesInfo"]
+	if container == nil {
+		container = claims["dataspace_info"]
+	}
+	switch v := container.(type) {
 	case []interface{}:
 		arr = v
 	case map[string]interface{}:
-		if inner, ok := v["dataspaces"].([]interface{}); ok {
+		if inner, ok := v["data"].([]interface{}); ok {
+			arr = inner
+		} else if inner, ok := v["dataspaces"].([]interface{}); ok {
 			arr = inner
 		}
 	}
@@ -271,11 +230,11 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 		if !ok {
 			continue
 		}
-		id, _ := m["id"].(string)
-		if strings.TrimSpace(id) == "" {
+		id := firstString(m, "id", "dataspace_id")
+		if id == "" {
 			continue
 		}
-		title, _ := m["title"].(string)
+		title := firstString(m, "title", "dataspace_title")
 		out = append(out, fiber.Map{"id": id, "title": title})
 	}
 	return out
@@ -837,6 +796,67 @@ func partyMatchesSearch(m map[string]interface{}, q string) bool {
 		}
 	}
 	return false
+}
+
+// fetchSatelliteSignedClaims performs an owner-authenticated GET against a
+// versioned satellite endpoint that responds with a signed JWT wrapper (e.g.
+// /dataspaces, /frameworks) and returns the decoded token payload (claims).
+// The wrapper key varies by satellite version, so callers pass the candidate
+// keys in priority order; label is used for error text and debug logging.
+// On failure it returns an HTTP status and a user-facing message; an empty
+// message means success. A missing or malformed token yields empty claims
+// rather than an error, so callers render an empty list instead of failing.
+func (h *HandlerRegistry) fetchSatelliteSignedClaims(path, label string, query url.Values, tokenKeys ...string) (map[string]interface{}, int, string) {
+	client := &http.Client{}
+	accessToken, err := satellite.GetOwnerAccessToken(client, h.Config)
+	if err != nil {
+		return nil, fiber.StatusBadGateway, "Failed to obtain satellite access token"
+	}
+
+	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+path)
+	if enc := query.Encode(); enc != "" {
+		endpoint += "?" + enc
+	}
+
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, fiber.StatusInternalServerError, "Failed to create request"
+	}
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fiber.StatusBadGateway, "Failed to fetch " + label
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if h.Config.SatelliteDebug {
+		log.Printf("satellite: GET %s status=%d", path, resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, "satellite " + label + " request failed"
+	}
+
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal(body, &wrapper); err != nil {
+		return nil, fiber.StatusInternalServerError, "Failed to parse " + label + " response"
+	}
+
+	// The satellite returns the list inside a signed JWT under a version-specific
+	// wrapper key; use the first candidate the response actually carries.
+	token := ""
+	for _, k := range tokenKeys {
+		if s, ok := wrapper[k].(string); ok && s != "" {
+			token = s
+			break
+		}
+	}
+
+	claims, err := decodeJWTPayload(token)
+	if err != nil {
+		claims = map[string]interface{}{}
+	}
+	return claims, resp.StatusCode, ""
 }
 
 // fetchSatelliteParties queries the satellite /parties endpoint (with an
