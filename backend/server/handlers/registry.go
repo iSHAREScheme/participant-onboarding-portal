@@ -122,7 +122,16 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadGateway, "Failed to obtain satellite access token")
 	}
 
-	req, err := http.NewRequest("GET", joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/dataspaces"), nil)
+	// v3 satellites paginate the dataspaces list (default pageSize 10). This is a
+	// selector, so ask for a single large page to return the full set rather than
+	// only the first page; unversioned 2.x satellites simply ignore the params.
+	endpoint := joinSatelliteURL(h.Config.SatelliteBaseUrl, h.Config.SatelliteV3Prefix()+"/dataspaces")
+	values := url.Values{}
+	values.Set("page", "1")
+	values.Set("pageSize", "100")
+	endpoint += "?" + values.Encode()
+
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create request")
 	}
@@ -141,8 +150,10 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, resp.StatusCode, "satellite dataspaces request failed")
 	}
 
-	// The response wraps a signed JWT (dataspacesToken / dataspaces_token) whose
-	// payload carries the dataspace list; unwrap and flatten to {id, title}.
+	// The response wraps a signed JWT whose payload carries the dataspace list;
+	// unwrap and flatten to {id, title}. The wrapper key differs by satellite
+	// version: v3 uses dataspacesToken, legacy 2.x uses dataspace_list_token
+	// (dataspaces_token is tolerated as an alternate spelling).
 	var wrapper map[string]interface{}
 	if err := json.Unmarshal(body, &wrapper); err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to parse dataspaces response")
@@ -150,6 +161,9 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 	token, _ := wrapper["dataspacesToken"].(string)
 	if token == "" {
 		token, _ = wrapper["dataspaces_token"].(string)
+	}
+	if token == "" {
+		token, _ = wrapper["dataspace_list_token"].(string)
 	}
 
 	dataspaces := []fiber.Map{}
@@ -247,17 +261,40 @@ func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
 	})
 }
 
+// firstString returns the first non-empty string value found among the given
+// keys, so callers can tolerate version-dependent field naming in one lookup.
+func firstString(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if s, ok := m[k].(string); ok && strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 // extractDataspaces defensively pulls {id, title} entries out of a decoded
-// dataspacesToken payload, tolerating the different nestings the satellite may
-// use (dataspacesInfo as an array, or wrapping a `dataspaces` array).
+// dataspaces token payload, tolerating the two satellite dialects:
+//   - v3 (camelCase): container "dataspacesInfo", items {id, title}
+//   - legacy 2.x (snake_case): container "dataspace_info", items
+//     {dataspace_id, dataspace_title}
+//
+// In both dialects the container may be a bare array or a paginated object
+// whose rows live under "data" (older builds used "dataspaces").
 func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 	out := []fiber.Map{}
 	var arr []interface{}
-	switch v := claims["dataspacesInfo"].(type) {
+
+	container := claims["dataspacesInfo"]
+	if container == nil {
+		container = claims["dataspace_info"]
+	}
+	switch v := container.(type) {
 	case []interface{}:
 		arr = v
 	case map[string]interface{}:
-		if inner, ok := v["dataspaces"].([]interface{}); ok {
+		if inner, ok := v["data"].([]interface{}); ok {
+			arr = inner
+		} else if inner, ok := v["dataspaces"].([]interface{}); ok {
 			arr = inner
 		}
 	}
@@ -271,11 +308,11 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 		if !ok {
 			continue
 		}
-		id, _ := m["id"].(string)
-		if strings.TrimSpace(id) == "" {
+		id := firstString(m, "id", "dataspace_id")
+		if id == "" {
 			continue
 		}
-		title, _ := m["title"].(string)
+		title := firstString(m, "title", "dataspace_title")
 		out = append(out, fiber.Map{"id": id, "title": title})
 	}
 	return out
