@@ -262,6 +262,38 @@ func frontendClientUUID(admin *keycloak.AdminClient) (string, error) {
 
 // assignClientRole grants a frontend client role to a user (the client
 // role-mappings POST needs the full role representation, so fetch it first).
+// setUserPartyID records the party a user belongs to as the "partyId" user
+// attribute. A realm protocol mapper surfaces it as the partyId token claim that
+// PR-MW's authorizePartyScope reads, so a PartyAdmin is scoped to this party.
+// GET-merge-PUT so other attributes are preserved.
+func (h *HandlerKeycloak) setUserPartyID(admin *keycloak.AdminClient, userID, partyID string) error {
+	status, body, err := admin.Do(http.MethodGet, "/users/"+escapeSegment(userID), nil)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("%s", keycloak.ExtractError(status, body))
+	}
+	var user map[string]any
+	if err := json.Unmarshal(body, &user); err != nil {
+		return err
+	}
+	attrs, _ := user["attributes"].(map[string]any)
+	if attrs == nil {
+		attrs = map[string]any{}
+	}
+	attrs["partyId"] = []string{partyID}
+	user["attributes"] = attrs
+	status, body, err = admin.Do(http.MethodPut, "/users/"+escapeSegment(userID), user)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusNoContent && status != http.StatusOK {
+		return fmt.Errorf("%s", keycloak.ExtractError(status, body))
+	}
+	return nil
+}
+
 func (h *HandlerKeycloak) assignClientRole(admin *keycloak.AdminClient, userID, roleName string) error {
 	clientUUID, err := frontendClientUUID(admin)
 	if err != nil {

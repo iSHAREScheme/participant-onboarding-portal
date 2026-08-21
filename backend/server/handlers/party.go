@@ -1154,6 +1154,39 @@ func buildEherkenningConsentRecord(p *models.Proposal) []byte {
 // @Failure      404  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
 // @Router       /proposals/{id}/complete [post]
+// grantOnboardingPartyAdmin makes the applicant the PartyAdmin of the party they
+// just onboarded (U2 role model): it assigns the PartyAdmin frontend client role
+// and records their party id as a KC user attribute (surfaced as the partyId claim
+// PR-MW scopes on). Best-effort: the party is already created by this point, so a
+// failure is logged and never blocks completion. No-op under OIDC-disabled (dev).
+func (h *HandlerParty) grantOnboardingPartyAdmin(proposal *models.Proposal) {
+	if h.Config.OIDCDisable {
+		return
+	}
+	username := strings.TrimSpace(proposal.KeycloakUsername)
+	partyID := strings.TrimSpace(proposal.PartyId)
+	if username == "" || partyID == "" {
+		return
+	}
+	hk := &HandlerKeycloak{Server: h.Server, Config: h.Config}
+	admin, err := hk.admin()
+	if err != nil {
+		log.Printf("onboarding: keycloak admin unavailable, not granting PartyAdmin to %q: %v", username, err)
+		return
+	}
+	userID, err := hk.findUserIDByUsername(admin, username)
+	if err != nil || userID == "" {
+		log.Printf("onboarding: could not resolve keycloak user %q to grant PartyAdmin: %v", username, err)
+		return
+	}
+	if err := hk.assignClientRole(admin, userID, middlewares.RolePartyAdmin); err != nil {
+		log.Printf("onboarding: could not assign PartyAdmin to %q (party %q): %v", username, partyID, err)
+	}
+	if err := hk.setUserPartyID(admin, userID, partyID); err != nil {
+		log.Printf("onboarding: could not set partyId=%q on %q: %v", partyID, username, err)
+	}
+}
+
 func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	id := c.Params("id")
 
@@ -1380,6 +1413,8 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		proposal.PartyId = normalizedPartyID
 	}
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(&proposal)
 
 	// Save the changes
 	result = h.Server.DB.Save(&proposal)
@@ -1472,6 +1507,8 @@ func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Propos
 	// downstream issuer/webhook flows key credentials by the registry DID.
 	proposal.PartyId = partyDID
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(proposal)
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
 	}
@@ -1581,6 +1618,8 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 	// downstream issuer/webhook flows key credentials by the registry DID.
 	proposal.PartyId = partyDID
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(proposal)
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
 	}
