@@ -798,19 +798,11 @@ func (h *HandlerParty) GetProposals(c *fiber.Ctx) error {
 // @Success      200  {object}  models.Proposal
 // @Failure      404  {object}  map[string]string
 // @Router       /proposals/{id} [get]
-// isOnboardingAdmin reports whether the authenticated session carries the
-// onboarding-admin realm role — the same role RequireAdminRole enforces on the
-// admin-only routes.
-func isOnboardingAdmin(claims *middlewares.KeycloakClaims) bool {
-	if claims == nil {
-		return false
-	}
-	for _, r := range claims.RealmAccess.Roles {
-		if r == "onboarding-admin" {
-			return true
-		}
-	}
-	return false
+// isSatelliteAdmin reports whether the authenticated session holds the
+// SatelliteAdmin frontend client role (or higher, e.g. SchemeOwner) — the same
+// operator role RequireAdminRole enforces on the admin-only routes.
+func isSatelliteAdmin(claims *middlewares.KeycloakClaims) bool {
+	return middlewares.HasRoleAtLeast(claims, middlewares.RoleSatelliteAdmin)
 }
 
 // callerMayActOnProposal authorises access to a single proposal: the session
@@ -828,7 +820,7 @@ func (h *HandlerParty) callerMayActOnProposal(c *fiber.Ctx, proposal *models.Pro
 	if claims == nil {
 		return false
 	}
-	if isOnboardingAdmin(claims) {
+	if isSatelliteAdmin(claims) {
 		return true
 	}
 	owner := strings.TrimSpace(proposal.KeycloakUsername)

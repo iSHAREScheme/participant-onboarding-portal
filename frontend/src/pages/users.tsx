@@ -279,13 +279,13 @@ const Users: NextPage = () => {
                     <span
                       className={`${styles.role} ${
                         styles[
-                          user.roles?.includes("onboarding-admin")
+                          user.roles?.includes("SatelliteAdmin")
                             ? "adminRole"
                             : "userRole"
                         ]
                       }`}
                     >
-                      {user.roles?.includes("onboarding-admin")
+                      {user.roles?.includes("SatelliteAdmin")
                         ? t("users.roles.admin")
                         : t("users.roles.user")}
                     </span>

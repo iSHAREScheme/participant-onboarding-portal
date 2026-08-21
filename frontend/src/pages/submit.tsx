@@ -1,3 +1,4 @@
+import { isSatelliteOperator } from "utils/roles";
 import React, { useState, useRef, useEffect } from "react";
 import { NextPage } from "next";
 import { useFormik } from "formik";
@@ -101,8 +102,7 @@ const Submit: NextPage = () => {
   // form the API will reject; the applicant onboarding flow lives at /register.
   const isAdmin = Boolean(
     keycloak?.authenticated &&
-    typeof keycloak.hasRealmRole === "function" &&
-    keycloak.hasRealmRole("onboarding-admin")
+    isSatelliteOperator(keycloak)
   );
   useEffect(() => {
     if (keycloak?.authenticated && !isAdmin) router.replace("/");

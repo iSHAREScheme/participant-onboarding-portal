@@ -1,3 +1,4 @@
+import { isSatelliteOperator } from "utils/roles";
 import React from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -27,7 +28,7 @@ const Header: React.FC = () => {
   const adminRoutesDisabled = env.NEXT_PUBLIC_DISABLE_ADMIN_ROUTES === "true"
   const showAdminNav =
     !!keycloak?.authenticated &&
-    keycloak.hasRealmRole("onboarding-admin") &&
+    isSatelliteOperator(keycloak) &&
     !adminRoutesDisabled
   // Every logged-in user gets the same header shell — hamburger + drawer (with
   // language + account) and the logo on the right on mobile. The admin nav links

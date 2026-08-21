@@ -9,6 +9,7 @@ import (
 
 	"onboardingportal/integrations/keycloak"
 	"onboardingportal/responses"
+	"onboardingportal/server/middlewares"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -21,7 +22,9 @@ import (
 // authenticates with its own admin credentials) and gates access purely on the
 // onboarding-admin realm role, like every other admin route.
 
-const onboardingAdminRole = "onboarding-admin"
+// satelliteAdminRole is the frontend CLIENT role that grants the operator surface
+// (see middlewares.RoleSatelliteAdmin). Replaces the former onboarding-admin realm role.
+const satelliteAdminRole = middlewares.RoleSatelliteAdmin
 
 // usersListCap bounds the single-page user fetch. The portal's operator base is
 // small; raise this (or add pagination) if a realm ever exceeds it.
@@ -69,7 +72,7 @@ func (h *HandlerKeycloak) ListUsers(c *fiber.Ctx) error {
 	for _, u := range raw {
 		u.Roles = []string{}
 		if adminIDs[u.ID] {
-			u.Roles = append(u.Roles, onboardingAdminRole)
+			u.Roles = append(u.Roles, satelliteAdminRole)
 		}
 		users = append(users, u)
 	}
@@ -81,7 +84,11 @@ func (h *HandlerKeycloak) ListUsers(c *fiber.Ctx) error {
 // admin badge — so it returns an empty set rather than an error.
 func (h *HandlerKeycloak) adminRoleMembers(admin *keycloak.AdminClient) map[string]bool {
 	ids := map[string]bool{}
-	status, body, err := admin.Do(http.MethodGet, fmt.Sprintf("/roles/%s/users?max=%d", escapeSegment(onboardingAdminRole), usersListCap), nil)
+	clientUUID, err := frontendClientUUID(admin)
+	if err != nil {
+		return ids
+	}
+	status, body, err := admin.Do(http.MethodGet, fmt.Sprintf("/clients/%s/roles/%s/users?max=%d", escapeSegment(clientUUID), escapeSegment(satelliteAdminRole), usersListCap), nil)
 	if err != nil || status != http.StatusOK {
 		return ids
 	}
@@ -151,7 +158,7 @@ func (h *HandlerKeycloak) CreateUser(c *fiber.Ctx) error {
 	}
 
 	if strings.EqualFold(input.Role, "admin") {
-		if err := h.assignRealmRole(admin, userID, onboardingAdminRole); err != nil {
+		if err := h.assignClientRole(admin, userID, satelliteAdminRole); err != nil {
 			return responses.ErrorResponse(c, fiber.StatusBadGateway, "User created but role assignment failed: "+err.Error())
 		}
 	}
@@ -229,8 +236,38 @@ func (h *HandlerKeycloak) findUserIDByUsername(admin *keycloak.AdminClient, user
 
 // assignRealmRole grants a realm role to a user (the role-mappings POST needs the
 // role's id + name, so it looks the role up first).
-func (h *HandlerKeycloak) assignRealmRole(admin *keycloak.AdminClient, userID, roleName string) error {
-	status, body, err := admin.Do(http.MethodGet, "/roles/"+escapeSegment(roleName), nil)
+// frontendClientUUID resolves the internal id of the "frontend" Keycloak client,
+// whose client roles carry the satellite RBAC.
+func frontendClientUUID(admin *keycloak.AdminClient) (string, error) {
+	status, body, err := admin.Do(http.MethodGet, "/clients?clientId="+escapeSegment(middlewares.FrontendClientID), nil)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("%s", keycloak.ExtractError(status, body))
+	}
+	var clients []map[string]any
+	if err := json.Unmarshal(body, &clients); err != nil {
+		return "", err
+	}
+	if len(clients) == 0 {
+		return "", fmt.Errorf("keycloak client %q not found", middlewares.FrontendClientID)
+	}
+	id, _ := clients[0]["id"].(string)
+	if id == "" {
+		return "", fmt.Errorf("keycloak client %q has no id", middlewares.FrontendClientID)
+	}
+	return id, nil
+}
+
+// assignClientRole grants a frontend client role to a user (the client
+// role-mappings POST needs the full role representation, so fetch it first).
+func (h *HandlerKeycloak) assignClientRole(admin *keycloak.AdminClient, userID, roleName string) error {
+	clientUUID, err := frontendClientUUID(admin)
+	if err != nil {
+		return err
+	}
+	status, body, err := admin.Do(http.MethodGet, "/clients/"+escapeSegment(clientUUID)+"/roles/"+escapeSegment(roleName), nil)
 	if err != nil {
 		return err
 	}
@@ -242,7 +279,7 @@ func (h *HandlerKeycloak) assignRealmRole(admin *keycloak.AdminClient, userID, r
 		return err
 	}
 	payload := []map[string]any{{"id": role["id"], "name": role["name"]}}
-	status, body, err = admin.Do(http.MethodPost, "/users/"+escapeSegment(userID)+"/role-mappings/realm", payload)
+	status, body, err = admin.Do(http.MethodPost, "/users/"+escapeSegment(userID)+"/role-mappings/clients/"+escapeSegment(clientUUID), payload)
 	if err != nil {
 		return err
 	}
