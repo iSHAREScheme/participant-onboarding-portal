@@ -1117,7 +1117,9 @@ const en = {
     },
     roles: {
       user: "User",
-      admin: "Administrator"
+      admin: "Administrator",
+      satelliteAdmin: "Satellite admin",
+      partyAdmin: "Party admin"
     },
     validation: {
       emailRequired: "Email is required",

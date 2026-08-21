@@ -1101,7 +1101,9 @@ const nl = {
     },
     roles: {
       user: "Gebruiker",
-      admin: "Beheerder"
+      admin: "Beheerder",
+      satelliteAdmin: "Satellietbeheerder",
+      partyAdmin: "Partijbeheerder"
     },
     messages: {
       error: {

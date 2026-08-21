@@ -441,8 +441,8 @@ export class API {
   listKeycloakUsers () {
     return this.client.get<{ users: KeycloakUser[] }>(`/users`)
   }
-  // Create a user (role "user" | "admin"); the backend also emails a set-password link.
-  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "user" | "admin" }) {
+  // Create a user (role = a frontend client role); the backend also emails a set-password link.
+  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "SatelliteAdmin" | "PartyAdmin" | "User" }) {
     return this.client.post(`/users`, body)
   }
   deleteKeycloakUser (id: string) {

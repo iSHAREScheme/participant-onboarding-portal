@@ -23,7 +23,7 @@ const Users: NextPage = () => {
     email: "",
     firstName: "",
     lastName: "",
-    role: "user",
+    role: "User",
   });
   const { t } = useLanguage();
   const [validationErrors, setValidationErrors] = useState({
@@ -109,11 +109,11 @@ const Users: NextPage = () => {
         email: newUserData.email.trim(),
         firstName: newUserData.firstName.trim(),
         lastName: newUserData.lastName.trim(),
-        role: newUserData.role === "admin" ? "admin" : "user",
+        role: newUserData.role as "SatelliteAdmin" | "PartyAdmin" | "User",
       });
       fetchData();
       setIsDialogOpen(false);
-      setNewUserData({ email: "", firstName: "", lastName: "", role: "user" });
+      setNewUserData({ email: "", firstName: "", lastName: "", role: "User" });
     } catch (error) {
       setError(apiError(error, t("users.messages.error.create")));
     }
@@ -222,8 +222,13 @@ const Users: NextPage = () => {
                     value={newUserData.role}
                     onChange={(e) => handleInputChange(e)}
                   >
-                    <option value="user">{t("users.roles.user")}</option>
-                    <option value="admin">{t("users.roles.admin")}</option>
+                    <option value="SatelliteAdmin">
+                      {t("users.roles.satelliteAdmin")}
+                    </option>
+                    <option value="PartyAdmin">
+                      {t("users.roles.partyAdmin")}
+                    </option>
+                    <option value="User">{t("users.roles.user")}</option>
                   </select>
                 </div>
               </div>
@@ -278,15 +283,17 @@ const Users: NextPage = () => {
                   <td data-label={t("users.table.headers.role")}>
                     <span
                       className={`${styles.role} ${
-                        styles[
-                          user.roles?.includes("SatelliteAdmin")
-                            ? "adminRole"
-                            : "userRole"
-                        ]
+                        user.roles?.[0] === "SatelliteAdmin"
+                          ? styles.adminRole
+                          : user.roles?.[0] === "PartyAdmin"
+                          ? styles.partyAdminRole
+                          : styles.userRole
                       }`}
                     >
-                      {user.roles?.includes("SatelliteAdmin")
-                        ? t("users.roles.admin")
+                      {user.roles?.[0] === "SatelliteAdmin"
+                        ? t("users.roles.satelliteAdmin")
+                        : user.roles?.[0] === "PartyAdmin"
+                        ? t("users.roles.partyAdmin")
                         : t("users.roles.user")}
                     </span>
                   </td>
