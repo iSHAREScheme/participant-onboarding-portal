@@ -107,6 +107,32 @@
       }
     ],
     "client": {
+      "frontend": [
+        {
+          "name": "SatelliteAdmin",
+          "description": "Satellite operator administrator — full satellite portal access",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "d62a0cf3-eaed-4273-a6f2-8cbb85c7e74d",
+          "attributes": {}
+        },
+        {
+          "name": "PartyAdmin",
+          "description": "Administrator for a single onboarded party (party-scoped)",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "d62a0cf3-eaed-4273-a6f2-8cbb85c7e74d",
+          "attributes": {}
+        },
+        {
+          "name": "User",
+          "description": "Read-only viewer for a single party (party-scoped)",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "d62a0cf3-eaed-4273-a6f2-8cbb85c7e74d",
+          "attributes": {}
+        }
+      ],
       "realm-management": [
         {
           "id": "615a501c-947f-49b0-a13c-eaca5b9be5bc",
@@ -443,6 +469,9 @@
         "onboarding-admin"
       ],
       "clientRoles": {
+        "frontend": [
+          "SatelliteAdmin"
+        ],
         "realm-management": [
           "realm-admin"
         ]
@@ -754,6 +783,22 @@
       "fullScopeAllowed": true,
       "nodeReRegistrationTimeout": -1,
       "protocolMappers": [
+        {
+          "name": "partyId",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "partyId",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "partyId",
+            "jsonType.label": "String"
+          }
+        },
         {
           "id": "a981334d-a8e8-405c-9a83-9d2efc959cdc",
           "name": "companyName",
