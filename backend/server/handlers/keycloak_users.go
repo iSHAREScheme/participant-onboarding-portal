@@ -22,14 +22,19 @@ import (
 // authenticates with its own admin credentials) and gates access purely on the
 // onboarding-admin realm role, like every other admin route.
 
-// createRoles are the frontend client roles the Users admin screen can assign and
-// display, in DESCENDING privilege order — the order also drives the list badge
-// (highest held role first).
+// createRoles are the frontend client roles the Users admin screen can assign,
+// in DESCENDING privilege order.
 var createRoles = []string{
 	middlewares.RoleSatelliteAdmin,
 	middlewares.RolePartyAdmin,
 	middlewares.RoleUser,
 }
+
+// listRoles are the frontend client roles the Users screen REPORTS, highest
+// first — the order drives the list badge (roles[0] = highest held role).
+// SchemeOwner is reportable (the scheme owner account holds it on a shared
+// realm) but deliberately not creatable from this screen.
+var listRoles = append([]string{middlewares.RoleSchemeOwner}, createRoles...)
 
 // normalizeCreateRole maps a create-user role input to a canonical frontend client
 // role. It accepts the client-role names and the legacy "admin"/"user" values, and
@@ -101,7 +106,7 @@ func (h *HandlerKeycloak) ListUsers(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"users": users})
 }
 
-// frontendRoleMembership returns userID -> the createRoles that user holds, in
+// frontendRoleMembership returns userID -> the listRoles that user holds, in
 // descending-privilege order (createRoles order). A per-role lookup failure is
 // non-fatal — that role is just omitted — so the list still renders.
 func (h *HandlerKeycloak) frontendRoleMembership(admin *keycloak.AdminClient) map[string][]string {
@@ -110,7 +115,7 @@ func (h *HandlerKeycloak) frontendRoleMembership(admin *keycloak.AdminClient) ma
 	if err != nil {
 		return out
 	}
-	for _, role := range createRoles {
+	for _, role := range listRoles {
 		status, body, err := admin.Do(http.MethodGet, fmt.Sprintf("/clients/%s/roles/%s/users?max=%d", escapeSegment(clientUUID), escapeSegment(role), usersListCap), nil)
 		if err != nil || status != http.StatusOK {
 			continue

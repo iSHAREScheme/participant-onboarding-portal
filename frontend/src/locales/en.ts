@@ -1133,6 +1133,7 @@ const en = {
       user: "User",
       admin: "Administrator",
       satelliteAdmin: "Satellite admin",
+      schemeOwner: "Scheme owner",
       partyAdmin: "Party admin"
     },
     validation: {

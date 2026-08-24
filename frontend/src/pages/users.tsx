@@ -283,6 +283,7 @@ const Users: NextPage = () => {
                   <td data-label={t("users.table.headers.role")}>
                     <span
                       className={`${styles.role} ${
+                        user.roles?.[0] === "SchemeOwner" ||
                         user.roles?.[0] === "SatelliteAdmin"
                           ? styles.adminRole
                           : user.roles?.[0] === "PartyAdmin"
@@ -290,7 +291,9 @@ const Users: NextPage = () => {
                           : styles.userRole
                       }`}
                     >
-                      {user.roles?.[0] === "SatelliteAdmin"
+                      {user.roles?.[0] === "SchemeOwner"
+                        ? t("users.roles.schemeOwner")
+                        : user.roles?.[0] === "SatelliteAdmin"
                         ? t("users.roles.satelliteAdmin")
                         : user.roles?.[0] === "PartyAdmin"
                         ? t("users.roles.partyAdmin")

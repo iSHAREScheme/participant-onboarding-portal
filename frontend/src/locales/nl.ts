@@ -1117,6 +1117,7 @@ const nl = {
       user: "Gebruiker",
       admin: "Beheerder",
       satelliteAdmin: "Satellietbeheerder",
+      schemeOwner: "Scheme-eigenaar",
       partyAdmin: "Partijbeheerder"
     },
     messages: {
