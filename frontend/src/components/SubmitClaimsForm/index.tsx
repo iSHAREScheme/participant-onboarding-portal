@@ -290,6 +290,54 @@ const SubmitClaimsForm: React.FC = () => {
   // Tracks which upload zone is currently being dragged over (by zone id).
   const [dragZone, setDragZone] = useState<string | null>(null);
 
+  // --- Creation wizard --------------------------------------------------------
+  // The single-page form is split into steps, starting from the certificate:
+  // most of the party's identity (party id, name, subject, validity) derives
+  // from the uploaded cert. Claim drafts keep their fixed MINIMUM_CLAIM_TYPES
+  // positions — each step just renders a subset of them:
+  //   0 certificate (claim 3) → 1 party identity → 2 framework claims (0-2)
+  //   → 3 additional claims (4+) → 4 review & create.
+  const WIZARD_STEPS = ["certificate", "party", "framework", "extras", "review"];
+  const [step, setStep] = useState(0);
+  const [wizardError, setWizardError] = useState<string | null>(null);
+  const claimStepOf = (index: number) => (index === 3 ? 0 : index <= 2 ? 2 : 3);
+
+  const stepError = (): string | null => {
+    if (step === 1) {
+      if (!partyId.trim()) return "submit.wizard.needPartyId";
+      if (!partyName.trim()) return "submit.wizard.needPartyName";
+    }
+    if (step === 2) {
+      const [compliance, agreement, role] = claims;
+      if (!compliance?.frameworkId?.trim()) return "submit.wizard.needFramework";
+      if (
+        !agreement?.agreementType?.trim() ||
+        !agreement?.agreementId?.trim() ||
+        !agreement?.title?.trim()
+      )
+        return "submit.wizard.needAgreement";
+      if (!role?.roleId?.trim()) return "submit.wizard.needRole";
+    }
+    return null;
+  };
+
+  const goNext = () => {
+    const err = stepError();
+    setWizardError(err);
+    if (!err) setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
+  };
+  const goBack = () => {
+    setWizardError(null);
+    setStep((s) => Math.max(s - 1, 0));
+  };
+
+  // The registry requires an x509 certificate unless the party's framework role
+  // is ServiceConsumer or EntitledParty (mirrors ValidateV3PartyOnboardingClaims).
+  const certMissing = !claims[3]?.x5c;
+  const certRequired = !["ServiceConsumer", "EntitledParty"].includes(
+    claims[2]?.roleId || ""
+  );
+
   useEffect(() => {
     let mounted = true;
     new API()
@@ -404,6 +452,12 @@ const SubmitClaimsForm: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Only the review step submits — Enter on an earlier step advances instead
+    // (the form fires submit on Enter in any input).
+    if (step !== WIZARD_STEPS.length - 1) {
+      goNext();
+      return;
+    }
     const aka = alsoKnownAs.map((s) => s.trim()).filter(Boolean);
     const party: Party = {
       id: partyId,
@@ -471,16 +525,29 @@ const SubmitClaimsForm: React.FC = () => {
       return;
     }
     try {
-      const { x5c, thumbprint, subjectName } = await extractCertificateFields(
-        file
-      );
+      const parsed = await extractCertificateFields(file);
       updateClaimFields(index, {
-        x5c,
-        "x5t#s256": thumbprint,
-        subjectName,
+        x5c: parsed.x5c,
+        "x5t#s256": parsed.thumbprint,
+        subjectName: parsed.subjectName,
+        // Default the claim window to the certificate's own validity.
+        ...(parsed.validFrom
+          ? { startDate: toDateInputValue(new Date(parsed.validFrom)) }
+          : {}),
+        ...(parsed.validTo
+          ? { endDate: toDateInputValue(new Date(parsed.validTo)) }
+          : {}),
         _certFile: file.name,
         _certError: "",
       });
+      // Derive the party identity from the certificate — prefill only, never
+      // overwrite something the operator already typed.
+      if (parsed.partyId) {
+        setPartyId((prev) => prev || parsed.partyId!.replace(/^did:ishare:/i, ""));
+      }
+      if (parsed.organizationName) {
+        setPartyName((prev) => prev || parsed.organizationName!);
+      }
     } catch (err: any) {
       updateClaimFields(index, {
         _certError: err?.message || t("submit.upload.certParseError"),
@@ -789,8 +856,54 @@ const SubmitClaimsForm: React.FC = () => {
     }
   };
 
+  // Compact one-line summary per claim for the review step.
+  const claimSummary = (c: ClaimDraft): string => {
+    const main =
+      c.type === "frameworkRole"
+        ? roleTitle(c.roleId || "")
+        : c.type === "x509Certificate"
+        ? c.subjectName || t("submit.wizard.noCertificate")
+        : c.type === "frameworkAgreement" || c.type === "dataspaceAgreement"
+        ? c.title || c.agreementId || ""
+        : c.type === "authRegistry"
+        ? c.name || ""
+        : c.type === "dataspaceMembership"
+        ? c.dataspaceId || ""
+        : c.frameworkId || "";
+    const dates = c.startDate ? ` · ${c.startDate} → ${c.endDate || "…"}` : "";
+    return `${main} · ${c.status}${dates}`;
+  };
+
+  const stepIndicator = (
+    <div className={styles.stepsContainer}>
+      {WIZARD_STEPS.map((key, i) => (
+        <div key={key} className={styles.stepWrapper}>
+          <div
+            className={`${styles.stepLabel} ${
+              i <= step ? styles.completed : ""
+            }`}
+          >
+            {t(`submit.steps.${key}`)}
+          </div>
+          <div
+            className={`${styles.step} ${
+              i === step ? styles.active : i < step ? styles.completed : ""
+            }`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit}>
+      {stepIndicator}
+
+      {step === 0 && (
+        <p className={styles.wizardHint}>{t("submit.wizard.certHint")}</p>
+      )}
+
+      {step === 1 && (
       <div className={styles.section}>
         <h2 className={styles.sectionTitle}>{t("submit.identity.heading")}</h2>
         <div className={styles.formGrid}>
@@ -866,8 +979,14 @@ const SubmitClaimsForm: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
-      {claims.map((claim, index) => (
+      {step === 3 && claims.length <= MINIMUM_CLAIM_TYPES.length && (
+        <p className={styles.wizardHint}>{t("submit.wizard.extrasHint")}</p>
+      )}
+
+      {claims.map((claim, index) =>
+        claimStepOf(index) !== step ? null : (
         <div className={styles.section} key={index}>
           <div className={styles.sectionBar}></div>
           <div className={styles.sectionHeader}>
@@ -917,21 +1036,54 @@ const SubmitClaimsForm: React.FC = () => {
           </div>
           {renderTypeUploads(claim, index)}
         </div>
-      ))}
+        )
+      )}
 
-      <div className={styles.buttonGroup}>
-        <Button
-          type="button"
-          variant="secondary"
-          icon={<div>+</div>}
-          onClick={addClaim}
-        >
-          {t("submit.actions.addClaim")}
-        </Button>
-      </div>
+      {step === 3 && (
+        <div className={styles.buttonGroup}>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<div>+</div>}
+            onClick={addClaim}
+          >
+            {t("submit.actions.addClaim")}
+          </Button>
+        </div>
+      )}
 
-      <br />
+      {step === WIZARD_STEPS.length - 1 && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>{t("submit.review.heading")}</h2>
+          <div className={styles.reviewBlock}>
+            <h3>{t("submit.identity.heading")}</h3>
+            <p className={styles.reviewLine}>
+              did:ishare:{partyId} — {partyName || "—"}
+            </p>
+            {alsoKnownAs.filter((a) => a.trim()).length > 0 && (
+              <p className={styles.reviewLine}>
+                {t("submit.identity.alsoKnownAs")}:{" "}
+                {alsoKnownAs.filter((a) => a.trim()).join(", ")}
+              </p>
+            )}
+          </div>
+          {claims.map((c, i) => (
+            <div className={styles.reviewBlock} key={i}>
+              <h3>{t("submit.claimTypes." + c.type)}</h3>
+              <p className={styles.reviewLine}>{claimSummary(c)}</p>
+            </div>
+          ))}
+          {certMissing && certRequired && (
+            <div className={styles.warnMessage}>
+              {t("submit.wizard.certRequiredWarn")}
+            </div>
+          )}
+        </div>
+      )}
 
+      {wizardError && (
+        <div className={styles.errorMessage}>{t(wizardError)}</div>
+      )}
       {error && (
         <div className={styles.errorMessage}>
           {t("submit.messages.submitError", {
@@ -945,10 +1097,27 @@ const SubmitClaimsForm: React.FC = () => {
         </div>
       )}
 
-      <div className={styles.buttonGroup}>
-        <Button type="submit" variant="primary" disabled={loading}>
-          {loading ? t("submit.actions.submitting") : t("submit.actions.create")}
-        </Button>
+      <div className={styles.wizardNav}>
+        <div>
+          {step > 0 && (
+            <Button type="button" variant="secondary" onClick={goBack}>
+              {t("submit.wizard.back")}
+            </Button>
+          )}
+        </div>
+        <div>
+          {step < WIZARD_STEPS.length - 1 ? (
+            <Button type="button" variant="primary" onClick={goNext}>
+              {t("submit.wizard.next")}
+            </Button>
+          ) : (
+            <Button type="submit" variant="primary" disabled={loading}>
+              {loading
+                ? t("submit.actions.submitting")
+                : t("submit.actions.create")}
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

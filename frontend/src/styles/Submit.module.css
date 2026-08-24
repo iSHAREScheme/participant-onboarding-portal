@@ -198,3 +198,94 @@
     width: 100%;
   }
 }
+
+/* ----- Create-party wizard (stepper mirrors Register.module.css) ----- */
+.stepsContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 0;
+  gap: 1rem;
+  margin: 0 auto 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stepWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.stepLabel {
+  font-size: 0.85rem;
+  line-height: 1.25;
+  text-align: center;
+  color: #6b6b6b;
+}
+
+.stepLabel.completed {
+  color: var(--secondary-color, #013a57);
+  font-weight: 600;
+}
+
+.step {
+  width: 100%;
+  height: 8px;
+  border-radius: 8px;
+  background-color: rgba(1, 58, 87, 0.15);
+  transition: background-color 0.2s ease;
+}
+
+.step.active {
+  background-color: var(--accent-color, var(--secondary-color, #013a57));
+}
+
+.step.completed {
+  background-color: var(--secondary-color, #013a57);
+}
+
+.wizardHint {
+  margin: 0 0 1rem;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.wizardNav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.reviewBlock {
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e2df;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  background: #fbfaf8;
+}
+
+.reviewBlock h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.reviewLine {
+  margin: 0.15rem 0;
+  font-size: 0.95rem;
+  color: #333;
+  overflow-wrap: anywhere;
+}
+
+.warnMessage {
+  background: #fff6e5;
+  border: 1px solid #f0c36d;
+  color: #7a5a00;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  margin: 0.75rem 0;
+}

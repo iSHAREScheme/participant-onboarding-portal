@@ -1606,6 +1606,29 @@ const nl = {
       assertion: "Assertie",
       minimum: "Vereist voor v3-partij"
     },
+    steps: {
+      certificate: "Certificaat",
+      party: "Partijgegevens",
+      framework: "Framework-claims",
+      extras: "Extra claims",
+      review: "Controleren"
+    },
+    wizard: {
+      certHint: "Begin met het X.509-certificaat van de partij: het partij-ID, de naam, het subject en de geldigheid worden er automatisch uit afgeleid. Sla deze stap over voor partijen zonder certificaat (Service Consumer of Entitled Party).",
+      extrasHint: "Voeg optioneel extra claims toe (autorisatieregister, dataspace-lidmaatschap, IdP-assertie, …) — of ga door naar controleren.",
+      back: "Terug",
+      next: "Volgende",
+      needPartyId: "Vul het partij-ID in voordat je verdergaat.",
+      needPartyName: "Vul de partijnaam in voordat je verdergaat.",
+      needFramework: "De nalevingsclaim heeft een framework-ID nodig.",
+      needAgreement: "De overeenkomstclaim heeft een type, ID en titel nodig.",
+      needRole: "Selecteer een framework-rol voordat je verdergaat.",
+      noCertificate: "Geen certificaat geüpload",
+      certRequiredWarn: "Er is geen certificaat geüpload en de gekozen framework-rol vereist er één — het register zal deze partij weigeren. Ga terug naar de stap Certificaat om er één te uploaden, of kies de rol Service Consumer of Entitled Party."
+    },
+    review: {
+      heading: "Controleren & aanmaken"
+    },
     claimTypes: {
       frameworkCompliance: "Framework-naleving",
       authRegistry: "Autorisatieregister",
