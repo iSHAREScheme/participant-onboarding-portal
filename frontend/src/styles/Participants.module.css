@@ -160,6 +160,23 @@
   overflow: visible;
 }
 
+/* Ownership indicator column (pen = owned/editable here, eye = view only) —
+   a narrow, centred glyph column mirroring the old registry UI. */
+.table th.accessHeader,
+.table td.accessCell {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.accessIcon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  color: var(--text-secondary, #61265e);
+  opacity: 0.75;
+}
+
 .roleList {
   display: flex;
   /* Stay on one line so a multi-role party doesn't make its row taller; only

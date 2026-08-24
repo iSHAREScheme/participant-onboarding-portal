@@ -107,7 +107,12 @@ const en = {
       roles: "Roles",
       status: "Status",
       startDate: "Start date",
-      endDate: "End date"
+      endDate: "End date",
+      access: "Access"
+    },
+    access: {
+      owned: "Registered by this registry — editable",
+      viewOnly: "Registered by another registry — view only"
     },
     pagination: {
       previous: "Previous",

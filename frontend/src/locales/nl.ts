@@ -106,7 +106,12 @@ const nl = {
       roles: "Rollen",
       status: "Status",
       startDate: "Startdatum",
-      endDate: "Einddatum"
+      endDate: "Einddatum",
+      access: "Toegang"
+    },
+    access: {
+      owned: "Geregistreerd door dit register — bewerkbaar",
+      viewOnly: "Geregistreerd door een ander register — alleen inzien"
     },
     pagination: {
       previous: "Vorige",

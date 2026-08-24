@@ -28,6 +28,7 @@ interface ParticipantRow {
   status: string;
   startDate: string;
   endDate: string;
+  owned: boolean;
 }
 
 // The backend returns one page of parties under `data`; tolerate the other
@@ -80,7 +81,11 @@ const normalize = (p: any): ParticipantRow => {
     }
   }
 
-  return { partyId, name, roles, status, startDate, endDate };
+  // Set server-side by the BFF (annotateOwnership): true when the party is
+  // registered under this portal's registrar — the same test as "My participants".
+  const owned = p?.ownedByRegistry === true;
+
+  return { partyId, name, roles, status, startDate, endDate, owned };
 };
 
 type FilterMode = "all" | "mine" | "active" | "certified";
@@ -99,6 +104,45 @@ const ROLE_FILTER_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const SEARCH_DEBOUNCE_MS = 350;
+
+// Ownership indicator, mirroring the old registry UI: a pencil for parties
+// registered by THIS registry (owned, editable here) and an eye for parties
+// registered elsewhere (view only). Lucide "pencil" / "eye" glyphs, inheriting
+// the cell's text colour.
+const PencilIcon = ({ label }: { label: string }) => (
+  <svg
+    className={styles.accessIcon}
+    role="img"
+    aria-label={label}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <title>{label}</title>
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </svg>
+);
+
+const EyeIcon = ({ label }: { label: string }) => (
+  <svg
+    className={styles.accessIcon}
+    role="img"
+    aria-label={label}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <title>{label}</title>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
 
 // "+N" badge for the roles beyond the first one shown. Its hover/focus tooltip
 // is rendered into a body portal with fixed positioning, so the table's scroll
@@ -413,6 +457,9 @@ const Participants: NextPage = () => {
                   <th>{t("participants.table.status")}</th>
                   <th>{t("participants.table.startDate")}</th>
                   <th>{t("participants.table.endDate")}</th>
+                  <th className={styles.accessHeader}>
+                    {t("participants.table.access")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -424,6 +471,7 @@ const Participants: NextPage = () => {
                     <td><Skeleton width={64} height={18} radius={9999} /></td>
                     <td><Skeleton width={72} /></td>
                     <td><Skeleton width={72} /></td>
+                    <td><Skeleton width={18} height={18} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -447,6 +495,9 @@ const Participants: NextPage = () => {
                 <th>{t("participants.table.status")}</th>
                 <th>{t("participants.table.startDate")}</th>
                 <th>{t("participants.table.endDate")}</th>
+                <th className={styles.accessHeader}>
+                  {t("participants.table.access")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -514,6 +565,16 @@ const Participants: NextPage = () => {
                   <td data-label={t("participants.table.endDate")}>
                     {formatDate(p.endDate)}
                   </td>
+                  <td
+                    className={styles.accessCell}
+                    data-label={t("participants.table.access")}
+                  >
+                    {p.owned ? (
+                      <PencilIcon label={t("participants.access.owned")} />
+                    ) : (
+                      <EyeIcon label={t("participants.access.viewOnly")} />
+                    )}
+                  </td>
                 </tr>
               ))}
               {/* Pad short pages (e.g. the last one) with blank rows so the
@@ -523,7 +584,7 @@ const Participants: NextPage = () => {
               {totalPages > 1 &&
                 Array.from({ length: blankRows }).map((_, i) => (
                   <tr key={`empty-${i}`} aria-hidden="true">
-                    <td colSpan={6}>&nbsp;</td>
+                    <td colSpan={7}>&nbsp;</td>
                   </tr>
                 ))}
             </tbody>
