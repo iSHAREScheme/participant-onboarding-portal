@@ -300,6 +300,9 @@ const SubmitClaimsForm: React.FC = () => {
   const WIZARD_STEPS = ["certificate", "party", "framework", "extras", "review"];
   const [step, setStep] = useState(0);
   const [wizardError, setWizardError] = useState<string | null>(null);
+  // Creating a party is permanent (no delete, only edit/revoke), so the review
+  // step requires an explicit confirmation before the Create button arms.
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const claimStepOf = (index: number) => (index === 3 ? 0 : index <= 2 ? 2 : 3);
 
   const stepError = (): string | null => {
@@ -328,6 +331,7 @@ const SubmitClaimsForm: React.FC = () => {
   };
   const goBack = () => {
     setWizardError(null);
+    setReviewConfirmed(false);
     setStep((s) => Math.max(s - 1, 0));
   };
 
@@ -458,6 +462,9 @@ const SubmitClaimsForm: React.FC = () => {
       goNext();
       return;
     }
+    // Never submit without the explicit review confirmation (creation is
+    // permanent — a party can only be edited or revoked afterwards).
+    if (!reviewConfirmed) return;
     const aka = alsoKnownAs.map((s) => s.trim()).filter(Boolean);
     const party: Party = {
       id: partyId,
@@ -905,7 +912,7 @@ const SubmitClaimsForm: React.FC = () => {
 
       {step === 1 && (
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>{t("submit.identity.heading")}</h2>
+        {/* No card title: the step indicator already reads "Party details". */}
         <div className={styles.formGrid}>
           <FormInput
             label={t("submit.identity.partyId")}
@@ -988,31 +995,41 @@ const SubmitClaimsForm: React.FC = () => {
       {claims.map((claim, index) =>
         claimStepOf(index) !== step ? null : (
         <div className={styles.section} key={index}>
-          <div className={styles.sectionBar}></div>
-          <div className={styles.sectionHeader}>
-            <div className={styles.sectionHeading}>
-              <h2 className={styles.sectionTitle}>
-                {t("submit.claim.heading", {
-                  index: index + 1,
-                  type: t("submit.claimTypes." + claim.type),
-                })}
-              </h2>
-              {isMinimumClaim(index) && (
-                <span className={styles.requiredBadge}>
-                  {t("submit.claim.minimum")}
-                </span>
+          {/* Card chrome differs by step: the certificate card carries no title
+              (the step indicator already says "Certificate", and "Claim 4" made
+              no sense once it moved first); framework cards are titled by their
+              claim type with the divider BETWEEN title and content; extra
+              claims keep the original numbered layout. */}
+          {claimStepOf(index) === 3 && <div className={styles.sectionBar}></div>}
+          {claimStepOf(index) !== 0 && (
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionHeading}>
+                <h2 className={styles.sectionTitle}>
+                  {claimStepOf(index) === 2
+                    ? t("submit.claimTypes." + claim.type)
+                    : t("submit.claim.heading", {
+                        index: index + 1,
+                        type: t("submit.claimTypes." + claim.type),
+                      })}
+                </h2>
+                {isMinimumClaim(index) && (
+                  <span className={styles.requiredBadge}>
+                    {t("submit.claim.minimum")}
+                  </span>
+                )}
+              </div>
+              {!isMinimumClaim(index) && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => removeClaim(index)}
+                >
+                  {t("submit.actions.remove")}
+                </Button>
               )}
             </div>
-            {!isMinimumClaim(index) && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => removeClaim(index)}
-              >
-                {t("submit.actions.remove")}
-              </Button>
-            )}
-          </div>
+          )}
+          {claimStepOf(index) === 2 && <div className={styles.sectionBar}></div>}
           <div className={styles.formGrid}>
             <FormSelect
               label={t("submit.claim.type")}
@@ -1078,6 +1095,17 @@ const SubmitClaimsForm: React.FC = () => {
               {t("submit.wizard.certRequiredWarn")}
             </div>
           )}
+          <div className={styles.warnMessage}>
+            {t("submit.review.permanentNote")}
+          </div>
+          <label className={styles.confirmRow}>
+            <input
+              type="checkbox"
+              checked={reviewConfirmed}
+              onChange={(e) => setReviewConfirmed(e.target.checked)}
+            />
+            <span>{t("submit.review.confirmLabel")}</span>
+          </label>
         </div>
       )}
 
@@ -1111,7 +1139,11 @@ const SubmitClaimsForm: React.FC = () => {
               {t("submit.wizard.next")}
             </Button>
           ) : (
-            <Button type="submit" variant="primary" disabled={loading}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading || !reviewConfirmed}
+            >
               {loading
                 ? t("submit.actions.submitting")
                 : t("submit.actions.create")}

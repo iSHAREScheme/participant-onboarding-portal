@@ -1627,7 +1627,9 @@ const nl = {
       certRequiredWarn: "Er is geen certificaat geüpload en de gekozen framework-rol vereist er één — het register zal deze partij weigeren. Ga terug naar de stap Certificaat om er één te uploaden, of kies de rol Service Consumer of Entitled Party."
     },
     review: {
-      heading: "Controleren & aanmaken"
+      heading: "Controleren & aanmaken",
+      permanentNote: "Het aanmaken van een partij is permanent: eenmaal toegevoegd aan het register kan deze niet worden verwijderd — alleen bewerkt, of ingetrokken via de claims.",
+      confirmLabel: "Ik heb de bovenstaande gegevens gecontroleerd en begrijp dat deze partij na aanmaken niet verwijderd kan worden."
     },
     claimTypes: {
       frameworkCompliance: "Framework-naleving",

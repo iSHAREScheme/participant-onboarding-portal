@@ -1630,7 +1630,9 @@ const en = {
       certRequiredWarn: "No certificate was uploaded, and the selected framework role requires one — the registry will reject this party. Go back to the Certificate step to upload one, or choose the Service Consumer or Entitled Party role."
     },
     review: {
-      heading: "Review & create"
+      heading: "Review & create",
+      permanentNote: "Creating a party is permanent: once added to the registry it cannot be deleted — it can only be edited, or revoked via its claims.",
+      confirmLabel: "I have reviewed the details above and understand this party cannot be deleted after creation."
     },
     claimTypes: {
       frameworkCompliance: "Framework Compliance",

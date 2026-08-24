@@ -289,3 +289,18 @@
   padding: 0.6rem 1rem;
   margin: 0.75rem 0;
 }
+
+.confirmRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+  color: #333;
+  cursor: pointer;
+}
+
+.confirmRow input {
+  margin-top: 0.2rem;
+  accent-color: var(--secondary-color, #013a57);
+}
