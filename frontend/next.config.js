@@ -63,6 +63,15 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-cache' },
         ],
       },
+      // Hashed build assets are content-addressed: restore long immutable
+      // caching for them (a later rule's header overrides the earlier rule's
+      // same-key header). Everything else keeps no-cache from the rule above.
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
     ]
   },
 };
