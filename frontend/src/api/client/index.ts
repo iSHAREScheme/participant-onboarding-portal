@@ -645,6 +645,10 @@ export class API {
       body
     )
   }
+  // v3.0: add a claim via POST /parties/{id}/claims (claims are append-only).
+  createClaim (id: string, claim: any) {
+    return this.client.post(`/parties/${encodeURIComponent(id)}/claims`, claim)
+  }
 
   // create/update
   updateProposal (userId: string, data: ProposalData) {

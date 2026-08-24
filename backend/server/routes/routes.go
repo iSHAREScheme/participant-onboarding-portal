@@ -79,9 +79,11 @@ func GroupPartiesRequests(server *s.Server, group fiber.Router, config *config.C
 	// Admin-protected party/claim updates (proxied to the satellite).
 	//   PUT   /parties/:id                  → v2.2 full party-update
 	//   PATCH /parties/:id                  → v3.0 update-party-information
+	//   POST  /parties/:id/claims           → v3.0 create-claim (append-only)
 	//   PATCH /parties/:id/claims/:claimId  → v3.0 update-claim-information
 	group.Put("/:id", middlewares.RequireAdminRole(), handler.UpdateParty)
 	group.Patch("/:id", middlewares.RequireAdminRole(), handler.PatchParty)
+	group.Post("/:id/claims", middlewares.RequireAdminRole(), handler.CreateClaim)
 	group.Patch("/:id/claims/:claimId", middlewares.RequireAdminRole(), handler.PatchClaim)
 }
 

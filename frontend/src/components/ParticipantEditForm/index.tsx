@@ -69,7 +69,11 @@ const ParticipantEditForm = ({
   const initialName = str(party.name ?? party.party_name);
   const initialAka = arr(party.alsoKnownAs);
   const [name, setName] = useState(initialName);
-  const [aka, setAka] = useState<string[]>(initialAka);
+  // alsoKnownAs is APPEND-ONLY on the registry: the satellite merges new
+  // aliases into the stored list and never removes or rewrites one (an "edited"
+  // alias would be stored as an extra alias alongside the old value). So the
+  // existing aliases render locked and only new entries can be added here.
+  const [newAka, setNewAka] = useState<string[]>([]);
 
   // --- v2.2 full-form state -------------------------------------------------
   const [form, setForm] = useState<V22FormState>(() => initV22(party));
@@ -112,9 +116,10 @@ const ParticipantEditForm = ({
       if (isV3) {
         const body: Record<string, any> = {};
         if (name !== initialName) body.name = name;
-        const cleanAka = aka.map((s) => s.trim()).filter(Boolean);
-        if (JSON.stringify(cleanAka) !== JSON.stringify(initialAka))
-          body.alsoKnownAs = cleanAka;
+        // Send the stored aliases verbatim plus the additions — never edited
+        // or removed entries (the registry's merge is append-only anyway).
+        const added = newAka.map((s) => s.trim()).filter(Boolean);
+        if (added.length) body.alsoKnownAs = [...initialAka, ...added];
         if (!Object.keys(body).length) {
           onCancel();
           return;
@@ -166,13 +171,21 @@ const ParticipantEditForm = ({
           </div>
           <div className={styles.repeaterField}>
             <span className={styles.repeaterLabel}>{f("alsoKnownAs")}</span>
-            {aka.map((v, i) => (
-              <div className={styles.repeaterRow} key={i}>
+            {initialAka.length > 0 && (
+              <p className={styles.subtitle}>{e("akaAppendOnly")}</p>
+            )}
+            {initialAka.map((v, i) => (
+              <div className={styles.repeaterRow} key={`existing-${i}`}>
+                <input className={styles.formInput} value={v} disabled />
+              </div>
+            ))}
+            {newAka.map((v, i) => (
+              <div className={styles.repeaterRow} key={`new-${i}`}>
                 <input
                   className={styles.formInput}
                   value={v}
                   onChange={(ev) =>
-                    setAka((prev) =>
+                    setNewAka((prev) =>
                       prev.map((x, j) => (j === i ? ev.target.value : x))
                     )
                   }
@@ -181,7 +194,7 @@ const ParticipantEditForm = ({
                   type="button"
                   className={styles.removeButton}
                   onClick={() =>
-                    setAka((prev) => prev.filter((_, j) => j !== i))
+                    setNewAka((prev) => prev.filter((_, j) => j !== i))
                   }
                   aria-label={e("cancel")}
                 >
@@ -193,7 +206,7 @@ const ParticipantEditForm = ({
               <button
                 type="button"
                 className={styles.cancelBtn}
-                onClick={() => setAka((prev) => [...prev, ""])}
+                onClick={() => setNewAka((prev) => [...prev, ""])}
               >
                 + {f("alsoKnownAs")}
               </button>

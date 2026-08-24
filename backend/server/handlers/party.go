@@ -559,6 +559,27 @@ func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
 	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
 }
 
+// CreateClaim godoc
+// @Summary      Add a claim to a party (v3.0)
+// @Description  Proxies to the Satellite's POST /parties/{partyId}/claims (iSHARE 3.0 create-claim). Claims are append-only: a new x509Certificate claim registers an additional active certificate — the previous certificate claim keeps its own status until it expires or is explicitly revoked.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id}/claims [post]
+func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim create requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWrite(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims")
+}
+
 type ProposalData struct {
 	Roles struct {
 		DataOwner    bool `json:"dataOwner"`

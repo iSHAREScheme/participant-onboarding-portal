@@ -85,6 +85,9 @@ const TYPE_READONLY: Record<string, string[]> = {
 };
 
 const STATUS = ["active", "inactive", "revoked", "suspended"];
+// x509Certificate claims only know active|revoked on the registry
+// (v3X509ClaimStatuses) — a cert is never inactive/suspended, it is revoked.
+const X509_STATUS = ["active", "revoked"];
 const LOA = ["low", "substantial", "high", "not-applicable"];
 const YESNONA = ["yes", "no", "not-applicable"];
 const BOOL = ["true", "false"];
@@ -123,8 +126,9 @@ const getVal = (claim: any, key: string): string => {
   return str(claim?.[key]);
 };
 
-const optionsFor = (key: string): string[] => {
-  if (key === "status") return STATUS;
+const optionsFor = (key: string, claimType?: string): string[] => {
+  if (key === "status")
+    return claimType === "x509Certificate" ? X509_STATUS : STATUS;
   if (key === "loa") return LOA;
   if (key === "compliancyVerified" || key === "legalAdherence") return YESNONA;
   if (key.endsWith("publiclyPublishable")) return BOOL;
@@ -197,7 +201,7 @@ const ClaimEditModal = ({
   };
 
   const editField = (key: string, kind: Kind) => {
-    const opts = optionsFor(key);
+    const opts = optionsFor(key, type);
     return (
       <div className={styles.formRow} key={key}>
         <label className={styles.formLabel}>{humanize(key)}</label>
