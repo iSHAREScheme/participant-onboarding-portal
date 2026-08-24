@@ -3,11 +3,35 @@ package satellite
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"onboardingportal/models"
 	"onboardingportal/requests"
 )
+
+// bareClaimDate matches what an HTML date input produces (yyyy-mm-dd).
+var bareClaimDate = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// NormalizeClaimDates expands bare date-input values in a claim into the
+// RFC3339 instants the satellite validates claim dates with — startDate to the
+// start of the day, endDate to the end. Values that already carry a time
+// component pass through untouched. Defense in depth: the frontend converts
+// too, but a stale cached bundle (or any other API client) must not be able to
+// fail every party/claim write with "must be an RFC3339 timestamp".
+func NormalizeClaimDates(claim map[string]interface{}) {
+	for key, suffix := range map[string]string{
+		"startDate": "T00:00:00.000Z",
+		"endDate":   "T23:59:59.000Z",
+	} {
+		if raw, ok := claim[key].(string); ok {
+			v := strings.TrimSpace(raw)
+			if bareClaimDate.MatchString(v) {
+				claim[key] = v + suffix
+			}
+		}
+	}
+}
 
 type AgreementFile struct {
 	Hash       string
@@ -680,6 +704,7 @@ func BuildEpCreation30RequestFromRequest(request *requests.PartyV3CreateRequest,
 		if status, ok := normalized["status"].(string); !ok || strings.TrimSpace(status) == "" {
 			normalized["status"] = "active"
 		}
+		NormalizeClaimDates(normalized)
 		claims = append(claims, normalized)
 	}
 

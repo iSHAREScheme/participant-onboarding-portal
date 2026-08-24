@@ -446,6 +446,27 @@ func truncateForLog(b []byte) string {
 // builds the payload that matches the satellite's schema version — and the
 // owner access token is attached. The satellite's response is passed back.
 func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath string) error {
+	return h.forwardPartyWriteBody(c, method, satellitePath, c.Body())
+}
+
+// normalizeClaimBody expands bare date-input values (yyyy-mm-dd) in a claim
+// JSON body to the RFC3339 instants the satellite requires — the same rule
+// party creation applies. Pass-through on parse failure: the satellite then
+// produces the authoritative error.
+func normalizeClaimBody(body []byte) []byte {
+	claim := map[string]interface{}{}
+	if err := json.Unmarshal(body, &claim); err != nil {
+		return body
+	}
+	satellite.NormalizeClaimDates(claim)
+	out, err := json.Marshal(claim)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
+func (h *HandlerParty) forwardPartyWriteBody(c *fiber.Ctx, method, satellitePath string, body []byte) error {
 	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create access token")
@@ -458,7 +479,6 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 	}
 
 	reqURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, satellitePath)
-	body := c.Body()
 
 	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
 	if err != nil {
@@ -556,7 +576,7 @@ func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
 	if id == "" || claimId == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
 	}
-	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
+	return h.forwardPartyWriteBody(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId), normalizeClaimBody(c.Body()))
 }
 
 // CreateClaim godoc
@@ -577,7 +597,7 @@ func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
 	if id == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
 	}
-	return h.forwardPartyWrite(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims")
+	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimBody(c.Body()))
 }
 
 type ProposalData struct {

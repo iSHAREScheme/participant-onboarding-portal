@@ -52,7 +52,16 @@ const nextConfig = {
     return [
       {
         source: '/:path*',
-        headers: securityHeaders,
+        headers: [
+          ...securityHeaders,
+          // Documents (and /public assets like env.js) must revalidate on every
+          // load: without this, browsers heuristically cache the HTML and keep
+          // referencing the PREVIOUS deploy's immutable chunks — new releases
+          // stay invisible until a hard reload. Next.js overrides this header
+          // with immutable caching for hashed /_next/static assets, so those
+          // stay long-cached as before.
+          { key: 'Cache-Control', value: 'no-cache' },
+        ],
       },
     ]
   },
