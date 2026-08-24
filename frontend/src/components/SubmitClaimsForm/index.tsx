@@ -71,6 +71,16 @@ const roleTitle = (roleId: string): string =>
 
 const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
 
+// The registry validates claim dates with time.Parse(time.RFC3339), so a bare
+// date-input value (yyyy-mm-dd) is rejected with "must be an RFC3339 timestamp".
+// Expand it to a full instant (start of day / end of day); values that already
+// carry a time component pass through untouched.
+const toRfc3339 = (value: string, endOfDay = false): string => {
+  const v = value.trim();
+  if (!v || v.includes("T")) return v;
+  return `${v}T${endOfDay ? "23:59:59" : "00:00:00"}.000Z`;
+};
+
 const buildInitialDefaults = (): ClaimDefaults => {
   const start = new Date();
   const end = new Date(start);
@@ -204,8 +214,8 @@ const toClaim = (d: ClaimDraft): Claim => {
   const base = {
     registrarId: d.registrarId,
     status: d.status as Claim["status"],
-    ...(d.startDate ? { startDate: d.startDate } : {}),
-    ...(d.endDate ? { endDate: d.endDate } : {}),
+    ...(d.startDate ? { startDate: toRfc3339(d.startDate) } : {}),
+    ...(d.endDate ? { endDate: toRfc3339(d.endDate, true) } : {}),
   };
 
   switch (d.type) {

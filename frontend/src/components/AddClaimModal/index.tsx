@@ -110,6 +110,14 @@ const inOneYear = (): string => {
 };
 const toDateInput = (iso: string): string => (iso ? iso.slice(0, 10) : "");
 
+// The registry validates claim dates with time.Parse(time.RFC3339); a bare
+// date-input value (yyyy-mm-dd) is rejected. Expand to a full instant.
+const toRfc3339 = (value: string, endOfDay = false): string => {
+  const v = value.trim();
+  if (!v || v.includes("T")) return v;
+  return `${v}T${endOfDay ? "23:59:59" : "00:00:00"}.000Z`;
+};
+
 const AddClaimModal = ({
   partyId,
   onSaved,
@@ -219,8 +227,8 @@ const AddClaimModal = ({
         type,
         status: form.status || "active",
         ...(registrarId ? { registrarId } : {}),
-        ...(form.startDate ? { startDate: form.startDate } : {}),
-        ...(form.endDate ? { endDate: form.endDate } : {}),
+        ...(form.startDate ? { startDate: toRfc3339(form.startDate) } : {}),
+        ...(form.endDate ? { endDate: toRfc3339(form.endDate, true) } : {}),
       };
       fields.forEach((f) => {
         const v = String(form[f.key] ?? "").trim();

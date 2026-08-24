@@ -162,9 +162,22 @@ const ClaimEditModal = ({
   const mutable = TYPE_MUTABLE[type] ?? [];
   const readonly = ["type", "registrarId", ...(TYPE_READONLY[type] ?? [])];
 
+  // Claim dates are stored as RFC3339 instants; a date input needs bare
+  // yyyy-mm-dd (an RFC3339 value renders as EMPTY), so trim for display and
+  // expand back to an instant on save.
+  const DATE_KEYS = ["startDate", "endDate"];
+  const toRfc3339 = (value: string, endOfDay = false): string => {
+    const v = value.trim();
+    if (!v || v.includes("T")) return v;
+    return `${v}T${endOfDay ? "23:59:59" : "00:00:00"}.000Z`;
+  };
+
   const editableKeys = ["status", "startDate", "endDate", ...mutable.map((m) => m.key)];
   const initial: Record<string, string> = {};
-  editableKeys.forEach((k) => (initial[k] = getVal(claim, k)));
+  editableKeys.forEach((k) => {
+    const v = getVal(claim, k);
+    initial[k] = DATE_KEYS.includes(k) ? v.slice(0, 10) : v;
+  });
   const [form, setForm] = useState<Record<string, string>>({ ...initial });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -176,7 +189,10 @@ const ClaimEditModal = ({
     try {
       const patch: Record<string, any> = {};
       ["status", "startDate", "endDate"].forEach((k) => {
-        if (form[k] !== initial[k]) patch[k] = form[k];
+        if (form[k] === initial[k]) return;
+        patch[k] = DATE_KEYS.includes(k)
+          ? toRfc3339(form[k], k === "endDate")
+          : form[k];
       });
       mutable.forEach((m) => {
         if (form[m.key] === initial[m.key]) return;
