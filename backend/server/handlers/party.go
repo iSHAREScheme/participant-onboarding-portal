@@ -14,6 +14,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
+
 	"onboardingportal/config"
 	"onboardingportal/integrations/satellite"
 	"onboardingportal/models"
@@ -1722,6 +1724,16 @@ func isSatelliteVersion22(raw string) bool {
 // the bare EORI it was derived from. A did:ishare id is normalized through the
 // EORI form; any other DID method (did:web, did:ebsi, …) is preserved verbatim
 // with no EORI alias; a plain EORI/registration number is promoted to a DID.
+// ntrAlignedID matches ids already in the satellite's calcIshareDid shape
+// (EU.<CC>.<identifier>), and ntrIdentifier matches bare ETSI NTR<CC>…
+// organizationIdentifier values that must be LIFTED into that shape.
+// Uppercase only, mirroring the satellite's calcIshareDid regex (NTR[A-Z][A-Z]):
+// an identifier it cannot derive a country from gains nothing from lifting.
+var (
+	ntrAlignedID  = regexp.MustCompile(`^EU\.[A-Z]{2}\.NTR[A-Z]{2}`)
+	ntrIdentifier = regexp.MustCompile(`^NTR([A-Z]{2})`)
+)
+
 func deriveV3Identity(rawID string) (did string, eori string) {
 	trimmed := strings.TrimSpace(rawID)
 	if trimmed == "" {
@@ -1729,11 +1741,22 @@ func deriveV3Identity(rawID string) (did string, eori string) {
 	}
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "did:ishare:") {
-		eori = normalizePartyID(trimmed[len("did:ishare:"):])
-		return satellite.BuildDidFromPartyID(eori), eori
-	}
-	if strings.HasPrefix(lower, "did:") {
+		trimmed = strings.TrimSpace(trimmed[len("did:ishare:"):])
+		lower = strings.ToLower(trimmed)
+	} else if strings.HasPrefix(lower, "did:") {
 		return trimmed, ""
+	}
+	// A v3 satellite requires a certificate-registered party's id to equal
+	// calcIshareDid(cert organizationIdentifier) = did:ishare:EU.<CC>.<identifier>
+	// for NTR<CC> identifiers. Ids already in that shape pass through verbatim,
+	// and bare NTR<CC>… identifiers are lifted into it — the legacy EU.EORI
+	// canonicalisation below must never rewrite them, or no NTR-certificate
+	// party can pass the satellite's alignment check.
+	if ntrAlignedID.MatchString(trimmed) {
+		return satellite.BuildDidFromPartyID(trimmed), ""
+	}
+	if m := ntrIdentifier.FindStringSubmatch(trimmed); m != nil {
+		return satellite.BuildDidFromPartyID("EU." + strings.ToUpper(m[1]) + "." + trimmed), ""
 	}
 	eori = normalizePartyID(trimmed)
 	return satellite.BuildDidFromPartyID(eori), eori
