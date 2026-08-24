@@ -304,3 +304,12 @@
   margin-top: 0.2rem;
   accent-color: var(--secondary-color, #013a57);
 }
+
+/* Mid-card divider (between a card's title and its fields). Unlike .sectionBar
+   it carries bottom clearance: FormInput labels FLOAT above their input's top
+   edge when filled, so a flush line would strike through them. */
+.sectionDivider {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 0 0 28px;
+}

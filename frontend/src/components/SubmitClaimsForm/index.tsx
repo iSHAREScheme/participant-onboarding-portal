@@ -1029,7 +1029,9 @@ const SubmitClaimsForm: React.FC = () => {
               )}
             </div>
           )}
-          {claimStepOf(index) === 2 && <div className={styles.sectionBar}></div>}
+          {claimStepOf(index) === 2 && (
+            <div className={styles.sectionDivider}></div>
+          )}
           <div className={styles.formGrid}>
             <FormSelect
               label={t("submit.claim.type")}
