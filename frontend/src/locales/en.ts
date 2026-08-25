@@ -1693,6 +1693,7 @@ const en = {
       agreementInvalidType: "Invalid file type. Please upload a PDF.",
       certTooLarge: "Certificate exceeds the 1 MB limit.",
       agreementTooLarge: "PDF exceeds the 10 MB limit.",
+      certNoNtrWarn: "This certificate's organizationIdentifier ({{identifier}}) has no NTR<country> form. The registry derives a party's identity from that form, so creating a party with this certificate will be rejected. Use a certificate whose organizationIdentifier is NTR<CC>-…, or register the party without a certificate (Service Consumer / Entitled Party roles only).",
       certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
       agreementReadError: "Could not read the PDF file."
     },

@@ -1690,6 +1690,7 @@ const nl = {
       agreementInvalidType: "Ongeldig bestandstype. Upload een PDF.",
       certTooLarge: "Certificaat overschrijdt de limiet van 1 MB.",
       agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
+      certNoNtrWarn: "De organizationIdentifier van dit certificaat ({{identifier}}) heeft geen NTR<land>-vorm. Het register leidt de identiteit van een partij daaruit af, dus een partij aanmaken met dit certificaat wordt geweigerd. Gebruik een certificaat met een NTR<CC>-… identifier, of registreer de partij zonder certificaat (alleen rollen Service Consumer / Entitled Party).",
       certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
       agreementReadError: "Kon het PDF-bestand niet lezen."
     },

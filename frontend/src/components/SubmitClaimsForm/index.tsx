@@ -556,6 +556,18 @@ const SubmitClaimsForm: React.FC = () => {
           : {}),
         _certFile: file.name,
         _certError: "",
+        // The v3 registry can only register certificate-backed parties whose
+        // identifier is NTR<CC>-… (calcIshareDid derives the country from it).
+        // The existing estate's serialNumber=EU.EORI… certificates are
+        // structurally rejected (backlog B2) — warn HERE, at the first step,
+        // instead of letting the operator walk into a 400 at Create.
+        _certWarn:
+          parsed.organizationIdentifier &&
+          !/^NTR[A-Z]{2}/.test(parsed.organizationIdentifier)
+            ? t("submit.upload.certNoNtrWarn", {
+                identifier: parsed.organizationIdentifier,
+              })
+            : "",
       });
       // Derive the party identity from the certificate — prefill only, never
       // overwrite something the operator already typed.
@@ -569,6 +581,7 @@ const SubmitClaimsForm: React.FC = () => {
       updateClaimFields(index, {
         _certError: err?.message || t("submit.upload.certParseError"),
         _certFile: "",
+        _certWarn: "",
         x5c: "",
         "x5t#s256": "",
         subjectName: "",
@@ -583,6 +596,7 @@ const SubmitClaimsForm: React.FC = () => {
       subjectName: "",
       _certFile: "",
       _certError: "",
+      _certWarn: "",
     });
 
   const handleAgreementFile = async (index: number, file: File) => {
@@ -706,6 +720,9 @@ const SubmitClaimsForm: React.FC = () => {
             onFile: (file) => handleCertFile(index, file),
             onRemove: () => clearCert(index),
           })}
+          {claim._certWarn && (
+            <div className={styles.warnMessage}>{claim._certWarn}</div>
+          )}
           {claim._certFile && (
             <>
               <FormInput
