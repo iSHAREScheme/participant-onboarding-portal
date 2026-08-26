@@ -487,8 +487,11 @@ const SubmitClaimsForm: React.FC = () => {
       return;
     }
     // Never submit without the explicit review confirmation (creation is
-    // permanent — a party can only be edited or revoked afterwards).
-    if (!reviewConfirmed) return;
+    // permanent — a party can only be edited or revoked afterwards), and never
+    // fire twice: once a submit is in flight or has succeeded, further
+    // submissions are ignored (the button is disabled too, but Enter and
+    // double-click race the state update).
+    if (!reviewConfirmed || loading || response) return;
     const aka = alsoKnownAs.map((s) => s.trim()).filter(Boolean);
     const party: Party = {
       id: partyId,
@@ -943,6 +946,21 @@ const SubmitClaimsForm: React.FC = () => {
     </div>
   );
 
+  // Once created, the wizard is done: replace it with a success panel until
+  // the redirect to /participants lands (the effect above navigates shortly).
+  if (response) {
+    return (
+      <div className={styles.successPanel}>
+        <div className={styles.successCheck}>✓</div>
+        <p className={styles.successTitle}>{t("submit.messages.submitSuccess")}</p>
+        <div className={styles.redirectRow}>
+          <span className={styles.btnSpinner} aria-hidden="true"></span>
+          {t("submit.messages.redirecting")}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit}>
       {stepIndicator}
@@ -1162,12 +1180,6 @@ const SubmitClaimsForm: React.FC = () => {
           })}
         </div>
       )}
-      {response && (
-        <div className={styles.uploadText}>
-          {t("submit.messages.submitSuccess")}
-        </div>
-      )}
-
       <div className={styles.wizardNav}>
         <div>
           {step > 0 && (
@@ -1187,9 +1199,14 @@ const SubmitClaimsForm: React.FC = () => {
               variant="primary"
               disabled={loading || !reviewConfirmed}
             >
-              {loading
-                ? t("submit.actions.submitting")
-                : t("submit.actions.create")}
+              {loading ? (
+                <>
+                  <span className={styles.btnSpinner} aria-hidden="true"></span>
+                  {t("submit.actions.submitting")}
+                </>
+              ) : (
+                t("submit.actions.create")
+              )}
             </Button>
           )}
         </div>

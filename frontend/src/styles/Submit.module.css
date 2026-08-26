@@ -313,3 +313,73 @@
   border-top: 1px solid #e5e5e5;
   margin: 0 0 28px;
 }
+
+/* ----- Create-flow feedback: button spinner + success panel ----- */
+@keyframes submitSpin {
+  to { transform: rotate(360deg); }
+}
+
+.btnSpinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: submitSpin 0.7s linear infinite;
+}
+
+@keyframes successPop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes successFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.successPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 4rem 1.5rem;
+  text-align: center;
+  animation: successFade 0.25s ease-out;
+}
+
+.successCheck {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #1e7e34;
+  color: #fff;
+  font-size: 2rem;
+  line-height: 64px;
+  font-weight: 700;
+  animation: successPop 0.4s ease-out;
+}
+
+.successTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e2b23;
+  margin: 0;
+}
+
+.redirectRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.redirectRow .btnSpinner {
+  margin-right: 0;
+  color: var(--secondary-color, #013a57);
+}
