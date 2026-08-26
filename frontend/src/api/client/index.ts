@@ -147,6 +147,7 @@ export type ClaimType =
   | "frameworkRole"
   | "x509Certificate"
   | "dataspaceMembership"
+  | "dataspaceRole"
   | "idpAssertion"
 
 export type Loa = "low" | "substantial" | "high" | "not-applicable"
@@ -223,6 +224,25 @@ export interface DataspaceMembershipClaim extends ClaimBase {
   additionalInfo?: AdditionalInfo
 }
 
+export interface DataspaceAgreementClaim extends ClaimBase {
+  type: "dataspaceAgreement"
+  dataspaceId: string
+  agreementType: string
+  agreementId: string
+  title: string
+  verificationHash?: string
+}
+
+export interface DataspaceRoleClaim extends ClaimBase {
+  type: "dataspaceRole"
+  dataspaceId: string
+  roleId: string
+  title?: string
+  loa: Loa
+  compliancyVerified: YesNoNa
+  legalAdherence: YesNoNa
+}
+
 export interface IdpAssertionClaim extends ClaimBase {
   type: "idpAssertion"
   assertion: string
@@ -235,6 +255,8 @@ export type Claim =
   | FrameworkRoleClaim
   | X509CertificateClaim
   | DataspaceMembershipClaim
+  | DataspaceAgreementClaim
+  | DataspaceRoleClaim
   | IdpAssertionClaim
 
 /** v3 participant identity wrapper (party in the spec). */

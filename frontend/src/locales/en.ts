@@ -1618,7 +1618,7 @@ const en = {
     },
     wizard: {
       certHint: "Start with the party's X.509 certificate: the party ID, name, subject and validity are derived from it automatically. You can skip this step for parties that authenticate without a certificate (Service Consumer or Entitled Party).",
-      extrasHint: "Optionally add more claims (authorisation registry, dataspace membership, IdP assertion, …) — or continue to review.",
+      extrasHint: "Optionally add more claims (authorisation registry, dataspace membership, dataspace agreement, dataspace role, …) — or continue to review.",
       back: "Back",
       next: "Next",
       needPartyId: "Enter the party ID before continuing.",
@@ -1626,6 +1626,7 @@ const en = {
       needFramework: "The compliance claim needs a framework ID.",
       needAgreement: "The agreement claim needs a type, ID and title.",
       needRole: "Select a framework role before continuing.",
+      needExtraFields: "Complete the required fields of the additional claims before continuing.",
       noCertificate: "No certificate uploaded",
       certRequiredWarn: "No certificate was uploaded, and the selected framework role requires one — the registry will reject this party. Go back to the Certificate step to upload one, or choose the Service Consumer or Entitled Party role."
     },
@@ -1642,6 +1643,7 @@ const en = {
       x509Certificate: "X.509 Certificate",
       dataspaceMembership: "Dataspace Membership",
       dataspaceAgreement: "Dataspace Agreement",
+      dataspaceRole: "Dataspace Role",
       idpAssertion: "IdP Assertion"
     },
     status: {

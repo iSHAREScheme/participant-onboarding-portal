@@ -72,7 +72,25 @@ const TYPE_FIELDS: Record<string, FieldSpec[]> = {
     { key: "dataspaceId", kind: "text", required: true },
     { key: "legalAdherence", kind: "select", required: true, options: YESNONA },
   ],
-  idpAssertion: [{ key: "assertion", kind: "textarea", required: true }],
+  // agreementType/roleId are free text: dataspaces define their own agreement
+  // and role vocabularies (no scheme whitelist on the satellite).
+  dataspaceAgreement: [
+    { key: "dataspaceId", kind: "text", required: true },
+    { key: "agreementType", kind: "text", required: true },
+    { key: "agreementId", kind: "text", required: true },
+    { key: "title", kind: "text", required: true },
+    { key: "verificationHash", kind: "text", required: false },
+  ],
+  dataspaceRole: [
+    { key: "dataspaceId", kind: "text", required: true },
+    { key: "roleId", kind: "text", required: true },
+    { key: "title", kind: "text", required: false },
+    { key: "loa", kind: "select", required: true, options: LOA },
+    { key: "compliancyVerified", kind: "select", required: true, options: YESNONA },
+    { key: "legalAdherence", kind: "select", required: true, options: YESNONA },
+  ],
+  // idpAssertion is deliberately absent: the assertion comes from an IdP login
+  // flow and cannot be hand-entered in a form.
 };
 
 // Claim types whose create path requires startDate/endDate.
@@ -81,6 +99,7 @@ const DATES_REQUIRED = new Set([
   "frameworkRole",
   "x509Certificate",
   "dataspaceMembership",
+  "dataspaceRole",
 ]);
 
 const LABEL_OVERRIDES: Record<string, string> = {
@@ -145,6 +164,21 @@ const AddClaimModal = ({
   const [registrarId, setRegistrarId] = useState("");
   const [certFile, setCertFile] = useState("");
   const [certError, setCertError] = useState("");
+
+  // Switching type keeps the claim skeleton and drops type-specific values so
+  // nothing typed for one type leaks into another (e.g. a dataspaceRole
+  // free-text roleId surviving into the frameworkRole select).
+  const changeType = (next: string) => {
+    setType(next);
+    setForm((prev) => ({
+      status: prev.status,
+      startDate: prev.startDate,
+      endDate: prev.endDate,
+      certificateType: DEFAULT_CERTIFICATE_TYPE,
+    }));
+    setCertFile("");
+    setCertError("");
+  };
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -319,7 +353,7 @@ const AddClaimModal = ({
               <select
                 className={styles.formInput}
                 value={type}
-                onChange={(ev) => setType(ev.target.value)}
+                onChange={(ev) => changeType(ev.target.value)}
               >
                 {Object.keys(TYPE_FIELDS).map((ct) => (
                   <option key={ct} value={ct}>

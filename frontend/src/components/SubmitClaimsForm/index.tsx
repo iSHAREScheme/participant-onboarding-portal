@@ -5,7 +5,7 @@ import { useSubmitParty } from "hooks";
 import { useLanguage } from "context/LanguageContext";
 import { API } from "api/client";
 import { extractCertificateFields } from "util/certificate";
-import { md5HexOfFile } from "util/md5";
+import { sha256HexOfFile } from "util/sha256";
 import styles from "styles/Submit.module.css";
 import type {
   AdditionalInfo,
@@ -28,7 +28,9 @@ type ClaimDraft = {
   [key: string]: string;
 };
 
-type EditableClaimType = Exclude<ClaimType, "dataspaceAgreement">;
+// idpAssertion is excluded: the assertion comes from an IdP login flow and
+// cannot be hand-entered in a form.
+type EditableClaimType = Exclude<ClaimType, "idpAssertion">;
 
 type ClaimDefaults = {
   registrarId: string;
@@ -75,6 +77,24 @@ const AGREEMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "CertifiedPartyAgreement", label: "Certified Party Agreement" },
   { value: "SatelliteAgreement", label: "Satellite Agreement" },
 ];
+
+// Free-text fields the satellite requires per claim type (its
+// v3ClaimCreateRequiredPaths); enum and date fields always carry defaults, so
+// only these can arrive empty. Checked when leaving the extras step so a
+// half-filled additional claim can't 400 the whole creation at the end.
+const REQUIRED_TEXT_FIELDS: Partial<Record<EditableClaimType, string[]>> = {
+  frameworkCompliance: ["frameworkId"],
+  authRegistry: ["name", "authRegistryId", "authUrl"],
+  frameworkAgreement: ["agreementType", "agreementId", "title"],
+  frameworkRole: ["frameworkId", "roleId"],
+  x509Certificate: ["certificateType", "x5c"],
+  dataspaceMembership: ["dataspaceId"],
+  dataspaceAgreement: ["dataspaceId", "agreementType", "agreementId", "title"],
+  dataspaceRole: ["dataspaceId", "roleId"],
+};
+
+const titleFromFilename = (name: string): string =>
+  name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
 
 const roleTitle = (roleId: string): string =>
   FRAMEWORK_ROLE_OPTIONS.find((o) => o.value === roleId)?.label || roleId;
@@ -193,6 +213,12 @@ const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDr
       next.legalAdherence = next.legalAdherence || "not-applicable";
       next.ai_publiclyPublishable = next.ai_publiclyPublishable || "false";
       break;
+    case "dataspaceRole":
+      next.loa = next.loa || defaults.frameworkRoleLoa;
+      next.legalAdherence = next.legalAdherence || defaults.frameworkRoleLegalAdherence;
+      next.compliancyVerified =
+        next.compliancyVerified || defaults.frameworkRoleCompliancyVerified;
+      break;
     default:
       break;
   }
@@ -286,11 +312,26 @@ const toClaim = (d: ClaimDraft): Claim => {
         legalAdherence: (d.legalAdherence || "not-applicable") as YesNoNa,
         additionalInfo: buildAdditionalInfo(d),
       };
-    case "idpAssertion":
+    case "dataspaceAgreement":
       return {
         ...base,
-        type: "idpAssertion",
-        assertion: d.assertion || "",
+        type: "dataspaceAgreement",
+        dataspaceId: d.dataspaceId || "",
+        agreementType: d.agreementType || "",
+        agreementId: d.agreementId || "",
+        title: d.title || "",
+        verificationHash: d.verificationHash || undefined,
+      };
+    case "dataspaceRole":
+      return {
+        ...base,
+        type: "dataspaceRole",
+        dataspaceId: d.dataspaceId || "",
+        roleId: d.roleId || "",
+        title: d.title || undefined,
+        loa: (d.loa || "not-applicable") as Loa,
+        compliancyVerified: (d.compliancyVerified || "not-applicable") as YesNoNa,
+        legalAdherence: (d.legalAdherence || "not-applicable") as YesNoNa,
       };
   }
 };
@@ -354,6 +395,13 @@ const SubmitClaimsForm: React.FC = () => {
         return "submit.wizard.needAgreement";
       if (!role?.roleId?.trim()) return "submit.wizard.needRole";
     }
+    if (step === 3) {
+      for (const extra of claims.slice(MINIMUM_CLAIM_TYPES.length)) {
+        for (const key of REQUIRED_TEXT_FIELDS[extra.type] || []) {
+          if (!extra[key]?.trim()) return "submit.wizard.needExtraFields";
+        }
+      }
+    }
     return null;
   };
 
@@ -406,7 +454,8 @@ const SubmitClaimsForm: React.FC = () => {
     { value: "frameworkRole", label: t("submit.claimTypes.frameworkRole") },
     { value: "x509Certificate", label: t("submit.claimTypes.x509Certificate") },
     { value: "dataspaceMembership", label: t("submit.claimTypes.dataspaceMembership") },
-    { value: "idpAssertion", label: t("submit.claimTypes.idpAssertion") },
+    { value: "dataspaceAgreement", label: t("submit.claimTypes.dataspaceAgreement") },
+    { value: "dataspaceRole", label: t("submit.claimTypes.dataspaceRole") },
   ];
 
   const statusOptions = [
@@ -550,7 +599,7 @@ const SubmitClaimsForm: React.FC = () => {
     />
   );
 
-  // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → md5 hash ---
+  // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → sha256 hash ---
 
   const handleCertFile = async (index: number, file: File) => {
     if (!/\.(pem|crt|cer|der)$/i.test(file.name)) {
@@ -653,20 +702,24 @@ const SubmitClaimsForm: React.FC = () => {
       return;
     }
     try {
-      const hash = await md5HexOfFile(file);
-      updateClaimFields(index, {
-        verificationHash: hash,
-        _agreementFile: file.name,
-        _agreementError: "",
-      });
-      // Prefill the agreement title from the document's filename — only when
-      // the operator hasn't typed one (feedback 2026-08-26).
-      const titleFromFile = file.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
-      if (titleFromFile) {
-        setClaims((prev) =>
-          prev.map((c, i) => (i === index && !c.title ? { ...c, title: titleFromFile } : c))
-        );
-      }
+      const hash = await sha256HexOfFile(file);
+      setClaims((prev) =>
+        prev.map((c, i) => {
+          if (i !== index) return c;
+          // Prefill the title from the document's filename; keep a title the
+          // operator typed themselves, but replace one that is only the
+          // previous upload's filename prefill (feedback 2026-08-26).
+          const keepTitle =
+            c.title && c.title !== titleFromFilename(c._agreementFile || "");
+          return {
+            ...c,
+            verificationHash: hash,
+            _agreementFile: file.name,
+            _agreementError: "",
+            title: keepTitle ? c.title : titleFromFilename(file.name),
+          };
+        })
+      );
     } catch (err: any) {
       updateClaimFields(index, {
         _agreementError: err?.message || t("submit.upload.agreementReadError"),
@@ -677,11 +730,15 @@ const SubmitClaimsForm: React.FC = () => {
   };
 
   const clearAgreement = (index: number) =>
-    updateClaimFields(index, {
-      verificationHash: "",
-      _agreementFile: "",
-      _agreementError: "",
-    });
+    setClaims((prev) =>
+      prev.map((c, i) => {
+        if (i !== index) return c;
+        const next: ClaimDraft = { ...c, verificationHash: "", _agreementFile: "", _agreementError: "" };
+        // A title that is only the removed file's filename prefill goes with it.
+        if (c.title && c.title === titleFromFilename(c._agreementFile || "")) next.title = "";
+        return next;
+      })
+    );
 
   // Reusable drag-and-drop upload zone (mirrors the v2 certificate uploader).
   const uploadZone = (opts: {
@@ -795,7 +852,7 @@ const SubmitClaimsForm: React.FC = () => {
         </div>
       );
     }
-    if (claim.type === "frameworkAgreement") {
+    if (claim.type === "frameworkAgreement" || claim.type === "dataspaceAgreement") {
       return (
         <div className={styles.repeaterField}>
           {uploadZone({
@@ -934,8 +991,44 @@ const SubmitClaimsForm: React.FC = () => {
             />
           </>
         );
-      case "idpAssertion":
-        return <>{claimInput(index, "assertion", t("submit.claim.assertion"), "", true)}</>;
+      case "dataspaceAgreement":
+        return (
+          <>
+            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
+            {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
+            {claimInput(index, "title", t("submit.claim.title"), "", true)}
+          </>
+        );
+      case "dataspaceRole":
+        return (
+          <>
+            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimInput(index, "roleId", t("submit.claim.roleId"), t("submit.placeholders.roleId"), true)}
+            {claimInput(index, "title", t("submit.claim.title"))}
+            <FormSelect
+              label={t("submit.claim.loa")}
+              options={loaOptions}
+              value={claim.loa || "not-applicable"}
+              onChange={(v) => updateClaim(index, "loa", v)}
+              required
+            />
+            <FormSelect
+              label={t("submit.claim.compliancyVerified")}
+              options={yesNoNaOptions}
+              value={claim.compliancyVerified || "not-applicable"}
+              onChange={(v) => updateClaim(index, "compliancyVerified", v)}
+              required
+            />
+            <FormSelect
+              label={t("submit.claim.legalAdherence")}
+              options={yesNoNaOptions}
+              value={claim.legalAdherence || "not-applicable"}
+              onChange={(v) => updateClaim(index, "legalAdherence", v)}
+              required
+            />
+          </>
+        );
       default:
         return null;
     }
@@ -948,12 +1041,16 @@ const SubmitClaimsForm: React.FC = () => {
         ? roleTitle(c.roleId || "")
         : c.type === "x509Certificate"
         ? c.subjectName || t("submit.wizard.noCertificate")
-        : c.type === "frameworkAgreement" || c.type === "dataspaceAgreement"
+        : c.type === "frameworkAgreement"
         ? c.title || c.agreementId || ""
+        : c.type === "dataspaceAgreement"
+        ? [c.dataspaceId, c.title || c.agreementId].filter(Boolean).join(" · ")
         : c.type === "authRegistry"
         ? c.name || ""
         : c.type === "dataspaceMembership"
         ? c.dataspaceId || ""
+        : c.type === "dataspaceRole"
+        ? [c.dataspaceId, c.roleId].filter(Boolean).join(" · ")
         : c.frameworkId || "";
     const dates = c.startDate ? ` · ${c.startDate} → ${c.endDate || "…"}` : "";
     return `${main} · ${c.status}${dates}`;

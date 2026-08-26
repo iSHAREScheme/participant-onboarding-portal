@@ -1615,7 +1615,7 @@ const nl = {
     },
     wizard: {
       certHint: "Begin met het X.509-certificaat van de partij: het partij-ID, de naam, het subject en de geldigheid worden er automatisch uit afgeleid. Sla deze stap over voor partijen zonder certificaat (Service Consumer of Entitled Party).",
-      extrasHint: "Voeg optioneel extra claims toe (autorisatieregister, dataspace-lidmaatschap, IdP-assertie, …) — of ga door naar controleren.",
+      extrasHint: "Voeg optioneel extra claims toe (autorisatieregister, dataspace-lidmaatschap, dataspace-overeenkomst, dataspace-rol, …) — of ga door naar controleren.",
       back: "Terug",
       next: "Volgende",
       needPartyId: "Vul het partij-ID in voordat je verdergaat.",
@@ -1623,6 +1623,7 @@ const nl = {
       needFramework: "De nalevingsclaim heeft een framework-ID nodig.",
       needAgreement: "De overeenkomstclaim heeft een type, ID en titel nodig.",
       needRole: "Selecteer een framework-rol voordat je verdergaat.",
+      needExtraFields: "Vul de verplichte velden van de extra claims in voordat je verdergaat.",
       noCertificate: "Geen certificaat geüpload",
       certRequiredWarn: "Er is geen certificaat geüpload en de gekozen framework-rol vereist er één — het register zal deze partij weigeren. Ga terug naar de stap Certificaat om er één te uploaden, of kies de rol Service Consumer of Entitled Party."
     },
@@ -1639,6 +1640,7 @@ const nl = {
       x509Certificate: "X.509-certificaat",
       dataspaceMembership: "Dataspace-lidmaatschap",
       dataspaceAgreement: "Dataspace-overeenkomst",
+      dataspaceRole: "Dataspace-rol",
       idpAssertion: "IdP-assertie"
     },
     status: {
