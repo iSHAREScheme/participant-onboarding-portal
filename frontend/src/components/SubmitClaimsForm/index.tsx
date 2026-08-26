@@ -67,6 +67,15 @@ const FRAMEWORK_ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "iShareSatellite", label: "iSHARE Satellite" },
 ];
 
+// Scheme agreement types (same set the classic UI offered; the spec's
+// ParticipantRegistryAgreement joins once backlog item 24-A is decided).
+const AGREEMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "TermsOfUse", label: "Terms of Use" },
+  { value: "AccessionAgreement", label: "Accession Agreement" },
+  { value: "CertifiedPartyAgreement", label: "Certified Party Agreement" },
+  { value: "SatelliteAgreement", label: "Satellite Agreement" },
+];
+
 const roleTitle = (roleId: string): string =>
   FRAMEWORK_ROLE_OPTIONS.find((o) => o.value === roleId)?.label || roleId;
 
@@ -165,8 +174,8 @@ const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDr
     case "frameworkAgreement":
       next.frameworkId = next.frameworkId || defaults.frameworkId;
       next.agreementType = next.agreementType || defaults.frameworkAgreementType;
-      next.agreementId = next.agreementId || defaults.frameworkAgreementId;
-      next.title = next.title || defaults.frameworkAgreementTitle;
+      // agreementId stays empty for the operator to fill; title is prefilled
+      // from the uploaded document's filename (feedback 2026-08-26).
       break;
     case "frameworkRole":
       next.frameworkId = next.frameworkId || defaults.frameworkId;
@@ -586,6 +595,17 @@ const SubmitClaimsForm: React.FC = () => {
               })
             : "",
       });
+      // Every claim's validity window follows the certificate's, not just the
+      // x509 claim's (feedback 2026-08-26); extras added later inherit via the
+      // defaults.
+      if (parsed.validFrom && parsed.validTo) {
+        const certStart = toDateInputValue(new Date(parsed.validFrom));
+        const certEnd = toDateInputValue(new Date(parsed.validTo));
+        setClaimDefaults((prev) => ({ ...prev, startDate: certStart, endDate: certEnd }));
+        setClaims((prev) =>
+          prev.map((c) => ({ ...c, startDate: certStart, endDate: certEnd }))
+        );
+      }
       // Derive the party identity from the certificate — prefill only, never
       // overwrite something the operator already typed.
       if (parsed.partyId) {
@@ -639,6 +659,14 @@ const SubmitClaimsForm: React.FC = () => {
         _agreementFile: file.name,
         _agreementError: "",
       });
+      // Prefill the agreement title from the document's filename — only when
+      // the operator hasn't typed one (feedback 2026-08-26).
+      const titleFromFile = file.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
+      if (titleFromFile) {
+        setClaims((prev) =>
+          prev.map((c, i) => (i === index && !c.title ? { ...c, title: titleFromFile } : c))
+        );
+      }
     } catch (err: any) {
       updateClaimFields(index, {
         _agreementError: err?.message || t("submit.upload.agreementReadError"),
@@ -831,7 +859,13 @@ const SubmitClaimsForm: React.FC = () => {
         return (
           <>
             {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
-            {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
+            <FormSelect
+              label={t("submit.claim.agreementType")}
+              options={AGREEMENT_TYPE_OPTIONS}
+              value={claim.agreementType || ""}
+              onChange={(v) => updateClaim(index, "agreementType", v)}
+              required
+            />
             {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
             {claimInput(index, "title", t("submit.claim.title"), "", true)}
           </>
