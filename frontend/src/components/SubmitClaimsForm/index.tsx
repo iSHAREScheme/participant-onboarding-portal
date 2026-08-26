@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import { FormInput, FormSelect, Button } from "components";
 import { useSubmitParty } from "hooks";
 import { useLanguage } from "context/LanguageContext";
@@ -287,7 +288,20 @@ const toClaim = (d: ClaimDraft): Claim => {
 
 const SubmitClaimsForm: React.FC = () => {
   const { t } = useLanguage();
+  const router = useRouter();
   const { submitParty, loading, error, response } = useSubmitParty();
+
+  // After a successful creation, take the operator to the participants list so
+  // they can see the new party appear — after a short pause so the success
+  // message registers. (The satellite lists the party within a second or two
+  // of accepting it.)
+  useEffect(() => {
+    if (!response) return;
+    const timer = setTimeout(() => {
+      void router.push("/participants");
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [response, router]);
   const [claimDefaults, setClaimDefaults] =
     useState<ClaimDefaults>(buildInitialDefaults);
 

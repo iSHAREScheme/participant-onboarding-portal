@@ -1682,7 +1682,7 @@ const en = {
     },
     messages: {
       submitError: "Failed to submit party. {{message}}",
-      submitSuccess: "Party submitted successfully."
+      submitSuccess: "Party submitted successfully. Taking you to the participants list…"
     },
     upload: {
       or: "or",

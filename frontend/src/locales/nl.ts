@@ -1679,7 +1679,7 @@ const nl = {
     },
     messages: {
       submitError: "Verzenden van partij mislukt. {{message}}",
-      submitSuccess: "Partij succesvol verzonden."
+      submitSuccess: "Partij succesvol verzonden. Je gaat nu naar de deelnemerslijst…"
     },
     upload: {
       or: "of",
