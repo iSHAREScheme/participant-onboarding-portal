@@ -105,6 +105,7 @@ const en = {
       partyId: "Party ID",
       name: "Name",
       roles: "Roles",
+      dataspace: "Dataspace",
       status: "Status",
       startDate: "Start date",
       endDate: "End date",

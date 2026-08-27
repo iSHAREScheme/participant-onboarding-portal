@@ -95,17 +95,21 @@
    must be accounted for. Scoped to tablet/desktop; on mobile the table becomes
    a stacked card layout where fixed column widths don't apply. */
 @media (min-width: 641px) {
+  /* Eight columns since the Dataspace column (2026-08-27). table-layout is
+     fixed, so these MUST sum to exactly 100% — a sum over 100% silently
+     collapses the last column to zero width (the invisible-Access-column
+     incident, rc.23). */
   .table th:nth-child(1),
   .table td:nth-child(1) {
-    width: 22%;
+    width: 20%;
   }
   .table th:nth-child(2),
   .table td:nth-child(2) {
-    width: 19%;
+    width: 17%;
   }
   .table th:nth-child(3),
   .table td:nth-child(3) {
-    width: 19%;
+    width: 15%;
   }
   .table th:nth-child(4),
   .table td:nth-child(4) {
@@ -113,14 +117,18 @@
   }
   .table th:nth-child(5),
   .table td:nth-child(5) {
-    width: 11%;
+    width: 10%;
   }
   .table th:nth-child(6),
   .table td:nth-child(6) {
-    width: 11%;
+    width: 10%;
   }
   .table th:nth-child(7),
   .table td:nth-child(7) {
+    width: 10%;
+  }
+  .table th:nth-child(8),
+  .table td:nth-child(8) {
     width: 6%;
   }
 }
@@ -169,7 +177,7 @@
 
 /* Ownership indicator column (pen = owned/editable here, eye = view only) —
    a narrow, centred glyph column mirroring the old registry UI. Its width comes
-   from the nth-child(7) rule above; slim padding so the glyph fits at 641px. */
+   from the nth-child(8) rule above; slim padding so the glyph fits at 641px. */
 .table th.accessHeader,
 .table td.accessCell {
   text-align: center;

@@ -25,6 +25,7 @@ interface ParticipantRow {
   partyId: string;
   name: string;
   roles: string[];
+  dataspaces: string[];
   status: string;
   startDate: string;
   endDate: string;
@@ -81,11 +82,28 @@ const normalize = (p: any): ParticipantRow => {
     }
   }
 
+  // Dataspace membership from the v3 claims (union over the dataspace-scoped
+  // claim types — a party with only a role or agreement claim in a dataspace
+  // still belongs to it). v2 parties carry no claims and show "—".
+  let dataspaces: string[] = [];
+  if (Array.isArray(p?.claims)) {
+    dataspaces = Array.from(
+      new Set(
+        p.claims
+          .filter((c: any) =>
+            ["dataspaceMembership", "dataspaceRole", "dataspaceAgreement"].includes(c?.type)
+          )
+          .map((c: any) => c?.dataspaceId)
+          .filter(Boolean)
+      )
+    );
+  }
+
   // Set server-side by the BFF (annotateOwnership): true when the party is
   // registered under this portal's registrar — the same test as "My participants".
   const owned = p?.ownedByRegistry === true;
 
-  return { partyId, name, roles, status, startDate, endDate, owned };
+  return { partyId, name, roles, dataspaces, status, startDate, endDate, owned };
 };
 
 type FilterMode = "all" | "mine" | "active" | "certified";
@@ -216,8 +234,10 @@ const Participants: NextPage = () => {
   const [role, setRole] = useState<string>(
     () => getParticipantsListState()?.role ?? ""
   );
+  // Default to the operator's own parties (Joost, 2026-08-27) — the in-session
+  // list state still wins, so switching to "all" sticks while navigating.
   const [filter, setFilter] = useState<FilterMode>(
-    () => (getParticipantsListState()?.filter as FilterMode) ?? "all"
+    () => (getParticipantsListState()?.filter as FilterMode) ?? "mine"
   );
   const [authorized, setAuthorized] = useState(false);
   // Guards against out-of-order responses: only the latest request applies.
@@ -454,6 +474,7 @@ const Participants: NextPage = () => {
                   <th>{t("participants.table.partyId")}</th>
                   <th>{t("participants.table.name")}</th>
                   <th>{t("participants.table.roles")}</th>
+                  <th>{t("participants.table.dataspace")}</th>
                   <th>{t("participants.table.status")}</th>
                   <th>{t("participants.table.startDate")}</th>
                   <th>{t("participants.table.endDate")}</th>
@@ -468,6 +489,7 @@ const Participants: NextPage = () => {
                     <td><Skeleton width="80%" /></td>
                     <td><Skeleton width="60%" /></td>
                     <td><Skeleton width={54} height={18} radius={9999} /></td>
+                    <td><Skeleton width={70} /></td>
                     <td><Skeleton width={64} height={18} radius={9999} /></td>
                     <td><Skeleton width={72} /></td>
                     <td><Skeleton width={72} /></td>
@@ -492,6 +514,7 @@ const Participants: NextPage = () => {
                 <th>{t("participants.table.partyId")}</th>
                 <th>{t("participants.table.name")}</th>
                 <th>{t("participants.table.roles")}</th>
+                <th>{t("participants.table.dataspace")}</th>
                 <th>{t("participants.table.status")}</th>
                 <th>{t("participants.table.startDate")}</th>
                 <th>{t("participants.table.endDate")}</th>
@@ -544,6 +567,19 @@ const Participants: NextPage = () => {
                       "—"
                     )}
                   </td>
+                  <td
+                    data-label={t("participants.table.dataspace")}
+                    title={p.dataspaces.join(", ") || undefined}
+                  >
+                    {p.dataspaces.length ? (
+                      <>
+                        {p.dataspaces[0]}
+                        {p.dataspaces.length > 1 && ` +${p.dataspaces.length - 1}`}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td data-label={t("participants.table.status")}>
                     {p.status ? (
                       <span
@@ -584,7 +620,7 @@ const Participants: NextPage = () => {
               {totalPages > 1 &&
                 Array.from({ length: blankRows }).map((_, i) => (
                   <tr key={`empty-${i}`} aria-hidden="true">
-                    <td colSpan={7}>&nbsp;</td>
+                    <td colSpan={8}>&nbsp;</td>
                   </tr>
                 ))}
             </tbody>

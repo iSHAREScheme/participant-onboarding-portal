@@ -104,6 +104,7 @@ const nl = {
       partyId: "Party ID",
       name: "Naam",
       roles: "Rollen",
+      dataspace: "Dataspace",
       status: "Status",
       startDate: "Startdatum",
       endDate: "Einddatum",
