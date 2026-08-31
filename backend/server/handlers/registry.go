@@ -1006,10 +1006,20 @@ func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, acti
 	}
 	// Role filter: a v3 claim-model satellite filters roles via a frameworkRole
 	// claim filter (it ignores a bare `role=`); a v2 satellite accepts `role=`.
+	// The v3 vocabulary renamed the registry role iShareSatellite ->
+	// ParticipantRegistry; accept either spelling from the caller and send the
+	// term the target satellite's vocabulary uses (the v3 middleware accepts
+	// both as synonyms, v2 only knows the old one).
 	if role != "" {
 		if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+			if strings.EqualFold(role, "iShareSatellite") {
+				role = "ParticipantRegistry"
+			}
 			q.Set("claimFilter[frameworkRole.roleId]", role)
 		} else {
+			if strings.EqualFold(role, "ParticipantRegistry") {
+				role = "iShareSatellite"
+			}
 			q.Set("role", role)
 		}
 	}

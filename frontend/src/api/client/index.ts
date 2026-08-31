@@ -516,7 +516,7 @@ export class API {
     search?: string
     // Party-id search (satellite matches id / EORI / DID, contains).
     id?: string
-    // Framework-role filter (frameworkRole claim roleId, e.g. "iShareSatellite").
+    // Framework-role filter (frameworkRole claim roleId, e.g. "ParticipantRegistry").
     role?: string
     activeOnly?: boolean
     certifiedOnly?: boolean

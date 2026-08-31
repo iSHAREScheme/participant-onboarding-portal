@@ -66,7 +66,9 @@ const FRAMEWORK_ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "AuthorisationRegistry", label: "Authorisation Registry" },
   { value: "IdentityProvider", label: "Identity Provider" },
   { value: "IdentityBroker", label: "Identity Broker" },
-  { value: "iShareSatellite", label: "iSHARE Satellite" },
+  // v3 renamed the registry role - write ParticipantRegistry, never the
+  // pre-rename iShareSatellite (AddClaimModal's ROLE_IDS made this switch first).
+  { value: "ParticipantRegistry", label: "Participant Registry" },
 ];
 
 // Scheme agreement types (same set the classic UI offered; the spec's

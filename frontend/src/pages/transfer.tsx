@@ -33,11 +33,13 @@ const partyOptionLabel = (p: Row): string => {
   return name ? `${name} — ${id}` : id;
 };
 
-// A party is a satellite when it carries the iShareSatellite role — as a v3
-// frameworkRole claim (roleId/title) or a v2 roles[] entry.
-const SAT_ROLE = "isharesatellite";
+// A party is a satellite when it carries the registry role — ParticipantRegistry
+// in the v3 vocabulary, iShareSatellite in v2 records and unmigrated projections
+// (both must match until every registrar has migrated) — as a v3 frameworkRole
+// claim (roleId/title) or a v2 roles[] entry.
+const SAT_ROLES = new Set(["isharesatellite", "participantregistry"]);
 const roleMatches = (s: any): boolean =>
-  str(s).toLowerCase().replace(/[\s_-]/g, "") === SAT_ROLE;
+  SAT_ROLES.has(str(s).toLowerCase().replace(/[\s_-]/g, ""));
 const isSatellite = (p: Row): boolean => {
   const claims = Array.isArray(p?.claims) ? p.claims : [];
   if (claims.some((c: any) => c?.type === "frameworkRole" && (roleMatches(c?.roleId) || roleMatches(c?.title))))
@@ -114,7 +116,7 @@ const Transfer: NextPage = () => {
   }, []);
 
   // Other satellites in the network: page through participants and keep those
-  // with the iShareSatellite role, excluding ourselves.
+  // with the registry role, excluding ourselves.
   const loadSatellites = useCallback(async () => {
     setSatStatus("loading");
     try {

@@ -45,6 +45,14 @@ const extractParties = (data: any): any[] => {
   );
 };
 
+// The v3 vocabulary renamed the registry role iShareSatellite ->
+// ParticipantRegistry. v2 records and unmigrated projections still carry the
+// old literal, so map it for display - the UI only ever shows the new term.
+const canonicalRole = (r: string): string =>
+  r.toLowerCase().replace(/[\s_-]/g, "") === "isharesatellite"
+    ? "ParticipantRegistry"
+    : r;
+
 const normalize = (p: any): ParticipantRow => {
   const partyId = p?.party_id ?? p?.id ?? "";
   const name = p?.party_name ?? p?.name ?? "";
@@ -62,6 +70,7 @@ const normalize = (p: any): ParticipantRow => {
       .map((c: any) => c?.roleId ?? c?.title)
       .filter(Boolean);
   }
+  roles = roles.map(canonicalRole);
 
   let status = p?.adherence?.status ?? p?.status ?? "";
   let startDate = p?.adherence?.start_date ?? p?.startDate ?? "";
@@ -118,7 +127,7 @@ const ROLE_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "AuthorisationRegistry", label: "Authorisation Registry" },
   { value: "IdentityProvider", label: "Identity Provider" },
   { value: "IdentityBroker", label: "Identity Broker" },
-  { value: "iShareSatellite", label: "iSHARE Satellite" },
+  { value: "ParticipantRegistry", label: "Participant Registry" },
 ];
 
 const SEARCH_DEBOUNCE_MS = 350;
