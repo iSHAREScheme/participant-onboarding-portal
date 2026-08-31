@@ -400,6 +400,11 @@
   box-sizing: border-box;
 }
 
+.statusSelect:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .statusSelect:focus {
   outline: none;
   border-color: var(--button-primary, #0066EE);

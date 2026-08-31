@@ -310,6 +310,12 @@ const Participants: NextPage = () => {
     } else {
       setIsLoading(true);
       setErrorKey(null);
+      // A cache miss means a DIFFERENT query (changed filter/search/page). Drop
+      // the previous rows so the skeleton shows: stale rows staying on screen
+      // read as the new filter's answer (clicking a role filter while "My
+      // participants" was active looked like the mine-filter was ignored).
+      setParticipants([]);
+      setTotalPages(1);
     }
     try {
       const api = new API();
@@ -413,10 +419,16 @@ const Participants: NextPage = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {/* Both filter selects are blocked while a fetch is in flight, so a
+                second filter can't be clicked before the first one's result is
+                on screen (the skeleton above signals the load). The search box
+                stays typable: disabling it would drop focus mid-keystroke, and
+                the request-id guard already discards stale responses. */}
             <select
               className={styles.statusSelect}
               aria-label={t("participants.roleFilterAria")}
               value={role}
+              disabled={isLoading}
               onChange={(e) => changeRole(e.target.value)}
             >
               <option value="">{t("participants.roleAll")}</option>
@@ -429,6 +441,7 @@ const Participants: NextPage = () => {
             <select
               className={styles.statusSelect}
               value={filter}
+              disabled={isLoading}
               onChange={(e) => changeFilter(e.target.value as FilterMode)}
             >
               <option value="all">{t("participants.filters.all")}</option>
