@@ -102,7 +102,7 @@ const OrganizationAccess: NextPage = () => {
     }
   };
 
-  const connectionOptions = overview?.idpConnections.length
+  const connectionOptions = overview?.idpConnections?.length
     ? overview.idpConnections
     : [{ alias: "google" }, { alias: "microsoft" }, { alias: "okta" }];
 
