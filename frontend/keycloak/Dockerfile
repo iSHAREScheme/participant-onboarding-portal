@@ -6,6 +6,9 @@ ENV KC_FEATURES=scripts,preview \
 
 # copy custom provider & realm-export
 COPY keycloakCustom /opt/keycloak/themes/keycloakCustom
+# Registry-look login theme (iSHARE v3 house style, renders identity-provider
+# buttons); the realm import selects it as the default login theme.
+COPY myThemeV3 /opt/keycloak/themes/myThemeV3
 COPY keycloakProviders /opt/keycloak/providers
 COPY keycloakConfig.json /opt/keycloak/data/import/realm-export.json
 COPY --chmod=0555 entrypoint.sh /usr/local/bin/kc-entrypoint.sh

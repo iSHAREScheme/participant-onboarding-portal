@@ -1778,7 +1778,7 @@
     "user": "${KEYCLOAK_SMTP_USER}",
     "password": "${KEYCLOAK_SMTP_PASS}"
   },
-  "loginTheme": "keycloakCustom",
+  "loginTheme": "myThemeV3",
   "accountTheme": "",
   "adminTheme": "",
   "emailTheme": "keycloakCustom",
