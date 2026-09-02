@@ -962,5 +962,5 @@ input[type="submit"]:active {
 #kc-social-providers h2 { text-align: center; font-size: 13px; color: #72767b; margin: 0 0 14px; }
 #kc-social-providers ul { margin: 0; padding: 0; }
 #kc-social-providers ul li { list-style: none; margin: 0 0 10px; }
-#kc-social-providers ul li a { display: block; width: 100%; text-align: center; padding: 9px 16px; font-size: 15px; border: 1px solid #0099d3; border-radius: 1px; color: #0099d3; background: #ffffff; text-decoration: none; }
-#kc-social-providers ul li a:hover, #kc-social-providers ul li a:focus { background: #0099d3; color: #ffffff; text-decoration: none; }
+#kc-social-providers ul li a { display: block; width: 100%; min-height: 46px; text-align: center; padding: 12px 18px; font-size: 16px; font-weight: 700; text-transform: uppercase; border: 1px solid var(--ishare-purple, #61385f); border-radius: 1px; color: var(--ishare-purple, #61385f); background: #ffffff; text-decoration: none; }
+#kc-social-providers ul li a:hover, #kc-social-providers ul li a:focus { background: #4f2d4d; border-color: #4f2d4d; color: #ffffff; text-decoration: none; }
