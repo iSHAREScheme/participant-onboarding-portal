@@ -20,8 +20,7 @@ func main() {
 	signedToken, err := utils.CreateSatelliteOwnerAccessToken(
 		cfg.SatelliteIss,
 		cfg.SatelliteAud,
-		cfg.SatelliteX5c,
-		cfg.SatellitePrivateKey,
+		cfg.Keys,
 	)
 	if err != nil {
 		log.Fatalf("failed to create token: %v", err)
