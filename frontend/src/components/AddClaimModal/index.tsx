@@ -332,9 +332,17 @@ const AddClaimModal = ({
       className={styles.modalOverlay}
       role="dialog"
       aria-modal="true"
+      tabIndex={-1}
       onClick={onClose}
+      onKeyDown={(ev) => {
+        if (ev.key === "Escape") onClose();
+      }}
     >
-      <div className={styles.modalPanel} onClick={(ev) => ev.stopPropagation()}>
+      <div
+        className={styles.modalPanel}
+        onClick={(ev) => ev.stopPropagation()}
+        onKeyDown={(ev) => ev.stopPropagation()}
+      >
         <div className={styles.modalHead}>
           <span className={styles.claimType}>{e("addClaimTitle")}</span>
           <button
