@@ -39,15 +39,11 @@ type HandlerParty struct {
 
 // CreateSatelliteOwnerAccessToken
 func createSatelliteOwnerAccessToken(config *config.Config) (string, error) {
-	iss := config.SatelliteIss
-	aud := config.SatelliteAud
-	x5c := config.SatelliteX5c
-	privateKey := config.SatellitePrivateKey
-	if strings.TrimSpace(privateKey) == "" {
+	if !config.Keys.Ready() {
 		return "", fmt.Errorf("satellite private key is not configured")
 	}
 
-	return utils.CreateSatelliteOwnerAccessToken(iss, aud, x5c, privateKey)
+	return utils.CreateSatelliteOwnerAccessToken(config.SatelliteIss, config.SatelliteAud, config.Keys)
 }
 
 func joinSatelliteURL(base, endpoint string) string {
@@ -99,8 +95,7 @@ func (h *HandlerParty) buildSporSignedRequest(subject string, organizationIdenti
 	}
 	iss := strings.TrimSpace(h.Config.RegistrarId)
 	aud := strings.TrimSpace(h.Config.SatelliteAud)
-	privateKey := strings.TrimSpace(h.Config.SatellitePrivateKey)
-	if privateKey == "" {
+	if !h.Config.Keys.Ready() {
 		return "", fmt.Errorf("SPOR signed request is not configured")
 	}
 	if iss == "" {
@@ -114,8 +109,7 @@ func (h *HandlerParty) buildSporSignedRequest(subject string, organizationIdenti
 		aud,
 		subject,
 		organizationIdentifier,
-		h.Config.SatelliteX5c,
-		privateKey,
+		h.Config.Keys,
 		300,
 	)
 }
@@ -133,8 +127,7 @@ func (h *HandlerParty) buildEpCreationEnvelope(payload interface{}, flavor epCre
 	token, err := utils.CreateEpCreationToken(
 		strings.TrimSpace(h.Config.RegistrarId),
 		strings.TrimSpace(h.Config.SatelliteAud),
-		h.Config.SatelliteX5c,
-		strings.TrimSpace(h.Config.SatellitePrivateKey),
+		h.Config.Keys,
 		partyClaimKey,
 		payload,
 		300,

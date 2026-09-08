@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"onboardingportal/models"
+	"onboardingportal/signing"
 	"onboardingportal/utils"
 	"os"
 	"strings"
@@ -31,6 +32,7 @@ type Config struct {
 	SatelliteX5c                string
 	SatellitePrivateKeyPath     string
 	SatellitePrivateKey         string
+	Keys                        *signing.KeySource
 	SatelliteDebug              bool
 	OIDCDisable                 bool
 	SporSignedRequestPath       string
@@ -197,12 +199,46 @@ func (config *Config) LoadEnvironment() error {
 	config.SatellitePrivateKeyPath = os.Getenv("SATELLITE_PRIVATE_KEY_PATH")
 
 	config.SatellitePrivateKey = normalizePEM(os.Getenv("SATELLITE_PRIVATE_KEY"))
-	if config.SatellitePrivateKey == "" && config.SatellitePrivateKeyPath != "" {
+	// In the vault key-source modes the key comes from Vault, so a missing
+	// key file is not an error; the historic file mode keeps failing fast.
+	keySource := strings.TrimSpace(os.Getenv("SATELLITE_KEY_SOURCE"))
+	if config.SatellitePrivateKey == "" && config.SatellitePrivateKeyPath != "" &&
+		(keySource == "" || keySource == signing.SourceFile) {
 		privateKey, err := utils.LoadPrivateKey(config.SatellitePrivateKeyPath)
 		if err != nil {
 			return err
 		}
 		config.SatellitePrivateKey = privateKey
+	}
+
+	// Key-source abstraction (additive): SATELLITE_KEY_SOURCE unset or "file"
+	// wraps the material resolved above and changes nothing; "vault-kv" and
+	// "vault-transit" fetch from / sign in Vault. See backend/signing.
+	keys, err := signing.Load(signing.Options{
+		Source:         keySource,
+		PrivateKeyPEM:  config.SatellitePrivateKey,
+		PrivateKeyPath: config.SatellitePrivateKeyPath,
+		X5c:            config.SatelliteX5c,
+		VaultAddr:      os.Getenv("VAULT_ADDR"),
+		VaultToken:     os.Getenv("VAULT_TOKEN"),
+		RoleID:         envOrFile("VAULT_ROLE_ID"),
+		SecretID:       envOrFile("VAULT_SECRET_ID"),
+		KVPath:         os.Getenv("VAULT_KV_PATH"),
+		TransitPath:    os.Getenv("VAULT_TRANSIT_PATH"),
+		TransitKey:     os.Getenv("VAULT_TRANSIT_KEY"),
+	})
+	if err != nil {
+		return err
+	}
+	config.Keys = keys
+	// Back-fill so existing readers (connection status, presence checks) see
+	// the effective material regardless of where it came from. The private
+	// key stays empty in transit mode - it never enters this process.
+	if config.SatellitePrivateKey == "" {
+		config.SatellitePrivateKey = keys.PrivateKeyPEM()
+	}
+	if config.SatelliteX5c == "" {
+		config.SatelliteX5c = keys.X5c()
 	}
 
 	if sporPathRaw, ok := os.LookupEnv("SPOR_SIGNED_REQUEST_PATH"); ok {
@@ -280,6 +316,17 @@ func (config *Config) LoadEnvironment() error {
 	config.CorsAllowedOrigins = strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
 
 	return nil
+}
+
+// envOrFile resolves NAME or NAME_FILE (file wins when both are set), for
+// secrets that deployments prefer to mount rather than pass inline.
+func envOrFile(name string) string {
+	if path := strings.TrimSpace(os.Getenv(name + "_FILE")); path != "" {
+		if b, err := os.ReadFile(path); err == nil {
+			return strings.TrimSpace(string(b))
+		}
+	}
+	return strings.TrimSpace(os.Getenv(name))
 }
 
 func normalizePEM(raw string) string {

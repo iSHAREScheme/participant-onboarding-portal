@@ -5,12 +5,14 @@ import (
 	"strings"
 	"time"
 
+	"onboardingportal/signing"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
-func CreateSporSignedRequestJWT(iss string, aud string, subject string, organizationIdentifier string, x5c string, privateKey string, ttlSeconds int) (string, error) {
-	if strings.TrimSpace(privateKey) == "" {
+func CreateSporSignedRequestJWT(iss string, aud string, subject string, organizationIdentifier string, keys *signing.KeySource, ttlSeconds int) (string, error) {
+	if !keys.Ready() {
 		return "", fmt.Errorf("SPOR private key is not configured")
 	}
 	if strings.TrimSpace(iss) == "" {
@@ -30,22 +32,17 @@ func CreateSporSignedRequestJWT(iss string, aud string, subject string, organiza
 		ttlSeconds = 300
 	}
 
-	parsedKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKey))
-	if err != nil {
-		return "", err
-	}
-
 	iat := time.Now().Unix()
 	exp := iat + int64(ttlSeconds)
 
 	claims := jwt.MapClaims{
-		"iss":                   iss,
-		"sub":                   subject,
-		"aud":                   aud,
-		"iat":                   iat,
-		"nbf":                   iat,
-		"exp":                   exp,
-		"jti":                   uuid.NewString(),
+		"iss":                    iss,
+		"sub":                    subject,
+		"aud":                    aud,
+		"iat":                    iat,
+		"nbf":                    iat,
+		"exp":                    exp,
+		"jti":                    uuid.NewString(),
 		"organizationIdentifier": organizationIdentifier,
 	}
 
@@ -53,26 +50,7 @@ func CreateSporSignedRequestJWT(iss string, aud string, subject string, organiza
 	token.Header["alg"] = jwt.SigningMethodRS256.Alg()
 	token.Header["typ"] = "JWT"
 
-	if x5c != "" {
-		rawParts := strings.Split(x5c, ",")
-		cleaned := make([]string, 0, len(rawParts))
-		for _, part := range rawParts {
-			trimmed := strings.TrimSpace(part)
-			trimmed = strings.Trim(trimmed, "\"")
-			if trimmed == "" {
-				continue
-			}
-			cleaned = append(cleaned, trimmed)
-		}
-		if len(cleaned) > 0 {
-			token.Header["x5c"] = cleaned
-		}
-	}
+	setX5cHeader(token, keys.X5c())
 
-	signedToken, err := token.SignedString(parsedKey)
-	if err != nil {
-		return "", err
-	}
-
-	return signedToken, nil
+	return keys.SignJWT(token, "spor_signed_request")
 }
