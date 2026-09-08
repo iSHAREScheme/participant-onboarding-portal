@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -77,5 +78,87 @@ func TestPublicFlowViews(t *testing.T) {
 	}
 	if _, hasFav := theme["faviconUrl"]; hasFav {
 		t.Fatal("faviconUrl should be absent when no favicon uploaded")
+	}
+}
+
+func TestPublicFlowViewsAgreementsAndAuthRegistry(t *testing.T) {
+	agreements := datatypes.JSON(`[
+		{"id":"tou","title":"ToU","version":"1","type":"frameworkAgreement","filePath":"/x/tou.pdf"},
+		{"id":"dsa","title":"DSA","version":"2","type":"dataspaceAgreement","url":"https://example.org/dsa.pdf","auth":{"method":"basic","username":"u","password":"secret"}}
+	]`)
+	flows := datatypes.JSON(`[
+		{"route":"all","enabled":true},
+		{"route":"tou-only","enabled":true,"agreementIds":["tou","gone"],
+		 "dataspaceId":"ds-1","dataspaceTitle":"Space One",
+		 "authRegistryId":"EU.EORI.NLAR","authRegistryName":"AR One","authRegistryUrl":"https://ar.example.org"}
+	]`)
+	s := models.Settings{PublicOnboardingEnabled: true, OnboardingFlows: flows, Agreements: agreements}
+	views := publicFlowViews(s)
+	if len(views) != 2 {
+		t.Fatalf("expected 2 flows, got %d", len(views))
+	}
+
+	// Empty selection = every configured agreement.
+	all, _ := views[0]["agreements"].([]publicAgreementView)
+	if len(all) != 2 {
+		t.Fatalf("empty agreementIds should expose all agreements, got %d", len(all))
+	}
+	if ids, _ := views[0]["agreementIds"].([]string); ids == nil || len(ids) != 0 {
+		t.Fatalf("agreementIds should serialise as an empty list, got %v", views[0]["agreementIds"])
+	}
+
+	// Explicit selection: only existing selected ids, in configured order, public view only.
+	sub, _ := views[1]["agreements"].([]publicAgreementView)
+	if len(sub) != 1 || sub[0].ID != "tou" {
+		t.Fatalf("expected only 'tou' agreement, got %+v", sub)
+	}
+	raw, _ := json.Marshal(views[1])
+	if strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "/x/tou.pdf") {
+		t.Fatalf("agreement secrets/paths leaked into the public flow view: %s", raw)
+	}
+	if views[1]["dataspaceId"] != "ds-1" || views[1]["dataspaceTitle"] != "Space One" {
+		t.Fatalf("dataspace fields wrong: %+v", views[1])
+	}
+	if views[1]["authRegistryId"] != "EU.EORI.NLAR" || views[1]["authRegistryUrl"] != "https://ar.example.org" {
+		t.Fatalf("auth registry fields wrong: %+v", views[1])
+	}
+}
+
+func TestValidateFlowsAgreementsAndAuthRegistry(t *testing.T) {
+	if err := validateFlows([]models.OnboardingFlow{{Route: "a", AgreementIds: []string{"tou", " "}}}); err == nil {
+		t.Fatal("blank agreement id should be rejected")
+	}
+	if err := validateFlows([]models.OnboardingFlow{{Route: "a", AuthRegistryUrl: "ar.example.org"}}); err == nil {
+		t.Fatal("non-absolute auth registry URL should be rejected")
+	}
+	if err := validateFlows([]models.OnboardingFlow{{Route: "a", AuthRegistryUrl: "https://ar.example.org", AgreementIds: []string{"tou"}}}); err != nil {
+		t.Fatalf("valid flow rejected: %v", err)
+	}
+}
+
+func TestResolveFlowDataspace(t *testing.T) {
+	flows := datatypes.JSON(`[{"route":"ds1","enabled":false,"dataspaceId":"flow-ds","dataspaceTitle":"Flow DS"},{"route":"plain","enabled":true}]`)
+	s := &models.Settings{DataspaceId: "settings-ds", DataspaceTitle: "Settings DS", OnboardingFlows: flows}
+
+	if id, title := resolveFlowDataspace("cfg-ds", "Cfg DS", nil, "ds1"); id != "cfg-ds" || title != "Cfg DS" {
+		t.Fatalf("no settings: got %s/%s", id, title)
+	}
+	if id, title := resolveFlowDataspace("cfg-ds", "Cfg DS", s, ""); id != "settings-ds" || title != "Settings DS" {
+		t.Fatalf("settings override: got %s/%s", id, title)
+	}
+	if id, title := resolveFlowDataspace("cfg-ds", "Cfg DS", s, "plain"); id != "settings-ds" || title != "Settings DS" {
+		t.Fatalf("flow without dataspace should inherit: got %s/%s", id, title)
+	}
+	// A disabled flow still resolves: the proposal was submitted through it.
+	if id, title := resolveFlowDataspace("cfg-ds", "Cfg DS", s, "ds1"); id != "flow-ds" || title != "Flow DS" {
+		t.Fatalf("flow override: got %s/%s", id, title)
+	}
+
+	all := []models.Agreement{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+	if got := flowAgreements(all, nil); len(got) != 3 {
+		t.Fatalf("nil selection should return all, got %d", len(got))
+	}
+	if got := flowAgreements(all, []string{"c", "a", "zz"}); len(got) != 2 || got[0].ID != "a" || got[1].ID != "c" {
+		t.Fatalf("selection should keep configured order and drop unknown ids, got %+v", got)
 	}
 }

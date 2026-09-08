@@ -22,6 +22,7 @@ import { sanitizeRichText } from "util/sanitizeHtml";
 import {
   applyFlowBranding,
   findFlow,
+  type PublicFlowAgreement,
   type PublicOnboardingFlow,
 } from "config/onboardingFlows";
 
@@ -187,7 +188,9 @@ const OnboardingLanding: React.FC<Props> = ({ flowRoute }) => {
   }
 
   const description = flow?.description || publicSettings.description || "";
-  const agreements = publicSettings.agreements ?? [];
+  // A flow lists only its own agreement selection (resolved server-side).
+  const agreements: PublicFlowAgreement[] =
+    flow?.agreements ?? publicSettings.agreements ?? [];
   const headerImageUrl = flow?.theme?.headerImageUrl;
 
   return (

@@ -881,10 +881,37 @@ const Register: NextPage = () => {
   const [registrarId, setRegistrarId] = useState("")
   // Onboarding agreement documents (configured in Settings), shown for download
   // on the signing steps. Secrets are redacted server-side.
-  const [agreements, setAgreements] = useState<AgreementView[]>([])
+  const [allAgreements, setAllAgreements] = useState<AgreementView[]>([])
+  // A flow can narrow the configured agreements to its own selection (empty
+  // selection = every configured agreement).
+  const agreements = useMemo<AgreementView[]>(() => {
+    const ids = activeFlow?.agreementIds
+    if (!ids || ids.length === 0) return allAgreements
+    return allAgreements.filter((a) => ids.includes(a.id))
+  }, [allAgreements, activeFlow])
   // Manual signing requires one signed upload per configured agreement (derived,
   // not hardcoded) so the step can never dead-end when the agreement set changes.
   const requiredAgreementCount = agreements.length
+
+  // A flow with its own authorization registry pins the association step to
+  // it, taking precedence over the global prefill setting.
+  useEffect(() => {
+    if (!activeFlow?.authRegistryId) return
+    const { authRegistryId, authRegistryName, authRegistryUrl } = activeFlow
+    queueMicrotask(() => {
+      setIsStaticAuthRegistry(true)
+      setIsSingleAssociation(true)
+      setFormData((prev) => ({
+        ...prev,
+        association: {
+          ...prev.association,
+          authRegistry: authRegistryId,
+          authRegistryName: authRegistryName || "",
+          authRegistryUrl: authRegistryUrl || "",
+        },
+      }))
+    })
+  }, [activeFlow])
 
   const urlRegex =
     /^(https?:\/\/)([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
@@ -1151,7 +1178,7 @@ const Register: NextPage = () => {
         requireQualifiedEidasCertificate:
           settingsData.requireQualifiedEidasCertificate === true,
       })
-      setAgreements(
+      setAllAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
       )
       const hasStaticAuthRegistry =

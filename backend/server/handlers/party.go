@@ -1268,21 +1268,13 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		registrarId = settings.RegistrarId
 	}
 
-	dataspaceId := h.Config.DataspaceId
-	dataspaceTitle := h.Config.DataspaceTitle
-	if settingsResult.Error == nil && settings.DataspaceId != "" {
-		dataspaceId = settings.DataspaceId
-	}
 	// A proposal that came through a configured onboarding flow with its own
 	// dataspace joins THAT dataspace instead of the deployment default.
-	if settingsResult.Error == nil && proposal.FlowRoute != "" {
-		for _, f := range decodeFlows(settings.OnboardingFlows) {
-			if f.Route == proposal.FlowRoute && f.DataspaceId != "" {
-				dataspaceId = f.DataspaceId
-				break
-			}
-		}
+	var flowSettings *models.Settings
+	if settingsResult.Error == nil {
+		flowSettings = &settings
 	}
+	dataspaceId, dataspaceTitle := resolveFlowDataspace(h.Config.DataspaceId, h.Config.DataspaceTitle, flowSettings, proposal.FlowRoute)
 
 	// Preflight: the satellite rejects ep_creation when registrar_id does not equal
 	// the owner-token issuer. An empty registrar_id is a configuration gap, so fail
@@ -1520,17 +1512,11 @@ func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Propos
 	}
 
 	var settings models.Settings
-	settingsResult := h.Server.DB.First(&settings)
-	dataspaceId := h.Config.DataspaceId
-	dataspaceTitle := h.Config.DataspaceTitle
-	if settingsResult.Error == nil {
-		if strings.TrimSpace(settings.DataspaceId) != "" {
-			dataspaceId = settings.DataspaceId
-		}
-		if strings.TrimSpace(settings.DataspaceTitle) != "" {
-			dataspaceTitle = settings.DataspaceTitle
-		}
+	var flowSettings *models.Settings
+	if h.Server.DB.First(&settings).Error == nil {
+		flowSettings = &settings
 	}
+	dataspaceId, dataspaceTitle := resolveFlowDataspace(h.Config.DataspaceId, h.Config.DataspaceTitle, flowSettings, proposal.FlowRoute)
 
 	authRegistryURL := proposal.AuthRegistryUrl
 
@@ -1592,8 +1578,17 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 	// agreed to. URL-sourced/unavailable documents fall back to the signed-artifact
 	// (or eHerkenning consent) hash so completion never hard-fails on hashing.
 	var settings models.Settings
-	h.Server.DB.First(&settings)
+	var flowSettings *models.Settings
+	if h.Server.DB.First(&settings).Error == nil {
+		flowSettings = &settings
+	}
+	// The flow the applicant came through decides which dataspace the party
+	// joins and which of the configured agreements it actually signed.
+	dataspaceId, configuredDataspaceTitle := resolveFlowDataspace(h.Config.DataspaceId, h.Config.DataspaceTitle, flowSettings, proposal.FlowRoute)
 	configuredAgreements := decodeAgreements(settings.Agreements)
+	if f := flowByRoute(flowSettings, proposal.FlowRoute); f != nil {
+		configuredAgreements = flowAgreements(configuredAgreements, f.AgreementIds)
+	}
 	signedHash, _ := h.agreementVerificationHash(proposal)
 
 	frameworkHash := signedHash
@@ -1605,7 +1600,7 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 
 	includeDataspace := false
 	dataspaceHash := ""
-	dataspaceTitle := strings.TrimSpace(h.Config.DataspaceTitle)
+	dataspaceTitle := strings.TrimSpace(configuredDataspaceTitle)
 	if da := findAgreementByType(configuredAgreements, "dataspaceAgreement"); da != nil {
 		includeDataspace = true
 		if strings.TrimSpace(da.Title) != "" {
@@ -1633,7 +1628,7 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 		EndDate:            endDate,
 
 		IncludeDataspaceAgreement: includeDataspace,
-		DataspaceID:               h.Config.DataspaceId,
+		DataspaceID:               dataspaceId,
 		DataspaceAgreementType:    "DataspaceAgreement",
 		DataspaceAgreementID:      h.Config.FrameworkId + "-dsa",
 		DataspaceAgreementTitle:   dataspaceTitle,
