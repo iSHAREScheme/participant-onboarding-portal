@@ -54,8 +54,76 @@ func validateFlows(flows []models.OnboardingFlow) error {
 			return fmt.Errorf("flow %d: route %q is used twice", i+1, route)
 		}
 		seen[route] = true
+		for _, id := range f.AgreementIds {
+			if strings.TrimSpace(id) == "" {
+				return fmt.Errorf("flow %d: agreement ids must not be blank", i+1)
+			}
+		}
+		if u := strings.TrimSpace(f.AuthRegistryUrl); u != "" {
+			parsed, err := url.Parse(u)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+				return fmt.Errorf("flow %d: authorization registry URL %q must be an absolute http(s) URL", i+1, u)
+			}
+		}
 	}
 	return nil
+}
+
+// flowByRoute returns the configured flow at route, enabled or not: a proposal
+// submitted through a flow keeps that flow's dataspace/agreements even if the
+// admin unpublishes the flow before approving it.
+func flowByRoute(settings *models.Settings, route string) *models.OnboardingFlow {
+	if settings == nil || route == "" {
+		return nil
+	}
+	flows := decodeFlows(settings.OnboardingFlows)
+	for i := range flows {
+		if flows[i].Route == route {
+			return &flows[i]
+		}
+	}
+	return nil
+}
+
+// flowAgreements narrows the configured agreements to the flow's selection,
+// keeping the configured order. An empty selection means all of them; ids that
+// no longer exist are skipped.
+func flowAgreements(all []models.Agreement, ids []string) []models.Agreement {
+	if len(ids) == 0 {
+		return all
+	}
+	wanted := map[string]bool{}
+	for _, id := range ids {
+		wanted[strings.TrimSpace(id)] = true
+	}
+	out := make([]models.Agreement, 0, len(ids))
+	for _, a := range all {
+		if wanted[a.ID] {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// resolveFlowDataspace layers the dataspace a party joins: deployment config,
+// then the Settings override, then the flow the proposal came through.
+func resolveFlowDataspace(cfgID, cfgTitle string, settings *models.Settings, route string) (string, string) {
+	id, title := cfgID, cfgTitle
+	if settings != nil {
+		if v := strings.TrimSpace(settings.DataspaceId); v != "" {
+			id = v
+		}
+		if v := strings.TrimSpace(settings.DataspaceTitle); v != "" {
+			title = v
+		}
+	}
+	if f := flowByRoute(settings, route); f != nil && strings.TrimSpace(f.DataspaceId) != "" {
+		id = strings.TrimSpace(f.DataspaceId)
+		if v := strings.TrimSpace(f.DataspaceTitle); v != "" {
+			title = v
+		}
+	}
+	return id, title
 }
 
 // themeEntries decodes the Themes library preserving unknown keys, so the
@@ -85,9 +153,14 @@ func publicFlowViews(settings models.Settings) []fiber.Map {
 		return views
 	}
 	entries := themeEntries(settings.Themes)
+	allAgreements := decodeAgreements(settings.Agreements)
 	for _, f := range decodeFlows(settings.OnboardingFlows) {
 		if !f.Enabled {
 			continue
+		}
+		agreementIds := f.AgreementIds
+		if agreementIds == nil {
+			agreementIds = []string{}
 		}
 		view := fiber.Map{
 			"route":              f.Route,
@@ -95,6 +168,12 @@ func publicFlowViews(settings models.Settings) []fiber.Map {
 			"themeName":          f.ThemeName,
 			"description":        f.Description,
 			"dataspaceId":        f.DataspaceId,
+			"dataspaceTitle":     f.DataspaceTitle,
+			"agreementIds":       agreementIds,
+			"agreements":         publicViewAgreements(flowAgreements(allAgreements, f.AgreementIds)),
+			"authRegistryId":     f.AuthRegistryId,
+			"authRegistryName":   f.AuthRegistryName,
+			"authRegistryUrl":    f.AuthRegistryUrl,
 			"defaultRole":        f.DefaultRole,
 			"skipRoles":          f.SkipRoles,
 			"activeRoles":        f.ActiveRoles,

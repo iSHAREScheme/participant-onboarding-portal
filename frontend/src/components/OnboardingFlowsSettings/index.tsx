@@ -12,13 +12,36 @@ import {
   type PublicOnboardingFlow,
 } from "config/onboardingFlows";
 
-export type EditableFlow = Omit<PublicOnboardingFlow, "theme">;
+// What the admin edits: the stored flow minus the backend-resolved fields.
+export type EditableFlow = Omit<PublicOnboardingFlow, "theme" | "agreements">;
+
+export interface FlowDataspaceOption {
+  id: string;
+  title?: string;
+}
+
+export interface FlowAuthRegistryOption {
+  id: string;
+  name?: string;
+  url?: string;
+}
+
+export interface FlowAgreementOption {
+  id: string;
+  title: string;
+  version?: string;
+}
 
 interface Props {
   enabled: boolean;
   flows: EditableFlow[];
   themeNames: string[];
-  roleOptions: string[];
+  roleOptions: readonly string[];
+  // Pick-lists sourced from the registry / settings so a flow can only refer
+  // to things that exist (a free-text dataspace id would never match).
+  dataspaces: FlowDataspaceOption[];
+  authRegistries: FlowAuthRegistryOption[];
+  agreements: FlowAgreementOption[];
   onEnabledChange: (enabled: boolean) => void;
   onFlowsChange: (flows: EditableFlow[]) => void;
 }
@@ -45,6 +68,9 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
   flows,
   themeNames,
   roleOptions,
+  dataspaces,
+  authRegistries,
+  agreements,
   onEnabledChange,
   onFlowsChange,
 }) => {
@@ -72,6 +98,19 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
     onEnabledChange(next);
     if (next && flows.length === 0) addFlow("");
   };
+
+  const toggleAgreement = (index: number, id: string, checked: boolean) => {
+    const current = flows[index].agreementIds ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, id]))
+      : current.filter((x) => x !== id);
+    update(index, { agreementIds: next });
+  };
+
+  // A stored id that is no longer in the pick-list still needs to be visible,
+  // otherwise the admin cannot see (or clear) a stale selection.
+  const withStale = <T extends { id: string }>(options: T[], id: string | undefined, make: () => T) =>
+    id && !options.some((o) => o.id === id) ? [...options, make()] : options;
 
   const publishedCount = flows.filter((f) => f.enabled !== false).length;
 
@@ -113,6 +152,16 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
             {flows.map((flow, i) => {
               const routeError = flowRouteError(flow.route ?? "", i, flows);
               const isLive = flow.enabled !== false && !routeError;
+              const dataspaceOptions = withStale(dataspaces, flow.dataspaceId, () => ({
+                id: flow.dataspaceId as string,
+                title: flow.dataspaceTitle,
+              }));
+              const registryOptions = withStale(authRegistries, flow.authRegistryId, () => ({
+                id: flow.authRegistryId as string,
+                name: flow.authRegistryName,
+                url: flow.authRegistryUrl,
+              }));
+              const selectedAgreements = flow.agreementIds ?? [];
               return (
                 <div key={i} className={styles.flowCard}>
                   <p className={styles.flowPublishedAt}>
@@ -218,19 +267,105 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
                           onChange={(e) => update(i, { description: e.target.value })}
                         />
                       </div>
+
                       <div className={styles.flowRow}>
                         <div className={styles.flowField}>
                           <label className={styles.colorLabel}>
-                            {t("settings.publicOnboarding.dataspaceId")}
+                            {t("settings.publicOnboarding.dataspace")}
                           </label>
-                          <input
-                            type="text"
-                            className={styles.input}
+                          <select
+                            className={styles.fontSelect}
                             value={flow.dataspaceId ?? ""}
-                            placeholder={t("settings.publicOnboarding.inherit")}
-                            onChange={(e) => update(i, { dataspaceId: e.target.value })}
-                          />
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              const ds = dataspaceOptions.find((d) => d.id === id);
+                              update(i, { dataspaceId: id, dataspaceTitle: ds?.title || "" });
+                            }}
+                          >
+                            <option value="">
+                              {dataspaceOptions.length
+                                ? t("settings.publicOnboarding.inherit")
+                                : t("settings.connection.dataspacesEmpty")}
+                            </option>
+                            {dataspaceOptions.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title ? `${d.title} (${d.id})` : d.id}
+                              </option>
+                            ))}
+                          </select>
                         </div>
+                        <div className={styles.flowField}>
+                          <label className={styles.colorLabel}>
+                            {t("settings.publicOnboarding.authRegistry")}
+                          </label>
+                          <select
+                            className={styles.fontSelect}
+                            value={flow.authRegistryId ?? ""}
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              const registry = registryOptions.find((r) => r.id === id);
+                              update(i, {
+                                authRegistryId: id,
+                                authRegistryName: registry?.name || "",
+                                authRegistryUrl: registry?.url || "",
+                              });
+                            }}
+                          >
+                            <option value="">
+                              {registryOptions.length
+                                ? t("settings.publicOnboarding.inherit")
+                                : t("settings.connection.authRegistriesEmpty")}
+                            </option>
+                            {registryOptions.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.name ? `${r.name} (${r.id})` : r.id}
+                              </option>
+                            ))}
+                          </select>
+                          {flow.authRegistryId && !flow.authRegistryUrl && (
+                            <p className={styles.flowError}>
+                              {t("settings.publicOnboarding.authRegistryNoUrl")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={styles.flowFieldWide}>
+                        <label className={styles.colorLabel}>
+                          {t("settings.publicOnboarding.agreements")}
+                        </label>
+                        <p className={styles.helperText}>
+                          {t("settings.publicOnboarding.agreementsHint")}
+                        </p>
+                        {agreements.length === 0 ? (
+                          <p className={styles.helperText}>
+                            {t("settings.publicOnboarding.agreementsEmpty")}
+                          </p>
+                        ) : (
+                          <div className={styles.flowCheckList}>
+                            {agreements.map((a) => (
+                              <label key={a.id} className={styles.checkboxLabel}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAgreements.includes(a.id)}
+                                  onChange={(e) => toggleAgreement(i, a.id, e.target.checked)}
+                                />
+                                {a.title}
+                                {a.version ? ` (${a.version})` : ""}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <p className={styles.helperText}>
+                          {selectedAgreements.length === 0
+                            ? t("settings.publicOnboarding.agreementsAll")
+                            : t("settings.publicOnboarding.agreementsSelected", {
+                                count: String(selectedAgreements.length),
+                              })}
+                        </p>
+                      </div>
+
+                      <div className={styles.flowRow}>
                         <div className={styles.flowField}>
                           <label className={styles.colorLabel}>
                             {t("settings.onboarding.activeRoles")}

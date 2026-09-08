@@ -16,12 +16,32 @@ export interface PublicFlowTheme {
   [key: string]: unknown;
 }
 
+// Public (redacted) view of a configured agreement, as resolved per flow by the
+// backend. Structurally a subset of api/client's AgreementView.
+export interface PublicFlowAgreement {
+  id: string;
+  title: string;
+  version: string;
+  type: string;
+  hasDocument: boolean;
+}
+
 export interface PublicOnboardingFlow {
   route: string; // "" = the base URL
   title?: string;
   themeName?: string;
   description?: string;
+  // Dataspace picked from the registry's dataspaces ("" = inherit).
   dataspaceId?: string;
+  dataspaceTitle?: string;
+  // Subset of configured agreements to sign; empty = all configured agreements.
+  agreementIds?: string[];
+  // Resolved by the backend for the public view (never sent by the admin UI).
+  agreements?: PublicFlowAgreement[];
+  // Authorization registry pinned for this flow ("" = inherit the global prefill).
+  authRegistryId?: string;
+  authRegistryName?: string;
+  authRegistryUrl?: string;
   defaultRole?: string;
   skipRoles?: string;
   activeRoles?: string;

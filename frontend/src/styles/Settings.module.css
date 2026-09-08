@@ -1152,6 +1152,16 @@
   gap: 0.9rem;
 }
 
+.flowCheckList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.4rem 1.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 6px;
+  background: var(--color-surface-muted, #fafafa);
+}
+
 .flowError {
   color: var(--color-error, #b3261e);
   font-size: 0.85rem;

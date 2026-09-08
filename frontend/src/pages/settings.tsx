@@ -1303,6 +1303,9 @@ const Settings: NextPage = () => {
             flows={onboardingFlows}
             themeNames={savedThemes.map((th) => th.name)}
             roleOptions={ALL_ROLES}
+            dataspaces={dataspaces}
+            authRegistries={authRegistries}
+            agreements={agreements}
             onEnabledChange={setPublicOnboardingEnabled}
             onFlowsChange={setOnboardingFlows}
           />
