@@ -642,6 +642,9 @@ type ProposalData struct {
 	} `json:"account"`
 	KeycloakUsername string `json:"keycloakUsername"`
 	Status           string `json:"status"`
+	// FlowRoute is the public onboarding flow the applicant came through
+	// ("" = base URL). Validated against the configured flows on receipt.
+	FlowRoute string `json:"flowRoute"`
 }
 
 // kvkFromPartyID extracts the KVK number embedded in a party id of the form
@@ -767,6 +770,7 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 
 	// Save proposal to database
 	proposal := models.Proposal{
+		FlowRoute:        sanitizeFlowRoute(h, proposalData.FlowRoute),
 		CompanyName:      proposalData.IDCheck.CompanyName,
 		KvkNumber:        proposalData.IDCheck.KvkNumber,
 		PartyId:          proposalData.IDCheck.PartyId,
@@ -1275,6 +1279,16 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	dataspaceTitle := h.Config.DataspaceTitle
 	if settingsResult.Error == nil && settings.DataspaceId != "" {
 		dataspaceId = settings.DataspaceId
+	}
+	// A proposal that came through a configured onboarding flow with its own
+	// dataspace joins THAT dataspace instead of the deployment default.
+	if settingsResult.Error == nil && proposal.FlowRoute != "" {
+		for _, f := range decodeFlows(settings.OnboardingFlows) {
+			if f.Route == proposal.FlowRoute && f.DataspaceId != "" {
+				dataspaceId = f.DataspaceId
+				break
+			}
+		}
 	}
 
 	// Preflight: the satellite rejects ep_creation when registrar_id does not equal

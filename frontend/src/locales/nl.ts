@@ -1383,6 +1383,34 @@ const nl = {
         testFailed: "SMTP-test mislukt"
       }
     },
+    publicOnboarding: {
+      title: "Publieke onboarding",
+      hint: "Bepaal of anonieme bezoekers de onboarding kunnen starten, en op welke routes.",
+      enable: "Publieke onboarding inschakelen",
+      enableHint: "Standaard uit: bezoekers worden naar het inlogscherm gestuurd totdat dit is ingeschakeld.",
+      flows: "Onboardingflows",
+      flowsHint: "Elke flow publiceert de onboarding op een eigen route met een eigen thema en instellingen. Laat de route leeg voor de basis-URL.",
+      route: "Route",
+      routePlaceholder: "(basis-URL)",
+      routeError: {
+        pattern: "Alleen kleine letters, cijfers en streepjes (moet alfanumeriek beginnen).",
+        reserved: "Deze route is gereserveerd door het portaal.",
+        duplicate: "Deze route wordt al door een andere flow gebruikt.",
+        "duplicate-base": "Slechts één flow kan op de basis-URL staan.",
+      },
+      flowTitle: "Titel",
+      theme: "Thema",
+      flowEnabled: "Ingeschakeld",
+      moreOptions: "Meer opties",
+      lessOptions: "Minder opties",
+      removeFlow: "Verwijderen",
+      addFlow: "+ Flow toevoegen",
+      description: "Landingstekst (vervangt de algemene omschrijving)",
+      dataspaceId: "Dataspace-ID",
+      inherit: "(overnemen)",
+      on: "Aan",
+      off: "Uit",
+    },
     onboarding: {
       flowTitle: "Onboarding-flow",
       flowHint: "Bepaal hoe aanmelders door de onboarding-wizard gaan.",
@@ -1411,6 +1439,18 @@ const nl = {
     theme: {
       title: "Kleuren & lettertypen",
       description: "Pas de kleuren en lettertypen van het portaal aan op de huisstijl van uw organisatie. De standaardwaarden volgen de iSHARE-huisstijl. Wijzigingen worden hier direct getoond — met Opslaan bewaart u een thema en met Toepassen publiceert u het naar elke bezoeker.",
+      assets: {
+        title: "Huisstijlbestanden",
+        hint: "Headerafbeelding en browsericoon horen bij het thema; elke flow met dit thema toont ze.",
+        "header-image": "Headerafbeelding",
+        favicon: "Browsericoon",
+        selectSaved: "Selecteer een opgeslagen thema om de headerafbeelding en het browsericoon te beheren.",
+        upload: "Uploaden",
+        replace: "Vervangen",
+        uploading: "Bezig met uploaden…",
+        uploaded: "Bestand geüpload.",
+        uploadFailed: "Upload mislukt.",
+      },
       library: {
         selectLabel: "Thema",
         brandDefault: "iSHARE-huisstijl (standaard)",

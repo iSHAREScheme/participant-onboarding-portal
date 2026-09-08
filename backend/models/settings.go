@@ -33,6 +33,18 @@ type Settings struct {
 	// (empty means the iSHARE brand default). Its values are mirrored into Theme.
 	ActiveTheme string `json:"activeTheme"`
 
+	// PublicOnboardingEnabled gates every anonymous onboarding surface. It
+	// deliberately defaults to FALSE: until an admin turns it on, anonymous
+	// visitors of the landing page (and of any configured flow route) are
+	// redirected to the login screen.
+	PublicOnboardingEnabled bool `json:"publicOnboardingEnabled"`
+	// OnboardingFlows is the JSON array of public onboarding entry points
+	// (models.OnboardingFlow): each pairs a route with a theme from the Themes
+	// library plus optional per-flow overrides of the onboarding settings, so
+	// one deployment can onboard for several dataspaces with distinct branding.
+	// A flow with route "" is served at the base URL.
+	OnboardingFlows datatypes.JSON `gorm:"type:json" json:"onboardingFlows"`
+
 	// Onboarding-flow configuration, admin-editable from the Onboarding settings
 	// tab. Legacy boolean settings are stored as strings for compatibility.
 	DefaultAssociationName string `json:"defaultAssociationName"`

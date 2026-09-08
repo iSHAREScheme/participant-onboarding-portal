@@ -100,6 +100,10 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 	group.Get("/settings/logo", handler.GetLogo)
 	group.Post("/settings/favicon", middlewares.RequireAdminRole(), handler.UploadFavicon)
 	group.Get("/settings/favicon", handler.GetFavicon)
+	// Theme branding assets (header image / favicon) live INSIDE the theme
+	// library entries; reads are public because flow pages are anonymous.
+	group.Post("/settings/themes/:name/asset/:kind", middlewares.RequireAdminRole(), handler.UploadThemeAsset)
+	group.Get("/settings/themes/:name/asset/:kind", handler.GetThemeAsset)
 
 	// Onboarding agreements. The document downloads stay public (the landing page
 	// previews them before login), but the full list — which carries each

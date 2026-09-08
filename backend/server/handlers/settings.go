@@ -92,6 +92,8 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 			"agreements":                       []publicAgreementView{},
 			"prConfigured":                     prConfigured,
 			"requireQualifiedEidasCertificate": false,
+			"publicOnboardingEnabled":          false,
+			"onboardingFlows":                  []fiber.Map{},
 		})
 	}
 	// Deliberately a curated allowlist of public fields — never spread the whole
@@ -113,6 +115,11 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"requireQualifiedEidasCertificate": settings.RequireQualifiedEidasCertificate,
 		// Topology flag — gates the registry-admin features in the UI.
 		"prConfigured": prConfigured,
+		// Public-onboarding gate + the enabled flows (with resolved themes).
+		// When the gate is off the flows list is empty by construction and the
+		// landing page redirects anonymous visitors to login.
+		"publicOnboardingEnabled": settings.PublicOnboardingEnabled,
+		"onboardingFlows":         publicFlowViews(settings),
 	})
 }
 
@@ -161,12 +168,14 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		PrApiBaseUrl                *string `json:"prApiBaseUrl"`
 
 		// Onboarding-flow configuration.
-		DefaultAssociationName           *string `json:"defaultAssociationName"`
-		SkipRoles                        *string `json:"skipRoles"`
-		ActiveRoles                      *string `json:"activeRoles"`
-		DefaultRole                      *string `json:"defaultRole"`
-		AutoAcceptProposal               *string `json:"autoAcceptProposal"`
-		RequireQualifiedEidasCertificate *bool   `json:"requireQualifiedEidasCertificate"`
+		PublicOnboardingEnabled          *bool           `json:"publicOnboardingEnabled"`
+		OnboardingFlows                  json.RawMessage `json:"onboardingFlows"`
+		DefaultAssociationName           *string         `json:"defaultAssociationName"`
+		SkipRoles                        *string         `json:"skipRoles"`
+		ActiveRoles                      *string         `json:"activeRoles"`
+		DefaultRole                      *string         `json:"defaultRole"`
+		AutoAcceptProposal               *string         `json:"autoAcceptProposal"`
+		RequireQualifiedEidasCertificate *bool           `json:"requireQualifiedEidasCertificate"`
 	}
 
 	if err := c.BodyParser(&input); err != nil {
@@ -201,10 +210,27 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		settings.Theme = datatypes.JSON(input.Theme)
 	}
 	if len(input.Themes) > 0 {
-		settings.Themes = datatypes.JSON(input.Themes)
+		// The theme editor rebuilds entries from its own state, which does not
+		// carry the branding assets (headerImagePath/faviconPath are written by
+		// the dedicated upload endpoints). Merge them back in by theme name so
+		// saving the editor never orphans uploaded assets.
+		settings.Themes = mergeThemeAssets(settings.Themes, datatypes.JSON(input.Themes))
 	}
 	if input.ActiveTheme != nil {
 		settings.ActiveTheme = *input.ActiveTheme
+	}
+	if input.PublicOnboardingEnabled != nil {
+		settings.PublicOnboardingEnabled = *input.PublicOnboardingEnabled
+	}
+	if len(input.OnboardingFlows) > 0 {
+		var flows []models.OnboardingFlow
+		if err := json.Unmarshal(input.OnboardingFlows, &flows); err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, "onboardingFlows must be an array of flow objects")
+		}
+		if err := validateFlows(flows); err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
+		settings.OnboardingFlows = datatypes.JSON(input.OnboardingFlows)
 	}
 	if input.SatelliteBaseUrl != nil {
 		settings.SatelliteBaseUrl = strings.TrimSpace(*input.SatelliteBaseUrl)

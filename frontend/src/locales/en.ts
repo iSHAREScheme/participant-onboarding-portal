@@ -1386,6 +1386,34 @@ const en = {
         testFailed: "SMTP test failed"
       }
     },
+    publicOnboarding: {
+      title: "Public onboarding",
+      hint: "Control whether anonymous visitors can start onboarding, and on which routes.",
+      enable: "Enable public onboarding",
+      enableHint: "Off by default: visitors are redirected to the login screen until this is enabled.",
+      flows: "Onboarding flows",
+      flowsHint: "Each flow publishes the onboarding on its own route with its own theme and settings. Leave the route empty to use the base URL.",
+      route: "Route",
+      routePlaceholder: "(base URL)",
+      routeError: {
+        pattern: "Lowercase letters, digits and dashes only (must start alphanumeric).",
+        reserved: "This route is reserved by the portal.",
+        duplicate: "This route is already used by another flow.",
+        "duplicate-base": "Only one flow can live at the base URL.",
+      },
+      flowTitle: "Title",
+      theme: "Theme",
+      flowEnabled: "Enabled",
+      moreOptions: "More options",
+      lessOptions: "Fewer options",
+      removeFlow: "Remove",
+      addFlow: "+ Add flow",
+      description: "Landing description (overrides the general description)",
+      dataspaceId: "Dataspace ID",
+      inherit: "(inherit)",
+      on: "On",
+      off: "Off",
+    },
     onboarding: {
       flowTitle: "Onboarding flow",
       flowHint: "Control how applicants move through the onboarding wizard.",
@@ -1414,6 +1442,18 @@ const en = {
     theme: {
       title: "Colours & fonts",
       description: "Customise the portal's colours and fonts to match your organisation's brand. Defaults follow the iSHARE brand guidelines. Changes preview live here — Save stores a theme, and Apply publishes it to every visitor.",
+      assets: {
+        title: "Branding assets",
+        hint: "Header image and browser icon are part of the theme; every flow using this theme shows them.",
+        "header-image": "Header image",
+        favicon: "Browser icon",
+        selectSaved: "Select a saved theme to manage its header image and browser icon.",
+        upload: "Upload",
+        replace: "Replace",
+        uploading: "Uploading…",
+        uploaded: "Asset uploaded.",
+        uploadFailed: "Upload failed.",
+      },
       library: {
         selectLabel: "Theme",
         brandDefault: "iSHARE brand default",
