@@ -83,8 +83,12 @@ const OnboardingLanding: React.FC<Props> = ({ flowRoute }) => {
     publicSettings !== null && flowRoute !== null && onboardingEnabled && !flow;
 
   // The gate: with public onboarding off, no onboarding surface is public.
-  // Anonymous visitors go to the login screen; authenticated ones to their home.
-  const gateClosed = publicSettings !== null && !onboardingEnabled;
+  // And the flows list IS the complete definition of what is published: the
+  // base URL is only public when a flow explicitly claims it (route ""), so
+  // adding only /custom-route flows never implicitly publishes the base URL.
+  const gateClosed =
+    publicSettings !== null &&
+    (!onboardingEnabled || (flowRoute === null && !flow));
   useEffect(() => {
     if (!gateClosed) return;
     if (keycloak?.authenticated) {
