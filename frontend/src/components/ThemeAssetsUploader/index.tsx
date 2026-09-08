@@ -66,9 +66,9 @@ const ThemeAssetsUploader: React.FC<Props> = ({
     <div className={styles.formGroup}>
       <span className={styles.label}>{t("settings.theme.assets.title")}</span>
       <p className={styles.helperText}>{t("settings.theme.assets.hint")}</p>
-      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+      <div className={styles.assetRow}>
         {KINDS.map((k) => (
-          <div key={k.kind}>
+          <div key={k.kind} className={styles.assetItem}>
             <label className={styles.colorLabel}>
               {t(`settings.theme.assets.${k.kind}`)}
             </label>
@@ -77,13 +77,11 @@ const ThemeAssetsUploader: React.FC<Props> = ({
               <img
                 src={assetUrl(k.kind)}
                 alt={k.kind}
-                style={{
-                  display: "block",
-                  maxWidth: k.kind === "header-image" ? 240 : 32,
-                  maxHeight: k.kind === "header-image" ? 80 : 32,
-                  marginBottom: 8,
-                  objectFit: "cover",
-                }}
+                className={
+                  k.kind === "header-image"
+                    ? styles.assetPreviewHeader
+                    : styles.assetPreviewFavicon
+                }
               />
             )}
             <label className={styles.ghostButton}>
