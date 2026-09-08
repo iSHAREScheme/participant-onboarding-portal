@@ -51,7 +51,7 @@ const ThemeAssetsUploader: React.FC<Props> = ({
       );
       if (!res.ok) throw new Error(String(res.status));
       flash("success", t("settings.theme.assets.uploaded"));
-      setBust(Date.now());
+      setBust((n) => n + 1);
       onUploaded();
     } catch {
       flash("error", t("settings.theme.assets.uploadFailed"));
