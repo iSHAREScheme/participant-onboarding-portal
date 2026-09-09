@@ -159,7 +159,9 @@ func (h *HandlerDelegation) GetOverview(c *fiber.Ctx) error {
 		verifiedOrg = org
 	}
 
-	var memberships []models.OrganizationMember
+	// Initialized empty (not nil): a nil slice marshals as JSON null and the
+	// frontend reads .length on these fields.
+	memberships := []models.OrganizationMember{}
 	h.Server.DB.Preload("Organization").
 		Where("status = ? AND (keycloak_subject = ? OR email = ? OR username = ?)",
 			"active",
@@ -169,8 +171,8 @@ func (h *HandlerDelegation) GetOverview(c *fiber.Ctx) error {
 		).
 		Find(&memberships)
 
-	var idpConnections []models.OrganizationIdpConnection
-	var members []models.OrganizationMember
+	idpConnections := []models.OrganizationIdpConnection{}
+	members := []models.OrganizationMember{}
 	if verifiedOrg != nil {
 		h.Server.DB.Where("organization_id = ?", verifiedOrg.ID).Order("created_at desc").Find(&idpConnections)
 		h.Server.DB.Where("organization_id = ?", verifiedOrg.ID).Order("created_at desc").Find(&members)

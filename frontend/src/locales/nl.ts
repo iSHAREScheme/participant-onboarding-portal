@@ -104,9 +104,15 @@ const nl = {
       partyId: "Party ID",
       name: "Naam",
       roles: "Rollen",
+      dataspace: "Dataspace",
       status: "Status",
       startDate: "Startdatum",
-      endDate: "Einddatum"
+      endDate: "Einddatum",
+      access: "Toegang"
+    },
+    access: {
+      owned: "Geregistreerd door dit register — bewerkbaar",
+      viewOnly: "Geregistreerd door een ander register — alleen inzien"
     },
     pagination: {
       previous: "Vorige",
@@ -195,6 +201,15 @@ const nl = {
         editClaim: "Claim bewerken",
         editClaimTitle: "Claim bewerken",
         noEditableClaimFields: "Dit claimtype heeft geen bewerkbare velden — de waarden worden bij uitgifte vastgelegd.",
+        akaAppendOnly: "Bestaande aliassen kunnen niet worden gewijzigd of verwijderd — het register accepteert alleen toevoegingen.",
+        addClaimButton: "Claim toevoegen",
+        addClaimTitle: "Claim toevoegen",
+        addClaimType: "Claimtype",
+        addClaimSubmit: "Claim toevoegen",
+        addClaimMissing: "Verplichte velden ontbreken",
+        addClaimCertUpload: "Certificaatbestand",
+        addClaimCertRequired: "Certificaatbestand",
+        addClaimCertHint: "Het nieuwe certificaat wordt geregistreerd als extra actief certificaat. Het vorige certificaat behoudt zijn eigen status totdat het verloopt of via zijn claimkaart wordt ingetrokken.",
         save: "Opslaan",
         saving: "Opslaan…",
         saveClaim: "Claim opslaan",
@@ -1101,7 +1116,10 @@ const nl = {
     },
     roles: {
       user: "Gebruiker",
-      admin: "Beheerder"
+      admin: "Beheerder",
+      satelliteAdmin: "Satellietbeheerder",
+      schemeOwner: "Scheme-eigenaar",
+      partyAdmin: "Partijbeheerder"
     },
     messages: {
       error: {
@@ -1589,6 +1607,32 @@ const nl = {
       assertion: "Assertie",
       minimum: "Vereist voor v3-partij"
     },
+    steps: {
+      certificate: "Certificaat",
+      party: "Partijgegevens",
+      framework: "Framework-claims",
+      extras: "Extra claims",
+      review: "Controleren"
+    },
+    wizard: {
+      certHint: "Begin met het X.509-certificaat van de partij: het partij-ID, de naam, het subject en de geldigheid worden er automatisch uit afgeleid. Sla deze stap over voor partijen zonder certificaat (Service Consumer of Entitled Party).",
+      extrasHint: "Voeg optioneel extra claims toe (autorisatieregister, dataspace-lidmaatschap, dataspace-overeenkomst, dataspace-rol, …) — of ga door naar controleren.",
+      back: "Terug",
+      next: "Volgende",
+      needPartyId: "Vul het partij-ID in voordat je verdergaat.",
+      needPartyName: "Vul de partijnaam in voordat je verdergaat.",
+      needFramework: "De nalevingsclaim heeft een framework-ID nodig.",
+      needAgreement: "De overeenkomstclaim heeft een type, ID en titel nodig.",
+      needRole: "Selecteer een framework-rol voordat je verdergaat.",
+      needExtraFields: "Vul de verplichte velden van de extra claims in voordat je verdergaat.",
+      noCertificate: "Geen certificaat geüpload",
+      certRequiredWarn: "Er is geen certificaat geüpload en de gekozen framework-rol vereist er één — het register zal deze partij weigeren. Ga terug naar de stap Certificaat om er één te uploaden, of kies de rol Service Consumer of Entitled Party."
+    },
+    review: {
+      heading: "Controleren & aanmaken",
+      permanentNote: "Het aanmaken van een partij is permanent: eenmaal toegevoegd aan het register kan deze niet worden verwijderd — alleen bewerkt, of ingetrokken via de claims.",
+      confirmLabel: "Ik heb de bovenstaande gegevens gecontroleerd en begrijp dat deze partij na aanmaken niet verwijderd kan worden."
+    },
     claimTypes: {
       frameworkCompliance: "Framework-naleving",
       authRegistry: "Autorisatieregister",
@@ -1597,6 +1641,7 @@ const nl = {
       x509Certificate: "X.509-certificaat",
       dataspaceMembership: "Dataspace-lidmaatschap",
       dataspaceAgreement: "Dataspace-overeenkomst",
+      dataspaceRole: "Dataspace-rol",
       idpAssertion: "IdP-assertie"
     },
     status: {
@@ -1637,7 +1682,8 @@ const nl = {
     },
     messages: {
       submitError: "Verzenden van partij mislukt. {{message}}",
-      submitSuccess: "Partij succesvol verzonden."
+      submitSuccess: "Partij succesvol verzonden.",
+      redirecting: "Je gaat nu naar de deelnemerslijst…"
     },
     upload: {
       or: "of",
@@ -1648,6 +1694,7 @@ const nl = {
       agreementInvalidType: "Ongeldig bestandstype. Upload een PDF.",
       certTooLarge: "Certificaat overschrijdt de limiet van 1 MB.",
       agreementTooLarge: "PDF overschrijdt de limiet van 10 MB.",
+      certNoNtrWarn: "De identifier van dit certificaat ({{identifier}}) volgt het did:ishare-formaat (NTR<CC>-…) niet, dus het register kan de partij-ID er niet uit afleiden of verifiëren. De registratie gaat door met de partij-ID die je invoert — controleer die goed, want het certificaat kan hem niet bevestigen. Gebruik voor een volledig geverifieerde identiteit een certificaat met een NTR<CC>-… organizationIdentifier.",
       certParseError: "Kon het certificaat niet lezen. Zorg dat het een geldig X.509-bestand (PEM/DER) is.",
       agreementReadError: "Kon het PDF-bestand niet lezen."
     },

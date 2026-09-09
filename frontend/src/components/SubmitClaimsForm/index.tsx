@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import { FormInput, FormSelect, Button } from "components";
 import { useSubmitParty } from "hooks";
 import { useLanguage } from "context/LanguageContext";
 import { API } from "api/client";
 import { extractCertificateFields } from "util/certificate";
-import { md5HexOfFile } from "util/md5";
+import { sha256HexOfFile } from "util/sha256";
 import styles from "styles/Submit.module.css";
 import type {
   AdditionalInfo,
@@ -27,7 +28,9 @@ type ClaimDraft = {
   [key: string]: string;
 };
 
-type EditableClaimType = Exclude<ClaimType, "dataspaceAgreement">;
+// idpAssertion is excluded: the assertion comes from an IdP login flow and
+// cannot be hand-entered in a form.
+type EditableClaimType = Exclude<ClaimType, "idpAssertion">;
 
 type ClaimDefaults = {
   registrarId: string;
@@ -63,13 +66,52 @@ const FRAMEWORK_ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: "AuthorisationRegistry", label: "Authorisation Registry" },
   { value: "IdentityProvider", label: "Identity Provider" },
   { value: "IdentityBroker", label: "Identity Broker" },
-  { value: "iShareSatellite", label: "iSHARE Satellite" },
+  // v3 renamed the registry role - write ParticipantRegistry, never the
+  // pre-rename iShareSatellite (AddClaimModal's ROLE_IDS made this switch first).
+  { value: "ParticipantRegistry", label: "Participant Registry" },
 ];
+
+// Scheme agreement types (same set the classic UI offered; the spec's
+// ParticipantRegistryAgreement joins once backlog item 24-A is decided).
+const AGREEMENT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "TermsOfUse", label: "Terms of Use" },
+  { value: "AccessionAgreement", label: "Accession Agreement" },
+  { value: "CertifiedPartyAgreement", label: "Certified Party Agreement" },
+  { value: "SatelliteAgreement", label: "Satellite Agreement" },
+];
+
+// Free-text fields the satellite requires per claim type (its
+// v3ClaimCreateRequiredPaths); enum and date fields always carry defaults, so
+// only these can arrive empty. Checked when leaving the extras step so a
+// half-filled additional claim can't 400 the whole creation at the end.
+const REQUIRED_TEXT_FIELDS: Partial<Record<EditableClaimType, string[]>> = {
+  frameworkCompliance: ["frameworkId"],
+  authRegistry: ["name", "authRegistryId", "authUrl"],
+  frameworkAgreement: ["agreementType", "agreementId", "title"],
+  frameworkRole: ["frameworkId", "roleId"],
+  x509Certificate: ["certificateType", "x5c"],
+  dataspaceMembership: ["dataspaceId"],
+  dataspaceAgreement: ["dataspaceId", "agreementType", "agreementId", "title"],
+  dataspaceRole: ["dataspaceId", "roleId"],
+};
+
+const titleFromFilename = (name: string): string =>
+  name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim();
 
 const roleTitle = (roleId: string): string =>
   FRAMEWORK_ROLE_OPTIONS.find((o) => o.value === roleId)?.label || roleId;
 
 const toDateInputValue = (date: Date) => date.toISOString().slice(0, 10);
+
+// The registry validates claim dates with time.Parse(time.RFC3339), so a bare
+// date-input value (yyyy-mm-dd) is rejected with "must be an RFC3339 timestamp".
+// Expand it to a full instant (start of day / end of day); values that already
+// carry a time component pass through untouched.
+const toRfc3339 = (value: string, endOfDay = false): string => {
+  const v = value.trim();
+  if (!v || v.includes("T")) return v;
+  return `${v}T${endOfDay ? "23:59:59" : "00:00:00"}.000Z`;
+};
 
 const buildInitialDefaults = (): ClaimDefaults => {
   const start = new Date();
@@ -154,8 +196,8 @@ const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDr
     case "frameworkAgreement":
       next.frameworkId = next.frameworkId || defaults.frameworkId;
       next.agreementType = next.agreementType || defaults.frameworkAgreementType;
-      next.agreementId = next.agreementId || defaults.frameworkAgreementId;
-      next.title = next.title || defaults.frameworkAgreementTitle;
+      // agreementId stays empty for the operator to fill; title is prefilled
+      // from the uploaded document's filename (feedback 2026-08-26).
       break;
     case "frameworkRole":
       next.frameworkId = next.frameworkId || defaults.frameworkId;
@@ -172,6 +214,12 @@ const applyClaimDefaults = (claim: ClaimDraft, defaults: ClaimDefaults): ClaimDr
     case "dataspaceMembership":
       next.legalAdherence = next.legalAdherence || "not-applicable";
       next.ai_publiclyPublishable = next.ai_publiclyPublishable || "false";
+      break;
+    case "dataspaceRole":
+      next.loa = next.loa || defaults.frameworkRoleLoa;
+      next.legalAdherence = next.legalAdherence || defaults.frameworkRoleLegalAdherence;
+      next.compliancyVerified =
+        next.compliancyVerified || defaults.frameworkRoleCompliancyVerified;
       break;
     default:
       break;
@@ -204,8 +252,8 @@ const toClaim = (d: ClaimDraft): Claim => {
   const base = {
     registrarId: d.registrarId,
     status: d.status as Claim["status"],
-    ...(d.startDate ? { startDate: d.startDate } : {}),
-    ...(d.endDate ? { endDate: d.endDate } : {}),
+    ...(d.startDate ? { startDate: toRfc3339(d.startDate) } : {}),
+    ...(d.endDate ? { endDate: toRfc3339(d.endDate, true) } : {}),
   };
 
   switch (d.type) {
@@ -266,18 +314,46 @@ const toClaim = (d: ClaimDraft): Claim => {
         legalAdherence: (d.legalAdherence || "not-applicable") as YesNoNa,
         additionalInfo: buildAdditionalInfo(d),
       };
-    case "idpAssertion":
+    case "dataspaceAgreement":
       return {
         ...base,
-        type: "idpAssertion",
-        assertion: d.assertion || "",
+        type: "dataspaceAgreement",
+        dataspaceId: d.dataspaceId || "",
+        agreementType: d.agreementType || "",
+        agreementId: d.agreementId || "",
+        title: d.title || "",
+        verificationHash: d.verificationHash || undefined,
+      };
+    case "dataspaceRole":
+      return {
+        ...base,
+        type: "dataspaceRole",
+        dataspaceId: d.dataspaceId || "",
+        roleId: d.roleId || "",
+        title: d.title || undefined,
+        loa: (d.loa || "not-applicable") as Loa,
+        compliancyVerified: (d.compliancyVerified || "not-applicable") as YesNoNa,
+        legalAdherence: (d.legalAdherence || "not-applicable") as YesNoNa,
       };
   }
 };
 
 const SubmitClaimsForm: React.FC = () => {
   const { t } = useLanguage();
+  const router = useRouter();
   const { submitParty, loading, error, response } = useSubmitParty();
+
+  // After a successful creation, take the operator to the participants list so
+  // they can see the new party appear — after a short pause so the success
+  // message registers. (The satellite lists the party within a second or two
+  // of accepting it.)
+  useEffect(() => {
+    if (!response) return;
+    const timer = setTimeout(() => {
+      void router.push("/participants");
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [response, router]);
   const [claimDefaults, setClaimDefaults] =
     useState<ClaimDefaults>(buildInitialDefaults);
 
@@ -289,6 +365,65 @@ const SubmitClaimsForm: React.FC = () => {
   );
   // Tracks which upload zone is currently being dragged over (by zone id).
   const [dragZone, setDragZone] = useState<string | null>(null);
+
+  // --- Creation wizard --------------------------------------------------------
+  // The single-page form is split into steps, starting from the certificate:
+  // most of the party's identity (party id, name, subject, validity) derives
+  // from the uploaded cert. Claim drafts keep their fixed MINIMUM_CLAIM_TYPES
+  // positions — each step just renders a subset of them:
+  //   0 certificate (claim 3) → 1 party identity → 2 framework claims (0-2)
+  //   → 3 additional claims (4+) → 4 review & create.
+  const WIZARD_STEPS = ["certificate", "party", "framework", "extras", "review"];
+  const [step, setStep] = useState(0);
+  const [wizardError, setWizardError] = useState<string | null>(null);
+  // Creating a party is permanent (no delete, only edit/revoke), so the review
+  // step requires an explicit confirmation before the Create button arms.
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const claimStepOf = (index: number) => (index === 3 ? 0 : index <= 2 ? 2 : 3);
+
+  const stepError = (): string | null => {
+    if (step === 1) {
+      if (!partyId.trim()) return "submit.wizard.needPartyId";
+      if (!partyName.trim()) return "submit.wizard.needPartyName";
+    }
+    if (step === 2) {
+      const [compliance, agreement, role] = claims;
+      if (!compliance?.frameworkId?.trim()) return "submit.wizard.needFramework";
+      if (
+        !agreement?.agreementType?.trim() ||
+        !agreement?.agreementId?.trim() ||
+        !agreement?.title?.trim()
+      )
+        return "submit.wizard.needAgreement";
+      if (!role?.roleId?.trim()) return "submit.wizard.needRole";
+    }
+    if (step === 3) {
+      for (const extra of claims.slice(MINIMUM_CLAIM_TYPES.length)) {
+        for (const key of REQUIRED_TEXT_FIELDS[extra.type] || []) {
+          if (!extra[key]?.trim()) return "submit.wizard.needExtraFields";
+        }
+      }
+    }
+    return null;
+  };
+
+  const goNext = () => {
+    const err = stepError();
+    setWizardError(err);
+    if (!err) setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1));
+  };
+  const goBack = () => {
+    setWizardError(null);
+    setReviewConfirmed(false);
+    setStep((s) => Math.max(s - 1, 0));
+  };
+
+  // The registry requires an x509 certificate unless the party's framework role
+  // is ServiceConsumer or EntitledParty (mirrors ValidateV3PartyOnboardingClaims).
+  const certMissing = !claims[3]?.x5c;
+  const certRequired = !["ServiceConsumer", "EntitledParty"].includes(
+    claims[2]?.roleId || ""
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -321,7 +456,8 @@ const SubmitClaimsForm: React.FC = () => {
     { value: "frameworkRole", label: t("submit.claimTypes.frameworkRole") },
     { value: "x509Certificate", label: t("submit.claimTypes.x509Certificate") },
     { value: "dataspaceMembership", label: t("submit.claimTypes.dataspaceMembership") },
-    { value: "idpAssertion", label: t("submit.claimTypes.idpAssertion") },
+    { value: "dataspaceAgreement", label: t("submit.claimTypes.dataspaceAgreement") },
+    { value: "dataspaceRole", label: t("submit.claimTypes.dataspaceRole") },
   ];
 
   const statusOptions = [
@@ -404,6 +540,18 @@ const SubmitClaimsForm: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Only the review step submits — Enter on an earlier step advances instead
+    // (the form fires submit on Enter in any input).
+    if (step !== WIZARD_STEPS.length - 1) {
+      goNext();
+      return;
+    }
+    // Never submit without the explicit review confirmation (creation is
+    // permanent — a party can only be edited or revoked afterwards), and never
+    // fire twice: once a submit is in flight or has succeeded, further
+    // submissions are ignored (the button is disabled too, but Enter and
+    // double-click race the state update).
+    if (!reviewConfirmed || loading || response) return;
     const aka = alsoKnownAs.map((s) => s.trim()).filter(Boolean);
     const party: Party = {
       id: partyId,
@@ -453,7 +601,7 @@ const SubmitClaimsForm: React.FC = () => {
     />
   );
 
-  // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → md5 hash ---
+  // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → sha256 hash ---
 
   const handleCertFile = async (index: number, file: File) => {
     if (!/\.(pem|crt|cer|der)$/i.test(file.name)) {
@@ -471,20 +619,57 @@ const SubmitClaimsForm: React.FC = () => {
       return;
     }
     try {
-      const { x5c, thumbprint, subjectName } = await extractCertificateFields(
-        file
-      );
+      const parsed = await extractCertificateFields(file);
       updateClaimFields(index, {
-        x5c,
-        "x5t#s256": thumbprint,
-        subjectName,
+        x5c: parsed.x5c,
+        "x5t#s256": parsed.thumbprint,
+        subjectName: parsed.subjectName,
+        // Default the claim window to the certificate's own validity.
+        ...(parsed.validFrom
+          ? { startDate: toDateInputValue(new Date(parsed.validFrom)) }
+          : {}),
+        ...(parsed.validTo
+          ? { endDate: toDateInputValue(new Date(parsed.validTo)) }
+          : {}),
         _certFile: file.name,
         _certError: "",
+        // The v3 registry can only register certificate-backed parties whose
+        // identifier is NTR<CC>-… (calcIshareDid derives the country from it).
+        // The existing estate's serialNumber=EU.EORI… certificates are
+        // structurally rejected (backlog B2) — warn HERE, at the first step,
+        // instead of letting the operator walk into a 400 at Create.
+        _certWarn:
+          parsed.organizationIdentifier &&
+          !/^NTR[A-Z]{2}/.test(parsed.organizationIdentifier)
+            ? t("submit.upload.certNoNtrWarn", {
+                identifier: parsed.organizationIdentifier,
+              })
+            : "",
       });
+      // Every claim's validity window follows the certificate's, not just the
+      // x509 claim's (feedback 2026-08-26); extras added later inherit via the
+      // defaults.
+      if (parsed.validFrom && parsed.validTo) {
+        const certStart = toDateInputValue(new Date(parsed.validFrom));
+        const certEnd = toDateInputValue(new Date(parsed.validTo));
+        setClaimDefaults((prev) => ({ ...prev, startDate: certStart, endDate: certEnd }));
+        setClaims((prev) =>
+          prev.map((c) => ({ ...c, startDate: certStart, endDate: certEnd }))
+        );
+      }
+      // Derive the party identity from the certificate — prefill only, never
+      // overwrite something the operator already typed.
+      if (parsed.partyId) {
+        setPartyId((prev) => prev || parsed.partyId!.replace(/^did:ishare:/i, ""));
+      }
+      if (parsed.organizationName) {
+        setPartyName((prev) => prev || parsed.organizationName!);
+      }
     } catch (err: any) {
       updateClaimFields(index, {
         _certError: err?.message || t("submit.upload.certParseError"),
         _certFile: "",
+        _certWarn: "",
         x5c: "",
         "x5t#s256": "",
         subjectName: "",
@@ -499,6 +684,7 @@ const SubmitClaimsForm: React.FC = () => {
       subjectName: "",
       _certFile: "",
       _certError: "",
+      _certWarn: "",
     });
 
   const handleAgreementFile = async (index: number, file: File) => {
@@ -518,12 +704,24 @@ const SubmitClaimsForm: React.FC = () => {
       return;
     }
     try {
-      const hash = await md5HexOfFile(file);
-      updateClaimFields(index, {
-        verificationHash: hash,
-        _agreementFile: file.name,
-        _agreementError: "",
-      });
+      const hash = await sha256HexOfFile(file);
+      setClaims((prev) =>
+        prev.map((c, i) => {
+          if (i !== index) return c;
+          // Prefill the title from the document's filename; keep a title the
+          // operator typed themselves, but replace one that is only the
+          // previous upload's filename prefill (feedback 2026-08-26).
+          const keepTitle =
+            c.title && c.title !== titleFromFilename(c._agreementFile || "");
+          return {
+            ...c,
+            verificationHash: hash,
+            _agreementFile: file.name,
+            _agreementError: "",
+            title: keepTitle ? c.title : titleFromFilename(file.name),
+          };
+        })
+      );
     } catch (err: any) {
       updateClaimFields(index, {
         _agreementError: err?.message || t("submit.upload.agreementReadError"),
@@ -534,11 +732,15 @@ const SubmitClaimsForm: React.FC = () => {
   };
 
   const clearAgreement = (index: number) =>
-    updateClaimFields(index, {
-      verificationHash: "",
-      _agreementFile: "",
-      _agreementError: "",
-    });
+    setClaims((prev) =>
+      prev.map((c, i) => {
+        if (i !== index) return c;
+        const next: ClaimDraft = { ...c, verificationHash: "", _agreementFile: "", _agreementError: "" };
+        // A title that is only the removed file's filename prefill goes with it.
+        if (c.title && c.title === titleFromFilename(c._agreementFile || "")) next.title = "";
+        return next;
+      })
+    );
 
   // Reusable drag-and-drop upload zone (mirrors the v2 certificate uploader).
   const uploadZone = (opts: {
@@ -622,6 +824,9 @@ const SubmitClaimsForm: React.FC = () => {
             onFile: (file) => handleCertFile(index, file),
             onRemove: () => clearCert(index),
           })}
+          {claim._certWarn && (
+            <div className={styles.warnMessage}>{claim._certWarn}</div>
+          )}
           {claim._certFile && (
             <>
               <FormInput
@@ -649,7 +854,7 @@ const SubmitClaimsForm: React.FC = () => {
         </div>
       );
     }
-    if (claim.type === "frameworkAgreement") {
+    if (claim.type === "frameworkAgreement" || claim.type === "dataspaceAgreement") {
       return (
         <div className={styles.repeaterField}>
           {uploadZone({
@@ -713,7 +918,13 @@ const SubmitClaimsForm: React.FC = () => {
         return (
           <>
             {claimStatic(index, "frameworkId", t("submit.claim.frameworkId"))}
-            {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
+            <FormSelect
+              label={t("submit.claim.agreementType")}
+              options={AGREEMENT_TYPE_OPTIONS}
+              value={claim.agreementType || ""}
+              onChange={(v) => updateClaim(index, "agreementType", v)}
+              required
+            />
             {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
             {claimInput(index, "title", t("submit.claim.title"), "", true)}
           </>
@@ -782,17 +993,118 @@ const SubmitClaimsForm: React.FC = () => {
             />
           </>
         );
-      case "idpAssertion":
-        return <>{claimInput(index, "assertion", t("submit.claim.assertion"), "", true)}</>;
+      case "dataspaceAgreement":
+        return (
+          <>
+            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
+            {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
+            {claimInput(index, "title", t("submit.claim.title"), "", true)}
+          </>
+        );
+      case "dataspaceRole":
+        return (
+          <>
+            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimInput(index, "roleId", t("submit.claim.roleId"), t("submit.placeholders.roleId"), true)}
+            {claimInput(index, "title", t("submit.claim.title"))}
+            <FormSelect
+              label={t("submit.claim.loa")}
+              options={loaOptions}
+              value={claim.loa || "not-applicable"}
+              onChange={(v) => updateClaim(index, "loa", v)}
+              required
+            />
+            <FormSelect
+              label={t("submit.claim.compliancyVerified")}
+              options={yesNoNaOptions}
+              value={claim.compliancyVerified || "not-applicable"}
+              onChange={(v) => updateClaim(index, "compliancyVerified", v)}
+              required
+            />
+            <FormSelect
+              label={t("submit.claim.legalAdherence")}
+              options={yesNoNaOptions}
+              value={claim.legalAdherence || "not-applicable"}
+              onChange={(v) => updateClaim(index, "legalAdherence", v)}
+              required
+            />
+          </>
+        );
       default:
         return null;
     }
   };
 
+  // Compact one-line summary per claim for the review step.
+  const claimSummary = (c: ClaimDraft): string => {
+    const main =
+      c.type === "frameworkRole"
+        ? roleTitle(c.roleId || "")
+        : c.type === "x509Certificate"
+        ? c.subjectName || t("submit.wizard.noCertificate")
+        : c.type === "frameworkAgreement"
+        ? c.title || c.agreementId || ""
+        : c.type === "dataspaceAgreement"
+        ? [c.dataspaceId, c.title || c.agreementId].filter(Boolean).join(" · ")
+        : c.type === "authRegistry"
+        ? c.name || ""
+        : c.type === "dataspaceMembership"
+        ? c.dataspaceId || ""
+        : c.type === "dataspaceRole"
+        ? [c.dataspaceId, c.roleId].filter(Boolean).join(" · ")
+        : c.frameworkId || "";
+    const dates = c.startDate ? ` · ${c.startDate} → ${c.endDate || "…"}` : "";
+    return `${main} · ${c.status}${dates}`;
+  };
+
+  const stepIndicator = (
+    <div className={styles.stepsContainer}>
+      {WIZARD_STEPS.map((key, i) => (
+        <div key={key} className={styles.stepWrapper}>
+          <div
+            className={`${styles.stepLabel} ${
+              i <= step ? styles.completed : ""
+            }`}
+          >
+            {t(`submit.steps.${key}`)}
+          </div>
+          <div
+            className={`${styles.step} ${
+              i === step ? styles.active : i < step ? styles.completed : ""
+            }`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
+  // Once created, the wizard is done: replace it with a success panel until
+  // the redirect to /participants lands (the effect above navigates shortly).
+  if (response) {
+    return (
+      <div className={styles.successPanel}>
+        <div className={styles.successCheck}>✓</div>
+        <p className={styles.successTitle}>{t("submit.messages.submitSuccess")}</p>
+        <div className={styles.redirectRow}>
+          <span className={styles.btnSpinner} aria-hidden="true"></span>
+          {t("submit.messages.redirecting")}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit}>
+      {stepIndicator}
+
+      {step === 0 && (
+        <p className={styles.wizardHint}>{t("submit.wizard.certHint")}</p>
+      )}
+
+      {step === 1 && (
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>{t("submit.identity.heading")}</h2>
+        {/* No card title: the step indicator already reads "Party details". */}
         <div className={styles.formGrid}>
           <FormInput
             label={t("submit.identity.partyId")}
@@ -866,34 +1178,52 @@ const SubmitClaimsForm: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
-      {claims.map((claim, index) => (
+      {step === 3 && claims.length <= MINIMUM_CLAIM_TYPES.length && (
+        <p className={styles.wizardHint}>{t("submit.wizard.extrasHint")}</p>
+      )}
+
+      {claims.map((claim, index) =>
+        claimStepOf(index) !== step ? null : (
         <div className={styles.section} key={index}>
-          <div className={styles.sectionBar}></div>
-          <div className={styles.sectionHeader}>
-            <div className={styles.sectionHeading}>
-              <h2 className={styles.sectionTitle}>
-                {t("submit.claim.heading", {
-                  index: index + 1,
-                  type: t("submit.claimTypes." + claim.type),
-                })}
-              </h2>
-              {isMinimumClaim(index) && (
-                <span className={styles.requiredBadge}>
-                  {t("submit.claim.minimum")}
-                </span>
+          {/* Card chrome differs by step: the certificate card carries no title
+              (the step indicator already says "Certificate", and "Claim 4" made
+              no sense once it moved first); framework cards are titled by their
+              claim type with the divider BETWEEN title and content; extra
+              claims keep the original numbered layout. */}
+          {claimStepOf(index) === 3 && <div className={styles.sectionBar}></div>}
+          {claimStepOf(index) !== 0 && (
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionHeading}>
+                <h2 className={styles.sectionTitle}>
+                  {claimStepOf(index) === 2
+                    ? t("submit.claimTypes." + claim.type)
+                    : t("submit.claim.heading", {
+                        index: index + 1,
+                        type: t("submit.claimTypes." + claim.type),
+                      })}
+                </h2>
+                {isMinimumClaim(index) && (
+                  <span className={styles.requiredBadge}>
+                    {t("submit.claim.minimum")}
+                  </span>
+                )}
+              </div>
+              {!isMinimumClaim(index) && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => removeClaim(index)}
+                >
+                  {t("submit.actions.remove")}
+                </Button>
               )}
             </div>
-            {!isMinimumClaim(index) && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => removeClaim(index)}
-              >
-                {t("submit.actions.remove")}
-              </Button>
-            )}
-          </div>
+          )}
+          {claimStepOf(index) === 2 && (
+            <div className={styles.sectionDivider}></div>
+          )}
           <div className={styles.formGrid}>
             <FormSelect
               label={t("submit.claim.type")}
@@ -917,21 +1247,65 @@ const SubmitClaimsForm: React.FC = () => {
           </div>
           {renderTypeUploads(claim, index)}
         </div>
-      ))}
+        )
+      )}
 
-      <div className={styles.buttonGroup}>
-        <Button
-          type="button"
-          variant="secondary"
-          icon={<div>+</div>}
-          onClick={addClaim}
-        >
-          {t("submit.actions.addClaim")}
-        </Button>
-      </div>
+      {step === 3 && (
+        <div className={styles.buttonGroup}>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<div>+</div>}
+            onClick={addClaim}
+          >
+            {t("submit.actions.addClaim")}
+          </Button>
+        </div>
+      )}
 
-      <br />
+      {step === WIZARD_STEPS.length - 1 && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>{t("submit.review.heading")}</h2>
+          <div className={styles.reviewBlock}>
+            <h3>{t("submit.identity.heading")}</h3>
+            <p className={styles.reviewLine}>
+              did:ishare:{partyId} — {partyName || "—"}
+            </p>
+            {alsoKnownAs.filter((a) => a.trim()).length > 0 && (
+              <p className={styles.reviewLine}>
+                {t("submit.identity.alsoKnownAs")}:{" "}
+                {alsoKnownAs.filter((a) => a.trim()).join(", ")}
+              </p>
+            )}
+          </div>
+          {claims.map((c, i) => (
+            <div className={styles.reviewBlock} key={i}>
+              <h3>{t("submit.claimTypes." + c.type)}</h3>
+              <p className={styles.reviewLine}>{claimSummary(c)}</p>
+            </div>
+          ))}
+          {certMissing && certRequired && (
+            <div className={styles.warnMessage}>
+              {t("submit.wizard.certRequiredWarn")}
+            </div>
+          )}
+          <div className={styles.warnMessage}>
+            {t("submit.review.permanentNote")}
+          </div>
+          <label className={styles.confirmRow}>
+            <input
+              type="checkbox"
+              checked={reviewConfirmed}
+              onChange={(e) => setReviewConfirmed(e.target.checked)}
+            />
+            <span>{t("submit.review.confirmLabel")}</span>
+          </label>
+        </div>
+      )}
 
+      {wizardError && (
+        <div className={styles.errorMessage}>{t(wizardError)}</div>
+      )}
       {error && (
         <div className={styles.errorMessage}>
           {t("submit.messages.submitError", {
@@ -939,16 +1313,36 @@ const SubmitClaimsForm: React.FC = () => {
           })}
         </div>
       )}
-      {response && (
-        <div className={styles.uploadText}>
-          {t("submit.messages.submitSuccess")}
+      <div className={styles.wizardNav}>
+        <div>
+          {step > 0 && (
+            <Button type="button" variant="secondary" onClick={goBack}>
+              {t("submit.wizard.back")}
+            </Button>
+          )}
         </div>
-      )}
-
-      <div className={styles.buttonGroup}>
-        <Button type="submit" variant="primary" disabled={loading}>
-          {loading ? t("submit.actions.submitting") : t("submit.actions.create")}
-        </Button>
+        <div>
+          {step < WIZARD_STEPS.length - 1 ? (
+            <Button type="button" variant="primary" onClick={goNext}>
+              {t("submit.wizard.next")}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading || !reviewConfirmed}
+            >
+              {loading ? (
+                <>
+                  <span className={styles.btnSpinner} aria-hidden="true"></span>
+                  {t("submit.actions.submitting")}
+                </>
+              ) : (
+                t("submit.actions.create")
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

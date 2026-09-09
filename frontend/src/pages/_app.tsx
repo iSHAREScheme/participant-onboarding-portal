@@ -1,3 +1,4 @@
+import { tokenHasOperatorRole } from "utils/roles";
 import type { AppProps } from "next/app"
 import "styles/globals.css"
 import Layout from "components/layout/Layout"
@@ -30,6 +31,7 @@ const keycloakStub = {
   realm: '',
   authServerUrl: '',
   hasRealmRole: () => false,
+    hasResourceRole: () => false,
 } as unknown as Keycloak;
 
 // Theme wrapper component to initialize theming
@@ -116,8 +118,7 @@ function MyApp({ Component, pageProps }: AppProps) {
             const info = await keycloak.loadUserInfo()
             setKeycloakUserInfo(keycloak, info)
 
-            const roles: string[] = (keycloak.tokenParsed?.realm_access?.roles as string[]) || []
-            const isAdmin = roles.includes('onboarding-admin')
+            const isAdmin = tokenHasOperatorRole(keycloak.tokenParsed as { resource_access?: Record<string, { roles?: string[] }> })
             const target = isAdmin ? '/admin' : '/register'
 
             // Steer the freshly-authenticated user to their role's home ONLY from the

@@ -402,6 +402,7 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
 	}
+	h.annotateOwnership(data)
 
 	return c.JSON(fiber.Map{
 		"data":       data,
@@ -483,14 +484,30 @@ func (h *HandlerRegistry) getFilteredParticipants(c *fiber.Ctx, page, pageSize i
 		log.Printf("satellite: filtered participants search=%q mine=%t active=%t certified=%t claimModel=%t matched=%d of %d page=%d/%d", search, mineOnly, activeOnly, certifiedOnly, claimModel, total, len(all), page, totalPages)
 	}
 
+	pageRows := filtered[start:end]
+	h.annotateOwnership(pageRows)
+
 	resp := fiber.Map{
-		"data": filtered[start:end], "page": page, "pageSize": pageSize,
+		"data": pageRows, "page": page, "pageSize": pageSize,
 		"total": total, "totalPages": totalPages,
 	}
 	if mineOnly {
 		resp["registrarId"] = registrar
 	}
 	return c.JSON(resp)
+}
+
+// annotateOwnership marks each party object with whether it is registered under
+// this portal's registrar — the same test the mineOnly filter uses — so the UI
+// can show owned-and-editable vs view-only without re-deriving registrar logic
+// client-side. Mutates the party maps in place (they are response-local).
+func (h *HandlerRegistry) annotateOwnership(parties []interface{}) {
+	registrar := h.resolveRegistrarId()
+	for _, p := range parties {
+		if m, ok := p.(map[string]interface{}); ok {
+			m["ownedByRegistry"] = registrar != "" && partyMatchesRegistrar(m, registrar)
+		}
+	}
 }
 
 // resolveRegistrarId returns the registrar that identifies "us": the configured
@@ -624,6 +641,7 @@ func (h *HandlerRegistry) GetParticipantDetail(c *fiber.Ctx) error {
 	if party == nil {
 		return responses.ErrorResponse(c, fiber.StatusNotFound, "participant not found")
 	}
+	h.annotateOwnership([]interface{}{party})
 	return c.JSON(fiber.Map{"data": party})
 }
 
@@ -988,10 +1006,20 @@ func (h *HandlerRegistry) fetchPartiesPage(page, pageSize int, name string, acti
 	}
 	// Role filter: a v3 claim-model satellite filters roles via a frameworkRole
 	// claim filter (it ignores a bare `role=`); a v2 satellite accepts `role=`.
+	// The v3 vocabulary renamed the registry role iShareSatellite ->
+	// ParticipantRegistry; accept either spelling from the caller and send the
+	// term the target satellite's vocabulary uses (the v3 middleware accepts
+	// both as synonyms, v2 only knows the old one).
 	if role != "" {
 		if strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+			if strings.EqualFold(role, "iShareSatellite") {
+				role = "ParticipantRegistry"
+			}
 			q.Set("claimFilter[frameworkRole.roleId]", role)
 		} else {
+			if strings.EqualFold(role, "ParticipantRegistry") {
+				role = "iShareSatellite"
+			}
 			q.Set("role", role)
 		}
 	}

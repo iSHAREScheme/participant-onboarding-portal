@@ -14,6 +14,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
+
 	"onboardingportal/config"
 	"onboardingportal/integrations/satellite"
 	"onboardingportal/models"
@@ -446,6 +448,27 @@ func truncateForLog(b []byte) string {
 // builds the payload that matches the satellite's schema version — and the
 // owner access token is attached. The satellite's response is passed back.
 func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath string) error {
+	return h.forwardPartyWriteBody(c, method, satellitePath, c.Body())
+}
+
+// normalizeClaimBody expands bare date-input values (yyyy-mm-dd) in a claim
+// JSON body to the RFC3339 instants the satellite requires — the same rule
+// party creation applies. Pass-through on parse failure: the satellite then
+// produces the authoritative error.
+func normalizeClaimBody(body []byte) []byte {
+	claim := map[string]interface{}{}
+	if err := json.Unmarshal(body, &claim); err != nil {
+		return body
+	}
+	satellite.NormalizeClaimDates(claim)
+	out, err := json.Marshal(claim)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
+func (h *HandlerParty) forwardPartyWriteBody(c *fiber.Ctx, method, satellitePath string, body []byte) error {
 	assertionToken, err := createSatelliteOwnerAccessToken(h.Server.Config)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to create access token")
@@ -458,7 +481,6 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 	}
 
 	reqURL := joinSatelliteURL(h.Config.SatelliteBaseUrl, satellitePath)
-	body := c.Body()
 
 	req, err := http.NewRequest(method, reqURL, bytes.NewReader(body))
 	if err != nil {
@@ -556,7 +578,28 @@ func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
 	if id == "" || claimId == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
 	}
-	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId))
+	return h.forwardPartyWriteBody(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId), normalizeClaimBody(c.Body()))
+}
+
+// CreateClaim godoc
+// @Summary      Add a claim to a party (v3.0)
+// @Description  Proxies to the Satellite's POST /parties/{partyId}/claims (iSHARE 3.0 create-claim). Claims are append-only: a new x509Certificate claim registers an additional active certificate — the previous certificate claim keeps its own status until it expires or is explicitly revoked.
+// @Tags         registry
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Party id / EORI"
+// @Success      201   {object}  map[string]interface{}
+// @Failure      400   {object}  map[string]string
+// @Router       /parties/{id}/claims [post]
+func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
+	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim create requires a 3.x satellite")
+	}
+	id := strings.TrimSpace(c.Params("id"))
+	if id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	}
+	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimBody(c.Body()))
 }
 
 type ProposalData struct {
@@ -798,19 +841,11 @@ func (h *HandlerParty) GetProposals(c *fiber.Ctx) error {
 // @Success      200  {object}  models.Proposal
 // @Failure      404  {object}  map[string]string
 // @Router       /proposals/{id} [get]
-// isOnboardingAdmin reports whether the authenticated session carries the
-// onboarding-admin realm role — the same role RequireAdminRole enforces on the
-// admin-only routes.
-func isOnboardingAdmin(claims *middlewares.KeycloakClaims) bool {
-	if claims == nil {
-		return false
-	}
-	for _, r := range claims.RealmAccess.Roles {
-		if r == "onboarding-admin" {
-			return true
-		}
-	}
-	return false
+// isSatelliteAdmin reports whether the authenticated session holds the
+// SatelliteAdmin frontend client role (or higher, e.g. SchemeOwner) — the same
+// operator role RequireAdminRole enforces on the admin-only routes.
+func isSatelliteAdmin(claims *middlewares.KeycloakClaims) bool {
+	return middlewares.HasRoleAtLeast(claims, middlewares.RoleSatelliteAdmin)
 }
 
 // callerMayActOnProposal authorises access to a single proposal: the session
@@ -828,7 +863,7 @@ func (h *HandlerParty) callerMayActOnProposal(c *fiber.Ctx, proposal *models.Pro
 	if claims == nil {
 		return false
 	}
-	if isOnboardingAdmin(claims) {
+	if isSatelliteAdmin(claims) {
 		return true
 	}
 	owner := strings.TrimSpace(proposal.KeycloakUsername)
@@ -1162,6 +1197,39 @@ func buildEherkenningConsentRecord(p *models.Proposal) []byte {
 // @Failure      404  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
 // @Router       /proposals/{id}/complete [post]
+// grantOnboardingPartyAdmin makes the applicant the PartyAdmin of the party they
+// just onboarded (U2 role model): it assigns the PartyAdmin frontend client role
+// and records their party id as a KC user attribute (surfaced as the partyId claim
+// PR-MW scopes on). Best-effort: the party is already created by this point, so a
+// failure is logged and never blocks completion. No-op under OIDC-disabled (dev).
+func (h *HandlerParty) grantOnboardingPartyAdmin(proposal *models.Proposal) {
+	if h.Config.OIDCDisable {
+		return
+	}
+	username := strings.TrimSpace(proposal.KeycloakUsername)
+	partyID := strings.TrimSpace(proposal.PartyId)
+	if username == "" || partyID == "" {
+		return
+	}
+	hk := &HandlerKeycloak{Server: h.Server, Config: h.Config}
+	admin, err := hk.admin()
+	if err != nil {
+		log.Printf("onboarding: keycloak admin unavailable, not granting PartyAdmin to %q: %v", username, err)
+		return
+	}
+	userID, err := hk.findUserIDByUsername(admin, username)
+	if err != nil || userID == "" {
+		log.Printf("onboarding: could not resolve keycloak user %q to grant PartyAdmin: %v", username, err)
+		return
+	}
+	if err := hk.assignClientRole(admin, userID, middlewares.RolePartyAdmin); err != nil {
+		log.Printf("onboarding: could not assign PartyAdmin to %q (party %q): %v", username, partyID, err)
+	}
+	if err := hk.setUserPartyID(admin, userID, partyID); err != nil {
+		log.Printf("onboarding: could not set partyId=%q on %q: %v", partyID, username, err)
+	}
+}
+
 func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 	id := c.Params("id")
 
@@ -1388,6 +1456,8 @@ func (h *HandlerParty) CompleteProposal(c *fiber.Ctx) error {
 		proposal.PartyId = normalizedPartyID
 	}
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(&proposal)
 
 	// Save the changes
 	result = h.Server.DB.Save(&proposal)
@@ -1480,6 +1550,8 @@ func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Propos
 	// downstream issuer/webhook flows key credentials by the registry DID.
 	proposal.PartyId = partyDID
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(proposal)
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
 	}
@@ -1589,6 +1661,8 @@ func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposa
 	// downstream issuer/webhook flows key credentials by the registry DID.
 	proposal.PartyId = partyDID
 	proposal.Status = "completed"
+	// U2: onboarding a party makes the applicant its PartyAdmin (best-effort).
+	h.grantOnboardingPartyAdmin(proposal)
 	if err := h.Server.DB.Save(proposal).Error; err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to complete proposal")
 	}
@@ -1650,6 +1724,16 @@ func isSatelliteVersion22(raw string) bool {
 // the bare EORI it was derived from. A did:ishare id is normalized through the
 // EORI form; any other DID method (did:web, did:ebsi, …) is preserved verbatim
 // with no EORI alias; a plain EORI/registration number is promoted to a DID.
+// ntrAlignedID matches ids already in the satellite's calcIshareDid shape
+// (EU.<CC>.<identifier>), and ntrIdentifier matches bare ETSI NTR<CC>…
+// organizationIdentifier values that must be LIFTED into that shape.
+// Uppercase only, mirroring the satellite's calcIshareDid regex (NTR[A-Z][A-Z]):
+// an identifier it cannot derive a country from gains nothing from lifting.
+var (
+	ntrAlignedID  = regexp.MustCompile(`^EU\.[A-Z]{2}\.NTR[A-Z]{2}`)
+	ntrIdentifier = regexp.MustCompile(`^NTR([A-Z]{2})`)
+)
+
 func deriveV3Identity(rawID string) (did string, eori string) {
 	trimmed := strings.TrimSpace(rawID)
 	if trimmed == "" {
@@ -1657,11 +1741,22 @@ func deriveV3Identity(rawID string) (did string, eori string) {
 	}
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "did:ishare:") {
-		eori = normalizePartyID(trimmed[len("did:ishare:"):])
-		return satellite.BuildDidFromPartyID(eori), eori
-	}
-	if strings.HasPrefix(lower, "did:") {
+		trimmed = strings.TrimSpace(trimmed[len("did:ishare:"):])
+		lower = strings.ToLower(trimmed)
+	} else if strings.HasPrefix(lower, "did:") {
 		return trimmed, ""
+	}
+	// A v3 satellite requires a certificate-registered party's id to equal
+	// calcIshareDid(cert organizationIdentifier) = did:ishare:EU.<CC>.<identifier>
+	// for NTR<CC> identifiers. Ids already in that shape pass through verbatim,
+	// and bare NTR<CC>… identifiers are lifted into it — the legacy EU.EORI
+	// canonicalisation below must never rewrite them, or no NTR-certificate
+	// party can pass the satellite's alignment check.
+	if ntrAlignedID.MatchString(trimmed) {
+		return satellite.BuildDidFromPartyID(trimmed), ""
+	}
+	if m := ntrIdentifier.FindStringSubmatch(trimmed); m != nil {
+		return satellite.BuildDidFromPartyID("EU." + strings.ToUpper(m[1]) + "." + trimmed), ""
 	}
 	eori = normalizePartyID(trimmed)
 	return satellite.BuildDidFromPartyID(eori), eori

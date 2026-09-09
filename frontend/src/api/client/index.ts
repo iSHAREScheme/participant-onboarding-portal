@@ -147,6 +147,7 @@ export type ClaimType =
   | "frameworkRole"
   | "x509Certificate"
   | "dataspaceMembership"
+  | "dataspaceRole"
   | "idpAssertion"
 
 export type Loa = "low" | "substantial" | "high" | "not-applicable"
@@ -223,6 +224,25 @@ export interface DataspaceMembershipClaim extends ClaimBase {
   additionalInfo?: AdditionalInfo
 }
 
+export interface DataspaceAgreementClaim extends ClaimBase {
+  type: "dataspaceAgreement"
+  dataspaceId: string
+  agreementType: string
+  agreementId: string
+  title: string
+  verificationHash?: string
+}
+
+export interface DataspaceRoleClaim extends ClaimBase {
+  type: "dataspaceRole"
+  dataspaceId: string
+  roleId: string
+  title?: string
+  loa: Loa
+  compliancyVerified: YesNoNa
+  legalAdherence: YesNoNa
+}
+
 export interface IdpAssertionClaim extends ClaimBase {
   type: "idpAssertion"
   assertion: string
@@ -235,6 +255,8 @@ export type Claim =
   | FrameworkRoleClaim
   | X509CertificateClaim
   | DataspaceMembershipClaim
+  | DataspaceAgreementClaim
+  | DataspaceRoleClaim
   | IdpAssertionClaim
 
 /** v3 participant identity wrapper (party in the spec). */
@@ -441,8 +463,8 @@ export class API {
   listKeycloakUsers () {
     return this.client.get<{ users: KeycloakUser[] }>(`/users`)
   }
-  // Create a user (role "user" | "admin"); the backend also emails a set-password link.
-  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "user" | "admin" }) {
+  // Create a user (role = a frontend client role); the backend also emails a set-password link.
+  createKeycloakUser (body: { email: string; firstName: string; lastName: string; role: "SatelliteAdmin" | "PartyAdmin" | "User" }) {
     return this.client.post(`/users`, body)
   }
   deleteKeycloakUser (id: string) {
@@ -494,7 +516,7 @@ export class API {
     search?: string
     // Party-id search (satellite matches id / EORI / DID, contains).
     id?: string
-    // Framework-role filter (frameworkRole claim roleId, e.g. "iShareSatellite").
+    // Framework-role filter (frameworkRole claim roleId, e.g. "ParticipantRegistry").
     role?: string
     activeOnly?: boolean
     certifiedOnly?: boolean
@@ -644,6 +666,10 @@ export class API {
       `/parties/${encodeURIComponent(id)}/claims/${encodeURIComponent(claimId)}`,
       body
     )
+  }
+  // v3.0: add a claim via POST /parties/{id}/claims (claims are append-only).
+  createClaim (id: string, claim: any) {
+    return this.client.post(`/parties/${encodeURIComponent(id)}/claims`, claim)
   }
 
   // create/update

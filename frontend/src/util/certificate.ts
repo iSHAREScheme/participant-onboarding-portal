@@ -84,11 +84,22 @@ function derivePartyIdentity(organizationIdentifier: string) {
 
   // eIDAS legal-person certificates commonly expose the ETSI
   // organizationIdentifier value as NTR<country>-<registration-number>.
-  // For Dutch trade-register identifiers, the portal already represents parties
-  // as EU.EORI.NL.KVK<digits>, so keep that canonical form across identity paths.
-  const ntrNl = identifier.match(/^NTRNL-?(\d{8,})$/i);
+  // A v3 registry validates that a certificate-registered party's id equals
+  // EXACTLY did:ishare:EU.<CC>.<organizationIdentifier> (its calcIshareDid),
+  // so derive that shape verbatim — the legacy EU.EORI.NL.KVK canonical form
+  // can never pass that alignment check. The KVK digits are still extracted
+  // for the eHerkenning claim mapping.
+  const ntr = identifier.match(/^NTR([A-Z]{2})/);
+  if (ntr) {
+    const ntrNl = identifier.match(/^NTRNL-?(\d{8,})$/i);
+    return {
+      ...(ntrNl ? { kvkNumber: ntrNl[1] } : {}),
+      partyId: `EU.${ntr[1].toUpperCase()}.${identifier}`,
+    };
+  }
+
   const kvk = identifier.match(/(?:^|[^A-Z0-9])KVK[\s.-]*(\d{8,})(?:$|[^0-9])/i);
-  const kvkNumber = ntrNl?.[1] || kvk?.[1] || "";
+  const kvkNumber = kvk?.[1] || "";
   if (kvkNumber) {
     return {
       kvkNumber,

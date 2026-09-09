@@ -25,9 +25,11 @@ interface ParticipantRow {
   partyId: string;
   name: string;
   roles: string[];
+  dataspaces: string[];
   status: string;
   startDate: string;
   endDate: string;
+  owned: boolean;
 }
 
 // The backend returns one page of parties under `data`; tolerate the other
@@ -42,6 +44,14 @@ const extractParties = (data: any): any[] => {
     []
   );
 };
+
+// The v3 vocabulary renamed the registry role iShareSatellite ->
+// ParticipantRegistry. v2 records and unmigrated projections still carry the
+// old literal, so map it for display - the UI only ever shows the new term.
+const canonicalRole = (r: string): string =>
+  r.toLowerCase().replace(/[\s_-]/g, "") === "isharesatellite"
+    ? "ParticipantRegistry"
+    : r;
 
 const normalize = (p: any): ParticipantRow => {
   const partyId = p?.party_id ?? p?.id ?? "";
@@ -60,6 +70,7 @@ const normalize = (p: any): ParticipantRow => {
       .map((c: any) => c?.roleId ?? c?.title)
       .filter(Boolean);
   }
+  roles = roles.map(canonicalRole);
 
   let status = p?.adherence?.status ?? p?.status ?? "";
   let startDate = p?.adherence?.start_date ?? p?.startDate ?? "";
@@ -80,7 +91,28 @@ const normalize = (p: any): ParticipantRow => {
     }
   }
 
-  return { partyId, name, roles, status, startDate, endDate };
+  // Dataspace membership from the v3 claims (union over the dataspace-scoped
+  // claim types — a party with only a role or agreement claim in a dataspace
+  // still belongs to it). v2 parties carry no claims and show "—".
+  let dataspaces: string[] = [];
+  if (Array.isArray(p?.claims)) {
+    dataspaces = Array.from(
+      new Set(
+        p.claims
+          .filter((c: any) =>
+            ["dataspaceMembership", "dataspaceRole", "dataspaceAgreement"].includes(c?.type)
+          )
+          .map((c: any) => c?.dataspaceId)
+          .filter(Boolean)
+      )
+    );
+  }
+
+  // Set server-side by the BFF (annotateOwnership): true when the party is
+  // registered under this portal's registrar — the same test as "My participants".
+  const owned = p?.ownedByRegistry === true;
+
+  return { partyId, name, roles, dataspaces, status, startDate, endDate, owned };
 };
 
 type FilterMode = "all" | "mine" | "active" | "certified";
@@ -95,10 +127,49 @@ const ROLE_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "AuthorisationRegistry", label: "Authorisation Registry" },
   { value: "IdentityProvider", label: "Identity Provider" },
   { value: "IdentityBroker", label: "Identity Broker" },
-  { value: "iShareSatellite", label: "iSHARE Satellite" },
+  { value: "ParticipantRegistry", label: "Participant Registry" },
 ];
 
 const SEARCH_DEBOUNCE_MS = 350;
+
+// Ownership indicator, mirroring the old registry UI: a pencil for parties
+// registered by THIS registry (owned, editable here) and an eye for parties
+// registered elsewhere (view only). Lucide "pencil" / "eye" glyphs, inheriting
+// the cell's text colour.
+const PencilIcon = ({ label }: { label: string }) => (
+  <svg
+    className={styles.accessIcon}
+    role="img"
+    aria-label={label}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <title>{label}</title>
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </svg>
+);
+
+const EyeIcon = ({ label }: { label: string }) => (
+  <svg
+    className={styles.accessIcon}
+    role="img"
+    aria-label={label}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <title>{label}</title>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
 
 // "+N" badge for the roles beyond the first one shown. Its hover/focus tooltip
 // is rendered into a body portal with fixed positioning, so the table's scroll
@@ -172,8 +243,10 @@ const Participants: NextPage = () => {
   const [role, setRole] = useState<string>(
     () => getParticipantsListState()?.role ?? ""
   );
+  // Default to the operator's own parties (Joost, 2026-08-27) — the in-session
+  // list state still wins, so switching to "all" sticks while navigating.
   const [filter, setFilter] = useState<FilterMode>(
-    () => (getParticipantsListState()?.filter as FilterMode) ?? "all"
+    () => (getParticipantsListState()?.filter as FilterMode) ?? "mine"
   );
   const [authorized, setAuthorized] = useState(false);
   // Guards against out-of-order responses: only the latest request applies.
@@ -246,6 +319,12 @@ const Participants: NextPage = () => {
     } else {
       setIsLoading(true);
       setErrorKey(null);
+      // A cache miss means a DIFFERENT query (changed filter/search/page). Drop
+      // the previous rows so the skeleton shows: stale rows staying on screen
+      // read as the new filter's answer (clicking a role filter while "My
+      // participants" was active looked like the mine-filter was ignored).
+      setParticipants([]);
+      setTotalPages(1);
     }
     try {
       const api = new API();
@@ -349,10 +428,16 @@ const Participants: NextPage = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {/* Both filter selects are blocked while a fetch is in flight, so a
+                second filter can't be clicked before the first one's result is
+                on screen (the skeleton above signals the load). The search box
+                stays typable: disabling it would drop focus mid-keystroke, and
+                the request-id guard already discards stale responses. */}
             <select
               className={styles.statusSelect}
               aria-label={t("participants.roleFilterAria")}
               value={role}
+              disabled={isLoading}
               onChange={(e) => changeRole(e.target.value)}
             >
               <option value="">{t("participants.roleAll")}</option>
@@ -365,6 +450,7 @@ const Participants: NextPage = () => {
             <select
               className={styles.statusSelect}
               value={filter}
+              disabled={isLoading}
               onChange={(e) => changeFilter(e.target.value as FilterMode)}
             >
               <option value="all">{t("participants.filters.all")}</option>
@@ -410,9 +496,13 @@ const Participants: NextPage = () => {
                   <th>{t("participants.table.partyId")}</th>
                   <th>{t("participants.table.name")}</th>
                   <th>{t("participants.table.roles")}</th>
+                  <th>{t("participants.table.dataspace")}</th>
                   <th>{t("participants.table.status")}</th>
                   <th>{t("participants.table.startDate")}</th>
                   <th>{t("participants.table.endDate")}</th>
+                  <th className={styles.accessHeader}>
+                    {t("participants.table.access")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -421,9 +511,11 @@ const Participants: NextPage = () => {
                     <td><Skeleton width="80%" /></td>
                     <td><Skeleton width="60%" /></td>
                     <td><Skeleton width={54} height={18} radius={9999} /></td>
+                    <td><Skeleton width={70} /></td>
                     <td><Skeleton width={64} height={18} radius={9999} /></td>
                     <td><Skeleton width={72} /></td>
                     <td><Skeleton width={72} /></td>
+                    <td><Skeleton width={18} height={18} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -444,9 +536,13 @@ const Participants: NextPage = () => {
                 <th>{t("participants.table.partyId")}</th>
                 <th>{t("participants.table.name")}</th>
                 <th>{t("participants.table.roles")}</th>
+                <th>{t("participants.table.dataspace")}</th>
                 <th>{t("participants.table.status")}</th>
                 <th>{t("participants.table.startDate")}</th>
                 <th>{t("participants.table.endDate")}</th>
+                <th className={styles.accessHeader}>
+                  {t("participants.table.access")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -493,6 +589,19 @@ const Participants: NextPage = () => {
                       "—"
                     )}
                   </td>
+                  <td
+                    data-label={t("participants.table.dataspace")}
+                    title={p.dataspaces.join(", ") || undefined}
+                  >
+                    {p.dataspaces.length ? (
+                      <>
+                        {p.dataspaces[0]}
+                        {p.dataspaces.length > 1 && ` +${p.dataspaces.length - 1}`}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td data-label={t("participants.table.status")}>
                     {p.status ? (
                       <span
@@ -514,6 +623,16 @@ const Participants: NextPage = () => {
                   <td data-label={t("participants.table.endDate")}>
                     {formatDate(p.endDate)}
                   </td>
+                  <td
+                    className={styles.accessCell}
+                    data-label={t("participants.table.access")}
+                  >
+                    {p.owned ? (
+                      <PencilIcon label={t("participants.access.owned")} />
+                    ) : (
+                      <EyeIcon label={t("participants.access.viewOnly")} />
+                    )}
+                  </td>
                 </tr>
               ))}
               {/* Pad short pages (e.g. the last one) with blank rows so the
@@ -523,7 +642,7 @@ const Participants: NextPage = () => {
               {totalPages > 1 &&
                 Array.from({ length: blankRows }).map((_, i) => (
                   <tr key={`empty-${i}`} aria-hidden="true">
-                    <td colSpan={6}>&nbsp;</td>
+                    <td colSpan={8}>&nbsp;</td>
                   </tr>
                 ))}
             </tbody>

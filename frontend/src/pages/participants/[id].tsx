@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
 import ClaimEditModal from "components/ClaimEditModal";
+import AddClaimModal from "components/AddClaimModal";
 import { Skeleton } from "components";
 import API from "api/client";
 import { cacheParticipants, getCachedParticipant } from "util/participantCache";
@@ -223,6 +224,7 @@ const ParticipantDetail: NextPage = () => {
   // Claim whose full data is shown in the modal (e.g. a long x509 certificate).
   const [openClaim, setOpenClaim] = useState<ClaimView | null>(null);
   const [editClaim, setEditClaim] = useState<any | null>(null);
+  const [addingClaim, setAddingClaim] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [diffEntry, setDiffEntry] = useState<HistoryEntry | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -336,7 +338,13 @@ const ParticipantDetail: NextPage = () => {
     party.claims.some(
       (c: any) => c?.type === "frameworkCompliance" && str(c?.id)
     );
-  const canEdit = satelliteIsV3 ? hasRealComplianceClaim : version.startsWith("2.2");
+  // Registered by THIS registry? Set server-side (annotateOwnership) with the
+  // same registrar test as the "My participants" filter. Only an explicit false
+  // hides the edit affordances — a party cached before the field existed keeps
+  // them (the satellite rejects foreign-party writes anyway).
+  const owned = party?.ownedByRegistry !== false;
+  const canEdit =
+    (satelliteIsV3 ? hasRealComplianceClaim : version.startsWith("2.2")) && owned;
   const partyName = party ? str(party.party_name ?? party.name) : "";
   const partyId = party ? str(party.party_id ?? party.id) : "";
   // EORI/DID aliases (v3 `alsoKnownAs`; tolerate snake_case / aka). Drop blanks
@@ -496,7 +504,7 @@ const ParticipantDetail: NextPage = () => {
                     ))}
                   </div>
                   <div className={styles.claimCardActions}>
-                    {satelliteIsV3 && c.claim?.id && (
+                    {satelliteIsV3 && owned && c.claim?.id && (
                       <button
                         type="button"
                         className={styles.claimEditBtn}
@@ -840,6 +848,14 @@ const ParticipantDetail: NextPage = () => {
                       {t("participants.detail.edit.button")}
                     </button>
                   )}
+                  {satelliteIsV3 && owned && !editing && (
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => setAddingClaim(true)}
+                    >
+                      {t("participants.detail.edit.addClaimButton")}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -995,6 +1011,18 @@ const ParticipantDetail: NextPage = () => {
             loadHistory();
           }}
           onClose={() => setEditClaim(null)}
+        />
+      )}
+
+      {addingClaim && (
+        <AddClaimModal
+          partyId={partyId}
+          onSaved={() => {
+            setAddingClaim(false);
+            load();
+            loadHistory();
+          }}
+          onClose={() => setAddingClaim(false)}
         />
       )}
 
