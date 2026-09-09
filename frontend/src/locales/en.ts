@@ -105,9 +105,15 @@ const en = {
       partyId: "Party ID",
       name: "Name",
       roles: "Roles",
+      dataspace: "Dataspace",
       status: "Status",
       startDate: "Start date",
-      endDate: "End date"
+      endDate: "End date",
+      access: "Access"
+    },
+    access: {
+      owned: "Registered by this registry — editable",
+      viewOnly: "Registered by another registry — view only"
     },
     pagination: {
       previous: "Previous",
@@ -196,6 +202,15 @@ const en = {
         editClaim: "Edit claim",
         editClaimTitle: "Edit claim",
         noEditableClaimFields: "This claim type has no editable fields — its values are set at issuance.",
+        akaAppendOnly: "Existing aliases cannot be changed or removed — the registry only accepts additions.",
+        addClaimButton: "Add claim",
+        addClaimTitle: "Add claim",
+        addClaimType: "Claim type",
+        addClaimSubmit: "Add claim",
+        addClaimMissing: "Missing required fields",
+        addClaimCertUpload: "Certificate file",
+        addClaimCertRequired: "Certificate file",
+        addClaimCertHint: "The new certificate is registered as an additional active certificate. The previous certificate keeps its own status until it expires or is revoked from its claim card.",
         save: "Save",
         saving: "Saving…",
         saveClaim: "Save claim",
@@ -1117,7 +1132,10 @@ const en = {
     },
     roles: {
       user: "User",
-      admin: "Administrator"
+      admin: "Administrator",
+      satelliteAdmin: "Satellite admin",
+      schemeOwner: "Scheme owner",
+      partyAdmin: "Party admin"
     },
     validation: {
       emailRequired: "Email is required",
@@ -1592,6 +1610,32 @@ const en = {
       assertion: "Assertion",
       minimum: "Required for v3 party"
     },
+    steps: {
+      certificate: "Certificate",
+      party: "Party details",
+      framework: "Framework claims",
+      extras: "Additional claims",
+      review: "Review"
+    },
+    wizard: {
+      certHint: "Start with the party's X.509 certificate: the party ID, name, subject and validity are derived from it automatically. You can skip this step for parties that authenticate without a certificate (Service Consumer or Entitled Party).",
+      extrasHint: "Optionally add more claims (authorisation registry, dataspace membership, dataspace agreement, dataspace role, …) — or continue to review.",
+      back: "Back",
+      next: "Next",
+      needPartyId: "Enter the party ID before continuing.",
+      needPartyName: "Enter the party name before continuing.",
+      needFramework: "The compliance claim needs a framework ID.",
+      needAgreement: "The agreement claim needs a type, ID and title.",
+      needRole: "Select a framework role before continuing.",
+      needExtraFields: "Complete the required fields of the additional claims before continuing.",
+      noCertificate: "No certificate uploaded",
+      certRequiredWarn: "No certificate was uploaded, and the selected framework role requires one — the registry will reject this party. Go back to the Certificate step to upload one, or choose the Service Consumer or Entitled Party role."
+    },
+    review: {
+      heading: "Review & create",
+      permanentNote: "Creating a party is permanent: once added to the registry it cannot be deleted — it can only be edited, or revoked via its claims.",
+      confirmLabel: "I have reviewed the details above and understand this party cannot be deleted after creation."
+    },
     claimTypes: {
       frameworkCompliance: "Framework Compliance",
       authRegistry: "Authorisation Registry",
@@ -1600,6 +1644,7 @@ const en = {
       x509Certificate: "X.509 Certificate",
       dataspaceMembership: "Dataspace Membership",
       dataspaceAgreement: "Dataspace Agreement",
+      dataspaceRole: "Dataspace Role",
       idpAssertion: "IdP Assertion"
     },
     status: {
@@ -1640,7 +1685,8 @@ const en = {
     },
     messages: {
       submitError: "Failed to submit party. {{message}}",
-      submitSuccess: "Party submitted successfully."
+      submitSuccess: "Party submitted successfully.",
+      redirecting: "Taking you to the participants list…"
     },
     upload: {
       or: "or",
@@ -1651,6 +1697,7 @@ const en = {
       agreementInvalidType: "Invalid file type. Please upload a PDF.",
       certTooLarge: "Certificate exceeds the 1 MB limit.",
       agreementTooLarge: "PDF exceeds the 10 MB limit.",
+      certNoNtrWarn: "This certificate's identifier ({{identifier}}) does not align with the did:ishare format (NTR<CC>-…), so the registry cannot derive or verify the party ID from it. Registration will proceed with the party ID you enter — double-check it, since the certificate cannot confirm it. For a fully verified identity, use a certificate whose organizationIdentifier is NTR<CC>-….",
       certParseError: "Could not read the certificate. Ensure it is a valid X.509 (PEM/DER) file.",
       agreementReadError: "Could not read the PDF file."
     },

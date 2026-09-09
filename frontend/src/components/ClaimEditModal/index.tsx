@@ -85,6 +85,9 @@ const TYPE_READONLY: Record<string, string[]> = {
 };
 
 const STATUS = ["active", "inactive", "revoked", "suspended"];
+// x509Certificate claims only know active|revoked on the registry
+// (v3X509ClaimStatuses) — a cert is never inactive/suspended, it is revoked.
+const X509_STATUS = ["active", "revoked"];
 const LOA = ["low", "substantial", "high", "not-applicable"];
 const YESNONA = ["yes", "no", "not-applicable"];
 const BOOL = ["true", "false"];
@@ -123,8 +126,9 @@ const getVal = (claim: any, key: string): string => {
   return str(claim?.[key]);
 };
 
-const optionsFor = (key: string): string[] => {
-  if (key === "status") return STATUS;
+const optionsFor = (key: string, claimType?: string): string[] => {
+  if (key === "status")
+    return claimType === "x509Certificate" ? X509_STATUS : STATUS;
   if (key === "loa") return LOA;
   if (key === "compliancyVerified" || key === "legalAdherence") return YESNONA;
   if (key.endsWith("publiclyPublishable")) return BOOL;
@@ -158,9 +162,22 @@ const ClaimEditModal = ({
   const mutable = TYPE_MUTABLE[type] ?? [];
   const readonly = ["type", "registrarId", ...(TYPE_READONLY[type] ?? [])];
 
+  // Claim dates are stored as RFC3339 instants; a date input needs bare
+  // yyyy-mm-dd (an RFC3339 value renders as EMPTY), so trim for display and
+  // expand back to an instant on save.
+  const DATE_KEYS = ["startDate", "endDate"];
+  const toRfc3339 = (value: string, endOfDay = false): string => {
+    const v = value.trim();
+    if (!v || v.includes("T")) return v;
+    return `${v}T${endOfDay ? "23:59:59" : "00:00:00"}.000Z`;
+  };
+
   const editableKeys = ["status", "startDate", "endDate", ...mutable.map((m) => m.key)];
   const initial: Record<string, string> = {};
-  editableKeys.forEach((k) => (initial[k] = getVal(claim, k)));
+  editableKeys.forEach((k) => {
+    const v = getVal(claim, k);
+    initial[k] = DATE_KEYS.includes(k) ? v.slice(0, 10) : v;
+  });
   const [form, setForm] = useState<Record<string, string>>({ ...initial });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -172,7 +189,10 @@ const ClaimEditModal = ({
     try {
       const patch: Record<string, any> = {};
       ["status", "startDate", "endDate"].forEach((k) => {
-        if (form[k] !== initial[k]) patch[k] = form[k];
+        if (form[k] === initial[k]) return;
+        patch[k] = DATE_KEYS.includes(k)
+          ? toRfc3339(form[k], k === "endDate")
+          : form[k];
       });
       mutable.forEach((m) => {
         if (form[m.key] === initial[m.key]) return;
@@ -197,7 +217,7 @@ const ClaimEditModal = ({
   };
 
   const editField = (key: string, kind: Kind) => {
-    const opts = optionsFor(key);
+    const opts = optionsFor(key, type);
     return (
       <div className={styles.formRow} key={key}>
         <label className={styles.formLabel}>{humanize(key)}</label>

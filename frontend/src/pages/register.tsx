@@ -1,3 +1,4 @@
+import { isSatelliteOperator } from "utils/roles";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { NextPage } from "next";
 import { useRouter } from "next/router";
@@ -293,8 +294,7 @@ const Register: NextPage = () => {
   // to a loader below while this redirect runs).
   const isAdmin = Boolean(
     keycloak?.authenticated &&
-    typeof keycloak.hasRealmRole === "function" &&
-    keycloak.hasRealmRole("onboarding-admin")
+    isSatelliteOperator(keycloak)
   );
   useEffect(() => {
     if (isAdmin) router.replace("/admin");

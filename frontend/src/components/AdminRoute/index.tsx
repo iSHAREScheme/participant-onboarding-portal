@@ -1,3 +1,4 @@
+import { isSatelliteOperator } from "utils/roles";
 import { useEffect } from "react";
 import styles from "../../styles/components/AdminRoute.module.css";
 import { Loading } from "components";
@@ -18,7 +19,7 @@ const AdminRoute = ({
   const adminRoutesDisabled = env.NEXT_PUBLIC_DISABLE_ADMIN_ROUTES === "true";
 
   const isAuthenticated = keycloak.authenticated;
-  const hasAdminRole = keycloak.hasRealmRole("onboarding-admin");
+  const hasAdminRole = isSatelliteOperator(keycloak);
 
   useEffect(() => {
     if (adminRoutesDisabled) {
@@ -53,7 +54,7 @@ const AdminRoute = ({
   }
 
   return keycloak.authenticated ? (
-    keycloak.hasRealmRole("onboarding-admin") ? (
+    isSatelliteOperator(keycloak) ? (
       <>{children}</>
     ) : (
       <h1 className={styles.container}>You don&apos;t have access to this page.</h1>

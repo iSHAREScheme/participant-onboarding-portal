@@ -119,3 +119,15 @@
 .required {
   color: #FF3B30;
 }
+/* Prefilled, non-editable fields must be visibly distinct from editable ones
+   (user feedback 2026-08-26): muted fill, dashed border, no-entry cursor. */
+.input:disabled {
+  background: #f1efec;
+  color: #6b6b6b;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.input:disabled ~ .label {
+  color: #8f8f8f;
+}

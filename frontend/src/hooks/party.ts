@@ -2,6 +2,16 @@ import { useState, useEffect } from 'react'
 import API from 'api/client'
 import type { Party } from 'api/client'
 
+// The BFF relays the satellite's own error text as { error } — surface THAT,
+// not axios's generic "Request failed with status code 400".
+const normalizeError = (err: any): Error =>
+  new Error(
+    err?.response?.data?.error ||
+      err?.response?.data?.message ||
+      err?.message ||
+      'Request failed'
+  )
+
 export const useSubmitInfo = () => {
     const Api = new API()
     const [response, setResponse] = useState<any>(null)
@@ -16,7 +26,7 @@ export const useSubmitInfo = () => {
             const response = await Api.submitInfo(data)
             setResponse(response.data)
         } catch (error) {
-            setError(error)
+            setError(normalizeError(error))
         } finally {
             setLoading(false)
         }
@@ -40,7 +50,7 @@ export const useSubmitParty = () => {
             const res = await Api.submitParty(party)
             setResponse(res.data)
         } catch (err) {
-            setError(err)
+            setError(normalizeError(err))
         } finally {
             setLoading(false)
         }

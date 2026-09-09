@@ -52,7 +52,25 @@ const nextConfig = {
     return [
       {
         source: '/:path*',
-        headers: securityHeaders,
+        headers: [
+          ...securityHeaders,
+          // Documents (and /public assets like env.js) must revalidate on every
+          // load: without this, browsers heuristically cache the HTML and keep
+          // referencing the PREVIOUS deploy's immutable chunks — new releases
+          // stay invisible until a hard reload. Next.js overrides this header
+          // with immutable caching for hashed /_next/static assets, so those
+          // stay long-cached as before.
+          { key: 'Cache-Control', value: 'no-cache' },
+        ],
+      },
+      // Hashed build assets are content-addressed: restore long immutable
+      // caching for them (a later rule's header overrides the earlier rule's
+      // same-key header). Everything else keeps no-cache from the rule above.
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
       },
     ]
   },
