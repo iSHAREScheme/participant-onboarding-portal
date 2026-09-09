@@ -303,7 +303,10 @@ const Participants: NextPage = () => {
   }, [pageSize]);
 
   const load = useCallback(async () => {
-    if (!pageSize) return;
+    // Never fetch before AdminRoute has confirmed authorization (defensive: the
+    // refresh button is also wired to load, and its disabled state alone should
+    // not be what keeps an unauthorized request from going out).
+    if (!authorized || !pageSize) return;
     const cacheKey = `${page}|${pageSize}|${appliedTerm}|${role}|${filter}`;
     const cached = getCachedParticipantsList(cacheKey);
     const reqId = ++reqIdRef.current;
@@ -362,7 +365,7 @@ const Participants: NextPage = () => {
     } finally {
       if (reqId === reqIdRef.current) setIsLoading(false);
     }
-  }, [page, appliedTerm, role, filter, pageSize]);
+  }, [authorized, page, appliedTerm, role, filter, pageSize]);
 
   // AdminRoute calls this once the admin is authorized (stable identity so it
   // doesn't retrigger AdminRoute's effect); fetching is driven by the effect
@@ -406,9 +409,13 @@ const Participants: NextPage = () => {
   };
 
   const hasQuery = appliedTerm.length > 0 || filter !== "all" || role !== "";
-  // Controls are available as soon as we're authorized (even while loading or
-  // when a search yields zero rows), so the user can always adjust or refresh.
-  const showToolbar = authorized;
+  // The toolbar is ALWAYS rendered (AdminRoute already gates this whole page on
+  // authorization, so the gate here was redundant). It used to appear only once
+  // `authorized` flipped, one render after AdminRoute mounted the page: the table
+  // area was measured at full height first, then shrank by the toolbar's height,
+  // useFitRows dropped pageSize by a row and `load` fired a SECOND time 40 ms after
+  // the first (two full registry walks in the backend, one discarded). Keeping the
+  // layout stable from the first paint makes the first measurement the final one.
   const showInitialLoading = isLoading && participants.length === 0;
   const showEmpty = !isLoading && !errorKey && participants.length === 0;
   const showTable = participants.length > 0;
@@ -418,73 +425,71 @@ const Participants: NextPage = () => {
   return (
     <AdminRoute fetchData={onAuthorized}>
       <div className={styles.container}>
-        {showToolbar && (
-          <div className={styles.toolbar}>
-            <input
-              type="text"
-              className={styles.searchInput}
-              data-tour="participants-search"
-              placeholder={t("participants.search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {/* Both filter selects are blocked while a fetch is in flight, so a
-                second filter can't be clicked before the first one's result is
-                on screen (the skeleton above signals the load). The search box
-                stays typable: disabling it would drop focus mid-keystroke, and
-                the request-id guard already discards stale responses. */}
-            <select
-              className={styles.statusSelect}
-              aria-label={t("participants.roleFilterAria")}
-              value={role}
-              disabled={isLoading}
-              onChange={(e) => changeRole(e.target.value)}
-            >
-              <option value="">{t("participants.roleAll")}</option>
-              {ROLE_FILTER_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className={styles.statusSelect}
-              value={filter}
-              disabled={isLoading}
-              onChange={(e) => changeFilter(e.target.value as FilterMode)}
-            >
-              <option value="all">{t("participants.filters.all")}</option>
-              <option value="mine">{t("participants.filters.mine")}</option>
-              <option value="active">{t("participants.filters.active")}</option>
-              <option value="certified">
-                {t("participants.filters.certified")}
+        <div className={styles.toolbar}>
+          <input
+            type="text"
+            className={styles.searchInput}
+            data-tour="participants-search"
+            placeholder={t("participants.search")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {/* Both filter selects are blocked while a fetch is in flight, so a
+              second filter can't be clicked before the first one's result is
+              on screen (the skeleton above signals the load). The search box
+              stays typable: disabling it would drop focus mid-keystroke, and
+              the request-id guard already discards stale responses. */}
+          <select
+            className={styles.statusSelect}
+            aria-label={t("participants.roleFilterAria")}
+            value={role}
+            disabled={isLoading}
+            onChange={(e) => changeRole(e.target.value)}
+          >
+            <option value="">{t("participants.roleAll")}</option>
+            {ROLE_FILTER_OPTIONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
               </option>
-            </select>
-            <button
-              className={styles.refreshButton}
-              onClick={load}
-              disabled={isLoading}
-              title={t("participants.refresh")}
-              aria-label={t("participants.refresh")}
+            ))}
+          </select>
+          <select
+            className={styles.statusSelect}
+            value={filter}
+            disabled={isLoading}
+            onChange={(e) => changeFilter(e.target.value as FilterMode)}
+          >
+            <option value="all">{t("participants.filters.all")}</option>
+            <option value="mine">{t("participants.filters.mine")}</option>
+            <option value="active">{t("participants.filters.active")}</option>
+            <option value="certified">
+              {t("participants.filters.certified")}
+            </option>
+          </select>
+          <button
+            className={styles.refreshButton}
+            onClick={load}
+            disabled={isLoading}
+            title={t("participants.refresh")}
+            aria-label={t("participants.refresh")}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="23 4 23 10 17 10" />
-                <polyline points="1 20 1 14 7 14" />
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-              </svg>
-            </button>
-          </div>
-        )}
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+        </div>
 
         {/* The scroll container always renders so useFitRows can measure the real
             available height (its clientHeight) even before the first row loads. */}
