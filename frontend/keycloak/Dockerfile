@@ -1,5 +1,5 @@
 
-FROM quay.io/keycloak/keycloak:26.6.2 AS builder
+FROM quay.io/keycloak/keycloak:26.7.3 AS builder
 
 ENV KC_FEATURES=scripts,preview \
     KC_DB=postgres
@@ -17,7 +17,7 @@ COPY --chmod=0555 entrypoint.sh /usr/local/bin/kc-entrypoint.sh
 RUN /opt/keycloak/bin/kc.sh build
 
 # Runtime
-FROM quay.io/keycloak/keycloak:26.6.2
+FROM quay.io/keycloak/keycloak:26.7.3
 
 ENV KC_FEATURES=scripts,preview \
     KC_DB=postgres
