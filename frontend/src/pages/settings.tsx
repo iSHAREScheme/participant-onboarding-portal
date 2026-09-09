@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import OnboardingFlowsSettings, { type EditableFlow } from "../components/OnboardingFlowsSettings";
+import OnboardingFlowsSettings, {
+  type EditableFlow,
+  stripFlowKey,
+  withFlowKeys,
+} from "../components/OnboardingFlowsSettings";
 import ThemeAssetsUploader from "../components/ThemeAssetsUploader";
 import { NextPage } from "next";
 import styles from "../styles/Settings.module.css";
@@ -400,7 +404,7 @@ const Settings: NextPage = () => {
       setAgreements(Array.isArray(data.agreements) ? data.agreements : []);
       setPublicOnboardingEnabled(data.publicOnboardingEnabled === true);
       setOnboardingFlows(
-        Array.isArray(data.onboardingFlows) ? data.onboardingFlows : []
+        withFlowKeys(Array.isArray(data.onboardingFlows) ? data.onboardingFlows : [])
       );
       setRawThemes(Array.isArray(data.themes) ? data.themes : []);
       setHideCapabilitiesUrl(Boolean(data.hideCapabilitiesUrl));
@@ -761,7 +765,7 @@ const Settings: NextPage = () => {
         autoAcceptProposal: autoAcceptProposal ? "true" : "false",
         requireQualifiedEidasCertificate,
         publicOnboardingEnabled,
-        onboardingFlows,
+        onboardingFlows: onboardingFlows.map(stripFlowKey),
         ...sat,
       });
       flash("success", t("settings.messages.saveSuccess"));

@@ -62,6 +62,12 @@ const ThemeAssetsUploader: React.FC<Props> = ({
 
   const present = { "header-image": hasHeaderImage, favicon: hasFavicon };
 
+  const buttonLabel = (kind: (typeof KINDS)[number]["kind"]) => {
+    if (busy === kind) return t("settings.theme.assets.uploading");
+    if (present[kind]) return t("settings.theme.assets.replace");
+    return t("settings.theme.assets.upload");
+  };
+
   return (
     <div className={styles.formGroup}>
       <span className={styles.label}>{t("settings.theme.assets.title")}</span>
@@ -85,11 +91,7 @@ const ThemeAssetsUploader: React.FC<Props> = ({
               />
             )}
             <label className={styles.ghostButton}>
-              {busy === k.kind
-                ? t("settings.theme.assets.uploading")
-                : present[k.kind]
-                  ? t("settings.theme.assets.replace")
-                  : t("settings.theme.assets.upload")}
+              {buttonLabel(k.kind)}
               <input
                 type="file"
                 accept={k.accept}

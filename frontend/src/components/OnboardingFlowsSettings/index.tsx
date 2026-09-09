@@ -12,8 +12,28 @@ import {
   type PublicOnboardingFlow,
 } from "config/onboardingFlows";
 
-// What the admin edits: the stored flow minus the backend-resolved fields.
-export type EditableFlow = Omit<PublicOnboardingFlow, "theme" | "agreements">;
+// What the admin edits: the stored flow minus the backend-resolved fields, plus
+// a client-only key so React can track rows through add/remove without falling
+// back to array indexes (routes are editable and may be blank while typing).
+export type EditableFlow = Omit<PublicOnboardingFlow, "theme" | "agreements"> & {
+  clientKey?: string;
+};
+
+export function newFlowKey(): string {
+  return `flow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Give every loaded flow a client key (idempotent). */
+export function withFlowKeys(flows: EditableFlow[]): EditableFlow[] {
+  return flows.map((f) => (f.clientKey ? f : { ...f, clientKey: newFlowKey() }));
+}
+
+/** Drop the client-only key before the flow is sent to the backend. */
+export function stripFlowKey(flow: EditableFlow): Omit<EditableFlow, "clientKey"> {
+  const { clientKey, ...rest } = flow;
+  void clientKey;
+  return rest;
+}
 
 export interface FlowDataspaceOption {
   id: string;
@@ -83,7 +103,10 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
   };
 
   const addFlow = (route = "") => {
-    onFlowsChange([...flows, { route, title: "", themeName: "", enabled: true }]);
+    onFlowsChange([
+      ...flows,
+      { route, title: "", themeName: "", enabled: true, clientKey: newFlowKey() },
+    ]);
     setExpanded(flows.length);
   };
 
@@ -163,7 +186,7 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
               }));
               const selectedAgreements = flow.agreementIds ?? [];
               return (
-                <div key={i} className={styles.flowCard}>
+                <div key={flow.clientKey ?? `route:${flow.route ?? ""}`} className={styles.flowCard}>
                   <p className={styles.flowPublishedAt}>
                     {isLive
                       ? t("settings.publicOnboarding.publishedAt")

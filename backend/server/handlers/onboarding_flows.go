@@ -33,38 +33,64 @@ func decodeFlows(raw datatypes.JSON) []models.OnboardingFlow {
 	return flows
 }
 
-// validateFlows enforces route shape, uniqueness and the reserved-route list.
+// validateFlows enforces route shape, uniqueness and the reserved-route list,
+// plus the per-flow agreement/authorization-registry references.
 func validateFlows(flows []models.OnboardingFlow) error {
 	seen := map[string]bool{}
 	for i, f := range flows {
-		route := strings.Trim(strings.TrimSpace(f.Route), "/")
-		if route != f.Route {
-			return fmt.Errorf("flow %d: route %q must be a bare path segment (no slashes or spaces)", i+1, f.Route)
+		n := i + 1
+		if err := validateFlowRoute(n, f.Route, seen); err != nil {
+			return err
 		}
-		if route != "" && !flowRoutePattern.MatchString(route) {
-			return fmt.Errorf("flow %d: route %q must match [a-z0-9-], start alphanumeric, max 64 chars", i+1, route)
+		if err := validateFlowAgreementIDs(n, f.AgreementIds); err != nil {
+			return err
 		}
-		if models.ReservedFlowRoutes[route] {
-			return fmt.Errorf("flow %d: route %q is reserved by the portal", i+1, route)
+		if err := validateFlowAuthRegistryURL(n, f.AuthRegistryUrl); err != nil {
+			return err
 		}
-		if seen[route] {
-			if route == "" {
-				return fmt.Errorf("flow %d: only one flow can live at the base URL", i+1)
-			}
-			return fmt.Errorf("flow %d: route %q is used twice", i+1, route)
+	}
+	return nil
+}
+
+// validateFlowRoute checks one flow's route and records it in seen.
+func validateFlowRoute(n int, raw string, seen map[string]bool) error {
+	route := strings.Trim(strings.TrimSpace(raw), "/")
+	if route != raw {
+		return fmt.Errorf("flow %d: route %q must be a bare path segment (no slashes or spaces)", n, raw)
+	}
+	if route != "" && !flowRoutePattern.MatchString(route) {
+		return fmt.Errorf("flow %d: route %q must match [a-z0-9-], start alphanumeric, max 64 chars", n, route)
+	}
+	if models.ReservedFlowRoutes[route] {
+		return fmt.Errorf("flow %d: route %q is reserved by the portal", n, route)
+	}
+	if seen[route] {
+		if route == "" {
+			return fmt.Errorf("flow %d: only one flow can live at the base URL", n)
 		}
-		seen[route] = true
-		for _, id := range f.AgreementIds {
-			if strings.TrimSpace(id) == "" {
-				return fmt.Errorf("flow %d: agreement ids must not be blank", i+1)
-			}
+		return fmt.Errorf("flow %d: route %q is used twice", n, route)
+	}
+	seen[route] = true
+	return nil
+}
+
+func validateFlowAgreementIDs(n int, ids []string) error {
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			return fmt.Errorf("flow %d: agreement ids must not be blank", n)
 		}
-		if u := strings.TrimSpace(f.AuthRegistryUrl); u != "" {
-			parsed, err := url.Parse(u)
-			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-				return fmt.Errorf("flow %d: authorization registry URL %q must be an absolute http(s) URL", i+1, u)
-			}
-		}
+	}
+	return nil
+}
+
+func validateFlowAuthRegistryURL(n int, raw string) error {
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return nil
+	}
+	parsed, err := url.Parse(u)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return fmt.Errorf("flow %d: authorization registry URL %q must be an absolute http(s) URL", n, u)
 	}
 	return nil
 }
@@ -145,7 +171,7 @@ func themeEntryByName(entries []map[string]interface{}, name string) map[string]
 	return nil
 }
 
-// publicFlowView is what anonymous visitors get per flow: branding + the
+// publicFlowViews is what anonymous visitors get per flow: branding + the
 // onboarding knobs the register page consumes. Never includes admin fields.
 func publicFlowViews(settings models.Settings) []fiber.Map {
 	views := []fiber.Map{}
@@ -158,48 +184,58 @@ func publicFlowViews(settings models.Settings) []fiber.Map {
 		if !f.Enabled {
 			continue
 		}
-		agreementIds := f.AgreementIds
-		if agreementIds == nil {
-			agreementIds = []string{}
-		}
-		view := fiber.Map{
-			"route":              f.Route,
-			"title":              f.Title,
-			"themeName":          f.ThemeName,
-			"description":        f.Description,
-			"dataspaceId":        f.DataspaceId,
-			"dataspaceTitle":     f.DataspaceTitle,
-			"agreementIds":       agreementIds,
-			"agreements":         publicViewAgreements(flowAgreements(allAgreements, f.AgreementIds)),
-			"authRegistryId":     f.AuthRegistryId,
-			"authRegistryName":   f.AuthRegistryName,
-			"authRegistryUrl":    f.AuthRegistryUrl,
-			"defaultRole":        f.DefaultRole,
-			"skipRoles":          f.SkipRoles,
-			"activeRoles":        f.ActiveRoles,
-			"autoAcceptProposal": f.AutoAcceptProposal,
-		}
+		view := publicFlowView(f, allAgreements)
 		if entry := themeEntryByName(entries, f.ThemeName); entry != nil {
-			// The colors/fonts as stored by the theme editor, plus asset URLS
-			// (never filesystem paths) for the flow page to apply.
-			theme := fiber.Map{}
-			for k, v := range entry {
-				if k == "headerImagePath" || k == "faviconPath" {
-					continue
-				}
-				theme[k] = v
-			}
-			if p, _ := entry["headerImagePath"].(string); p != "" {
-				theme["headerImageUrl"] = "/api/backend/settings/themes/" + f.ThemeName + "/asset/header-image"
-			}
-			if p, _ := entry["faviconPath"].(string); p != "" {
-				theme["faviconUrl"] = "/api/backend/settings/themes/" + f.ThemeName + "/asset/favicon"
-			}
-			view["theme"] = theme
+			view["theme"] = publicThemeView(entry, f.ThemeName)
 		}
 		views = append(views, view)
 	}
 	return views
+}
+
+// publicFlowView maps one enabled flow to its public shape, resolving the
+// flow's agreement selection to redacted agreement views.
+func publicFlowView(f models.OnboardingFlow, allAgreements []models.Agreement) fiber.Map {
+	agreementIds := f.AgreementIds
+	if agreementIds == nil {
+		agreementIds = []string{}
+	}
+	return fiber.Map{
+		"route":              f.Route,
+		"title":              f.Title,
+		"themeName":          f.ThemeName,
+		"description":        f.Description,
+		"dataspaceId":        f.DataspaceId,
+		"dataspaceTitle":     f.DataspaceTitle,
+		"agreementIds":       agreementIds,
+		"agreements":         publicViewAgreements(flowAgreements(allAgreements, f.AgreementIds)),
+		"authRegistryId":     f.AuthRegistryId,
+		"authRegistryName":   f.AuthRegistryName,
+		"authRegistryUrl":    f.AuthRegistryUrl,
+		"defaultRole":        f.DefaultRole,
+		"skipRoles":          f.SkipRoles,
+		"activeRoles":        f.ActiveRoles,
+		"autoAcceptProposal": f.AutoAcceptProposal,
+	}
+}
+
+// publicThemeView copies a theme-library entry as stored by the theme editor,
+// replacing filesystem asset paths with the public asset URLs.
+func publicThemeView(entry map[string]interface{}, themeName string) fiber.Map {
+	theme := fiber.Map{}
+	for k, v := range entry {
+		if k == "headerImagePath" || k == "faviconPath" {
+			continue
+		}
+		theme[k] = v
+	}
+	if p, _ := entry["headerImagePath"].(string); p != "" {
+		theme["headerImageUrl"] = "/api/backend/settings/themes/" + themeName + "/asset/header-image"
+	}
+	if p, _ := entry["faviconPath"].(string); p != "" {
+		theme["faviconUrl"] = "/api/backend/settings/themes/" + themeName + "/asset/favicon"
+	}
+	return theme
 }
 
 // mergeThemeAssets carries the asset paths (written by the upload endpoints)
@@ -213,19 +249,8 @@ func mergeThemeAssets(existing, incoming datatypes.JSON) datatypes.JSON {
 	}
 	for _, entry := range next {
 		name, _ := entry["name"].(string)
-		if name == "" {
-			continue
-		}
-		old := themeEntryByName(prev, name)
-		if old == nil {
-			continue
-		}
-		for _, field := range []string{"headerImagePath", "faviconPath"} {
-			if _, has := entry[field]; !has {
-				if v, ok := old[field].(string); ok && v != "" {
-					entry[field] = v
-				}
-			}
+		if old := themeEntryByName(prev, name); name != "" && old != nil {
+			carryThemeAssets(entry, old)
 		}
 	}
 	merged, err := json.Marshal(next)
@@ -233,6 +258,19 @@ func mergeThemeAssets(existing, incoming datatypes.JSON) datatypes.JSON {
 		return incoming
 	}
 	return datatypes.JSON(merged)
+}
+
+// carryThemeAssets copies the asset path fields from old into entry when entry
+// does not set them itself.
+func carryThemeAssets(entry, old map[string]interface{}) {
+	for _, field := range []string{"headerImagePath", "faviconPath"} {
+		if _, has := entry[field]; has {
+			continue
+		}
+		if v, ok := old[field].(string); ok && v != "" {
+			entry[field] = v
+		}
+	}
 }
 
 // sanitizeFlowRoute keeps a submitted flow route only when it matches a
