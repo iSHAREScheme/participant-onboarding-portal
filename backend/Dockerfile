@@ -7,7 +7,7 @@
 # EXPOSE 8081
 # ENTRYPOINT [ "/opt/app/app" ]
 
-FROM golang:1.25-alpine AS build
+FROM golang:1.25.13-alpine AS build
 WORKDIR /opt/app
 RUN apk add --no-cache build-base sqlite-dev
 
