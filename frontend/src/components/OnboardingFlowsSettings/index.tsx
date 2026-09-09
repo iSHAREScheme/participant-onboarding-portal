@@ -19,8 +19,15 @@ export type EditableFlow = Omit<PublicOnboardingFlow, "theme" | "agreements"> & 
   clientKey?: string;
 };
 
+let flowKeySeq = 0;
+
+// Client-only identity for a flow row (never persisted). Prefers the platform
+// UUID generator; falls back to a monotonic counter where it is unavailable.
 export function newFlowKey(): string {
-  return `flow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `flow-${uuid}`;
+  flowKeySeq += 1;
+  return `flow-${Date.now().toString(36)}-${flowKeySeq}`;
 }
 
 /** Give every loaded flow a client key (idempotent). */
@@ -30,8 +37,8 @@ export function withFlowKeys(flows: EditableFlow[]): EditableFlow[] {
 
 /** Drop the client-only key before the flow is sent to the backend. */
 export function stripFlowKey(flow: EditableFlow): Omit<EditableFlow, "clientKey"> {
-  const { clientKey, ...rest } = flow;
-  void clientKey;
+  const rest: EditableFlow = { ...flow };
+  delete rest.clientKey;
   return rest;
 }
 
