@@ -188,3 +188,17 @@
     justify-content: center;
   }
 }
+
+/* Flow header banner: the theme's header image rendered above the landing. */
+.flowHeader {
+  width: 100%;
+  max-height: 240px;
+  overflow: hidden;
+}
+
+.flowHeaderImage {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+}

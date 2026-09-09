@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import OnboardingFlowsSettings, {
+  type EditableFlow,
+  stripFlowKey,
+  withFlowKeys,
+} from "../components/OnboardingFlowsSettings";
+import ThemeAssetsUploader from "../components/ThemeAssetsUploader";
 import { NextPage } from "next";
 import styles from "../styles/Settings.module.css";
 import AdminRoute from "components/AdminRoute";
@@ -258,6 +264,11 @@ const Settings: NextPage = () => {
   // Named-theme library: saved themes, which one is published (active), and the
   // theme currently loaded in the editor plus its (editable) name.
   const [savedThemes, setSavedThemes] = useState<SavedTheme[]>([]);
+  // Public onboarding: master gate + configured flows; rawThemes keeps the
+  // stored library entries verbatim (incl. asset paths the editor ignores).
+  const [publicOnboardingEnabled, setPublicOnboardingEnabled] = useState(false);
+  const [onboardingFlows, setOnboardingFlows] = useState<EditableFlow[]>([]);
+  const [rawThemes, setRawThemes] = useState<Record<string, unknown>[]>([]);
   const [activeThemeName, setActiveThemeName] = useState<string>("");
   const [selectedThemeName, setSelectedThemeName] = useState<string>("");
   const [themeName, setThemeName] = useState<string>("");
@@ -391,6 +402,11 @@ const Settings: NextPage = () => {
         data.requireQualifiedEidasCertificate === true
       );
       setAgreements(Array.isArray(data.agreements) ? data.agreements : []);
+      setPublicOnboardingEnabled(data.publicOnboardingEnabled === true);
+      setOnboardingFlows(
+        withFlowKeys(Array.isArray(data.onboardingFlows) ? data.onboardingFlows : [])
+      );
+      setRawThemes(Array.isArray(data.themes) ? data.themes : []);
       setHideCapabilitiesUrl(Boolean(data.hideCapabilitiesUrl));
       // Seed the theme editor from saved overrides, falling back to brand.
       const savedTheme: Record<string, any> =
@@ -748,6 +764,8 @@ const Settings: NextPage = () => {
         defaultRole,
         autoAcceptProposal: autoAcceptProposal ? "true" : "false",
         requireQualifiedEidasCertificate,
+        publicOnboardingEnabled,
+        onboardingFlows: onboardingFlows.map(stripFlowKey),
         ...sat,
       });
       flash("success", t("settings.messages.saveSuccess"));
@@ -1284,6 +1302,17 @@ const Settings: NextPage = () => {
 
           {activeTab === "onboarding" && (
           <>
+          <OnboardingFlowsSettings
+            enabled={publicOnboardingEnabled}
+            flows={onboardingFlows}
+            themeNames={savedThemes.map((th) => th.name)}
+            roleOptions={ALL_ROLES}
+            dataspaces={dataspaces}
+            authRegistries={authRegistries}
+            agreements={agreements}
+            onEnabledChange={setPublicOnboardingEnabled}
+            onFlowsChange={setOnboardingFlows}
+          />
           {/* Onboarding flow */}
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>{t("settings.onboarding.flowTitle")}</h2>
@@ -2080,6 +2109,21 @@ const Settings: NextPage = () => {
                 <p className={styles.libraryHint}>
                   {t("settings.theme.library.hint")}
                 </p>
+                <ThemeAssetsUploader
+                  themeName={selectedThemeName}
+                  hasHeaderImage={Boolean(
+                    (rawThemes.find((e) => e.name === selectedThemeName) as
+                      | { headerImagePath?: string }
+                      | undefined)?.headerImagePath
+                  )}
+                  hasFavicon={Boolean(
+                    (rawThemes.find((e) => e.name === selectedThemeName) as
+                      | { faviconPath?: string }
+                      | undefined)?.faviconPath
+                  )}
+                  onUploaded={() => void loadSettings()}
+                  flash={flash}
+                />
                 <div className={styles.themeLibraryActions}>
                   <span className={styles.activeThemeBadge}>
                     {t("settings.theme.library.currentlyLive", {

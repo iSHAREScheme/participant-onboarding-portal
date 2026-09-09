@@ -26,6 +26,10 @@ type Proposal struct {
 	ContactEmail    string    `json:"contactEmail"`
 	ContactPhone    string    `json:"contactPhone"`
 	Status          string    `json:"status"`
+	// FlowRoute records which public onboarding flow produced this proposal
+	// ("" = the base URL / no flow). Party creation uses it to apply the
+	// flow's dataspace override.
+	FlowRoute string `json:"flowRoute"`
 	CreatedAt       time.Time `json:"createdAt"`
 	KeycloakUsername string    `json:"keycloakUsername"`
 	SignedAgreementPaths []string  `json:"signedAgreementPaths" gorm:"type:text;serializer:json"`

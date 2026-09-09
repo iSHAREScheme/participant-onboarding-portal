@@ -14,6 +14,7 @@ import { extractCertificateFields, type CertificateFields } from "util/certifica
 import API, { AgreementView } from "api/client"
 import { AxiosError } from "axios"
 import { getPublicEnv } from "config/publicEnv"
+import { applyFlowBranding, type PublicOnboardingFlow } from "config/onboardingFlows"
 import {
   loadStoredIdpActionState,
   setPendingIdpLinkAction,
@@ -379,13 +380,44 @@ const Register: NextPage = () => {
     autoAccept: "",
     requireQualifiedEidasCertificate: false,
   })
+  // Public onboarding flows + theme library (raw, from admin settings). When
+  // the user arrived through a flow route (?flow=…), that flow's overrides win
+  // over the deployment-wide onboarding settings, and its theme brands this
+  // page too.
+  const [onboardingFlows, setOnboardingFlows] = useState<PublicOnboardingFlow[]>([])
+  const [themeLibrary, setThemeLibrary] = useState<Record<string, unknown>[]>([])
+  const flowRouteParam =
+    router.isReady && typeof router.query.flow === "string" ? router.query.flow : ""
+  const activeFlow = useMemo(
+    () => onboardingFlows.find((f) => (f.route ?? "") === flowRouteParam),
+    [onboardingFlows, flowRouteParam]
+  )
+  useEffect(() => {
+    if (!activeFlow) return
+    const entry = themeLibrary.find(
+      (e) => typeof e.name === "string" && e.name === activeFlow.themeName
+    )
+    const theme = entry
+      ? {
+          ...(entry as PublicOnboardingFlow["theme"]),
+          headerImageUrl: (entry as { headerImagePath?: string }).headerImagePath
+            ? `/api/backend/settings/themes/${encodeURIComponent(String(entry.name))}/asset/header-image`
+            : undefined,
+          faviconUrl: (entry as { faviconPath?: string }).faviconPath
+            ? `/api/backend/settings/themes/${encodeURIComponent(String(entry.name))}/asset/favicon`
+            : undefined,
+        }
+      : undefined
+    applyFlowBranding({ ...activeFlow, theme })
+  }, [activeFlow, themeLibrary])
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
   const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
   // Onboarding-flow flags come from DB settings (Settings → Onboarding); an unset
   // value defaults to false. They are no longer mirrored into window.__ENV.
-  const autoAcceptProposal = obSettings.autoAccept === "true"
-  const skipRoleStep = obSettings.skipRoles === "true"
+  const autoAcceptProposal =
+    (activeFlow?.autoAcceptProposal || obSettings.autoAccept) === "true"
+  const skipRoleStep = (activeFlow?.skipRoles || obSettings.skipRoles) === "true"
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const eherkenningAlias =
@@ -401,13 +433,14 @@ const Register: NextPage = () => {
 
   const steps = alwaysM2M ? StepsV2 : StepsV1
   const activeRoles = (
+    activeFlow?.activeRoles ||
     obSettings.activeRoles ||
     "dataowner,dataconsumer,dataprovider"
   )
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean)
-  const defaultRoleValue = obSettings.defaultRole
+  const defaultRoleValue = activeFlow?.defaultRole || obSettings.defaultRole
   const defaultRoles = useMemo(
     () => ({
       dataOwner: defaultRoleValue === "dataowner",
@@ -848,10 +881,37 @@ const Register: NextPage = () => {
   const [registrarId, setRegistrarId] = useState("")
   // Onboarding agreement documents (configured in Settings), shown for download
   // on the signing steps. Secrets are redacted server-side.
-  const [agreements, setAgreements] = useState<AgreementView[]>([])
+  const [allAgreements, setAllAgreements] = useState<AgreementView[]>([])
+  // A flow can narrow the configured agreements to its own selection (empty
+  // selection = every configured agreement).
+  const agreements = useMemo<AgreementView[]>(() => {
+    const ids = activeFlow?.agreementIds
+    if (!ids || ids.length === 0) return allAgreements
+    return allAgreements.filter((a) => ids.includes(a.id))
+  }, [allAgreements, activeFlow])
   // Manual signing requires one signed upload per configured agreement (derived,
   // not hardcoded) so the step can never dead-end when the agreement set changes.
   const requiredAgreementCount = agreements.length
+
+  // A flow with its own authorization registry pins the association step to
+  // it, taking precedence over the global prefill setting.
+  useEffect(() => {
+    if (!activeFlow?.authRegistryId) return
+    const { authRegistryId, authRegistryName, authRegistryUrl } = activeFlow
+    queueMicrotask(() => {
+      setIsStaticAuthRegistry(true)
+      setIsSingleAssociation(true)
+      setFormData((prev) => ({
+        ...prev,
+        association: {
+          ...prev.association,
+          authRegistry: authRegistryId,
+          authRegistryName: authRegistryName || "",
+          authRegistryUrl: authRegistryUrl || "",
+        },
+      }))
+    })
+  }, [activeFlow])
 
   const urlRegex =
     /^(https?:\/\/)([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
@@ -1106,6 +1166,10 @@ const Register: NextPage = () => {
       // Store registrarId in form data
       setRegistrarId(settingsData.registrarId || "")
       setHideCapabilitiesUrlField(Boolean(settingsData.hideCapabilitiesUrl))
+      setOnboardingFlows(
+        Array.isArray(settingsData.onboardingFlows) ? settingsData.onboardingFlows : []
+      )
+      setThemeLibrary(Array.isArray(settingsData.themes) ? settingsData.themes : [])
       setObSettings({
         skipRoles: settingsData.skipRoles || "",
         activeRoles: settingsData.activeRoles || "",
@@ -1114,7 +1178,7 @@ const Register: NextPage = () => {
         requireQualifiedEidasCertificate:
           settingsData.requireQualifiedEidasCertificate === true,
       })
-      setAgreements(
+      setAllAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
       )
       const hasStaticAuthRegistry =
@@ -1393,6 +1457,9 @@ const Register: NextPage = () => {
             cttProof: null,
           },
           keycloakUsername: keycloak?.tokenParsed?.preferred_username || "",
+          // Which public onboarding flow the applicant came through ("" = base
+          // URL); the backend validates it and applies the flow's dataspace.
+          flowRoute: flowRouteParam,
         }
 
         if (useAutoAcceptProposal) formDataWithoutFile.status = "signed"
