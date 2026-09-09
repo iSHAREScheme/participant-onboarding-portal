@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"onboardingportal/signing"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -15,8 +17,8 @@ import (
 // "epRequest" for v2.1.1/v2.2, "parties_info" for v2.0.1 — per the spec's
 // jwt_payload_ep_creation_(request_)token. The token is signed (RS256) by the
 // registrar with its x5c certificate chain so the satellite can verify it.
-func CreateEpCreationToken(iss, aud, x5c, privateKey, partyClaimKey string, party interface{}, ttlSeconds int) (string, error) {
-	if strings.TrimSpace(privateKey) == "" {
+func CreateEpCreationToken(iss, aud string, keys *signing.KeySource, partyClaimKey string, party interface{}, ttlSeconds int) (string, error) {
+	if !keys.Ready() {
 		return "", fmt.Errorf("ep_creation private key is not configured")
 	}
 	if strings.TrimSpace(iss) == "" {
@@ -30,11 +32,6 @@ func CreateEpCreationToken(iss, aud, x5c, privateKey, partyClaimKey string, part
 	}
 	if ttlSeconds <= 0 {
 		ttlSeconds = 300
-	}
-
-	parsedKey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(privateKey))
-	if err != nil {
-		return "", err
 	}
 
 	iat := time.Now().Unix()
@@ -53,19 +50,7 @@ func CreateEpCreationToken(iss, aud, x5c, privateKey, partyClaimKey string, part
 	token.Header["alg"] = jwt.SigningMethodRS256.Alg()
 	token.Header["typ"] = "JWT"
 
-	if x5c != "" {
-		rawParts := strings.Split(x5c, ",")
-		cleaned := make([]string, 0, len(rawParts))
-		for _, part := range rawParts {
-			trimmed := strings.Trim(strings.TrimSpace(part), "\"")
-			if trimmed != "" {
-				cleaned = append(cleaned, trimmed)
-			}
-		}
-		if len(cleaned) > 0 {
-			token.Header["x5c"] = cleaned
-		}
-	}
+	setX5cHeader(token, keys.X5c())
 
-	return token.SignedString(parsedKey)
+	return keys.SignJWT(token, "ep_creation_token")
 }

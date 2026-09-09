@@ -47,12 +47,11 @@ func GetOwnerAccessToken(client *http.Client, cfg *config.Config) (string, error
 	}
 	tokenCacheMu.Unlock()
 
-	privateKey := strings.TrimSpace(cfg.SatellitePrivateKey)
-	if privateKey == "" {
+	if !cfg.Keys.Ready() {
 		return "", fmt.Errorf("satellite private key is not configured")
 	}
 	assertion, err := utils.CreateSatelliteOwnerAccessToken(
-		cfg.SatelliteIss, cfg.SatelliteAud, cfg.SatelliteX5c, privateKey,
+		cfg.SatelliteIss, cfg.SatelliteAud, cfg.Keys,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create client assertion: %w", err)

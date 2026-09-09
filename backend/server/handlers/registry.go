@@ -45,10 +45,11 @@ func (h *HandlerRegistry) GetConnection(c *fiber.Ctx) error {
 	if frameworkAgreementId == "" && strings.TrimSpace(cfg.FrameworkId) != "" {
 		frameworkAgreementId = strings.TrimSpace(cfg.FrameworkId) + "-tou"
 	}
-	// A connection needs both a certificate chain and a private key (path or
-	// inline). Only report whether they are present — never the key itself.
-	certConfigured := strings.TrimSpace(cfg.SatelliteX5c) != "" &&
-		(strings.TrimSpace(cfg.SatellitePrivateKey) != "" || strings.TrimSpace(cfg.SatellitePrivateKeyPath) != "")
+	// A connection needs both a certificate chain and a usable signing key.
+	// Only report whether they are present — never the key itself. In the
+	// vault-transit key source the key lives in Vault, so readiness comes
+	// from the key source, not from an in-process PEM.
+	certConfigured := strings.TrimSpace(cfg.SatelliteX5c) != "" && cfg.Keys.Ready()
 	return c.JSON(fiber.Map{
 		"baseUrl":                         cfg.SatelliteBaseUrl,
 		"iss":                             cfg.SatelliteIss,
