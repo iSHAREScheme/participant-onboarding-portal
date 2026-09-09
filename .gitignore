@@ -37,3 +37,7 @@ frontend/public/env.js
 
 # OS
 .DS_Store
+
+# backend dev tooling (husky/commitlint) installed with yarn
+backend/node_modules/
+backend/.yarn/install-state.gz

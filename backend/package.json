@@ -10,5 +10,11 @@
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
     "husky": "^9.1.7"
+  },
+  "resolutions": {
+    "js-yaml@npm:^4": "^4.3.2",
+    "fast-uri": "^3.1.6",
+    "js-yaml@npm:^4.1.0": "^4.3.2",
+    "ajv@npm:^8.11.0": "^8.18.0"
   }
 }
