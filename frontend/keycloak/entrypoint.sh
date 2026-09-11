@@ -25,26 +25,49 @@ if [ -n "${EH_CHAIN_PEM:-}" ]; then
   printf "%s" "$EH_CHAIN_PEM" > /tmp/trust/eh-chain.pem
 fi
 
+KC_BIN="${KC_BIN:-/opt/keycloak/bin/kc.sh}"
+
+# kc_relative_path prints the HTTP relative path Keycloak serves under ("" for the root).
+# Downstream images re-augment this one with `kc.sh build --http-relative-path=/auth`
+# (PRDev shared Keycloak), which persists the option in the build without exporting any
+# environment variable, so the admin API is at http://localhost:8080/auth. Precedence:
+# KC_HTTP_RELATIVE_PATH (runtime/build env) > persisted build option (kc.sh show-config) > "".
+kc_relative_path() {
+  rel="${KC_HTTP_RELATIVE_PATH:-}"
+  if [ -z "$rel" ]; then
+    rel=$("$KC_BIN" show-config 2>/dev/null | sed -n 's/.*kc\.http-relative-path *= *\([^ ]*\).*/\1/p' | head -n 1)
+  fi
+  rel="${rel%/}"
+  case "$rel" in
+    "" ) printf '' ;;
+    /* ) printf '%s' "$rel" ;;
+    *  ) printf '/%s' "$rel" ;;
+  esac
+}
+
 wait_for_admin_api() {
   if [ -z "${KC_BOOTSTRAP_ADMIN_USERNAME:-}" ] || [ -z "${KC_BOOTSTRAP_ADMIN_PASSWORD:-}" ]; then
     echo "[kc-entrypoint] admin credentials missing; skipping post-start admin updates" >&2
     return 1
   fi
 
+  KC_ADMIN_URL="http://localhost:8080$(kc_relative_path)"
+  echo "[kc-entrypoint] waiting for admin API at $KC_ADMIN_URL"
   i=0
   while [ "$i" -lt 60 ]; do
     if /opt/keycloak/bin/kcadm.sh config credentials \
-      --server http://localhost:8080 \
+      --server "$KC_ADMIN_URL" \
       --realm master \
       --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
       --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1; then
+      echo "[kc-entrypoint] admin API reachable at $KC_ADMIN_URL"
       return 0
     fi
     i=$((i+1))
     sleep 1
   done
 
-  echo "[kc-entrypoint] WARNING: timed out waiting for Keycloak admin API" >&2
+  echo "[kc-entrypoint] WARNING: timed out waiting for Keycloak admin API at $KC_ADMIN_URL" >&2
   return 1
 }
 
