@@ -220,7 +220,8 @@ func (h *HandlerRegistry) issuerAction(c *fiber.Ctx, suffix string) error {
 // claims, signs them, and exposes OID4VCI offers — which the dashboard then polls
 // for. The party id is derived from the caller's token (never from input), so a
 // user can only ever request credentials for their own party. Body:
-// {"credentialTypes":["PartyCredential", ...]}.
+// {"credentialTypes":["PartyIdCredential", ...]} (the issuer's canonical type names,
+// see its /.well-known/openid-credential-issuer).
 func (h *HandlerRegistry) RequestMyCredentials(c *fiber.Ctx) error {
 	proposal := h.callerProposal(c)
 	if proposal == nil || strings.TrimSpace(proposal.PartyId) == "" {
