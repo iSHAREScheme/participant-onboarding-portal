@@ -206,7 +206,11 @@ func (h *HandlerPR) RedeliverIssuerDelivery(c *fiber.Ctx) error {
 
 // ReemitPartyEvents proxies POST {PR}/api/issuer/parties/{partyId}/reemit.
 func (h *HandlerPR) ReemitPartyEvents(c *fiber.Ctx) error {
-	out, err := h.client.ReemitParty(prBearer(c), c.Params("partyId"))
+	partyID, err := partyPathParam(c, "partyId")
+	if err != nil || partyID == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
+	}
+	out, err := h.client.ReemitParty(prBearer(c), partyID)
 	if err != nil {
 		return relayPRError(c, err)
 	}

@@ -444,6 +444,24 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 	return h.forwardPartyWriteBody(c, method, satellitePath, c.Body())
 }
 
+// errMissingOrInvalidPartyID is the 400 body for a party write whose route id is
+// absent or not a valid percent-encoded value.
+const errMissingOrInvalidPartyID = "missing or invalid party id"
+
+// partyPathParam returns a route parameter decoded from its percent-encoding.
+// Fiber hands parameters over as they appear in the request path (UnescapePath
+// is off), so a did:ishare id sent by the frontend as did%3Aishare%3A… arrives
+// still encoded; forwarding it through url.PathEscape then double-encodes it
+// (did%253A…) and the satellite decodes only once, looks up "did%3Aishare%3A…"
+// and answers "party not found" for every party with a DID.
+func partyPathParam(c *fiber.Ctx, name string) (string, error) {
+	decoded, err := url.PathUnescape(strings.TrimSpace(c.Params(name)))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(decoded), nil
+}
+
 // normalizeClaimBody expands bare date-input values (yyyy-mm-dd) in a claim
 // JSON body to the RFC3339 instants the satellite requires — the same rule
 // party creation applies. Pass-through on parse failure: the satellite then
@@ -537,9 +555,9 @@ func (h *HandlerParty) UpdateParty(c *fiber.Ctx) error {
 	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "2") {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PUT update requires a 2.x satellite")
 	}
-	id := strings.TrimSpace(c.Params("id"))
-	if id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	id, err := partyPathParam(c, "id")
+	if err != nil || id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWrite(c, http.MethodPut, "/parties/"+url.PathEscape(id))
 }
@@ -558,9 +576,9 @@ func (h *HandlerParty) PatchParty(c *fiber.Ctx) error {
 	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Party PATCH update requires a 3.x satellite")
 	}
-	id := strings.TrimSpace(c.Params("id"))
-	if id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	id, err := partyPathParam(c, "id")
+	if err != nil || id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id))
 }
@@ -580,10 +598,10 @@ func (h *HandlerParty) PatchClaim(c *fiber.Ctx) error {
 	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim PATCH update requires a 3.x satellite")
 	}
-	id := strings.TrimSpace(c.Params("id"))
-	claimId := strings.TrimSpace(c.Params("claimId"))
-	if id == "" || claimId == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id or claim id")
+	id, err := partyPathParam(c, "id")
+	claimId, claimErr := partyPathParam(c, "claimId")
+	if err != nil || claimErr != nil || id == "" || claimId == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing or invalid party id or claim id")
 	}
 	return h.forwardPartyWriteBody(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims/"+url.PathEscape(claimId), normalizeClaimBody(c.Body()))
 }
@@ -602,9 +620,9 @@ func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
 	if !strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3") {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Claim create requires a 3.x satellite")
 	}
-	id := strings.TrimSpace(c.Params("id"))
-	if id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
+	id, err := partyPathParam(c, "id")
+	if err != nil || id == "" {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimCreateBody(c.Body()))
 }
