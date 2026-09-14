@@ -120,6 +120,10 @@ func (h *HandlerRegistry) GetDataspaces(c *fiber.Ctx) error {
 	// v3 satellites paginate the dataspaces list (default pageSize 10). This is a
 	// selector, so request a single large page to return the full set rather than
 	// only the first page; unversioned 2.x satellites simply ignore the params.
+	if handled, err := h.relayRegistryRead(c, "/api/v3/dataspaces", nil); handled {
+		return err
+	}
+
 	query := url.Values{}
 	query.Set("page", "1")
 	query.Set("pageSize", "100")
@@ -156,6 +160,10 @@ func (h *HandlerRegistry) GetFrameworks(c *fiber.Ctx) error {
 	}
 	if pageSize > 100 {
 		pageSize = 100
+	}
+
+	if handled, err := h.relayRegistryRead(c, "/api/v3/frameworks", url.Values{"page": {strconv.Itoa(page)}, "pageSize": {strconv.Itoa(pageSize)}}); handled {
+		return err
 	}
 
 	query := url.Values{}
@@ -393,6 +401,13 @@ func (h *HandlerRegistry) GetParticipants(c *fiber.Ctx) error {
 	//   - "mine" (the satellite ignores registrar query params), and
 	//   - active/certified on a v3 claim-model satellite (it ignores
 	//     active_only/certified_only — that state lives in the claims).
+	// Preferred path: the co-deployed registry's Keycloak-bearer read API filters
+	// and pages server-side in one call (see registry_pr_api.go). Everything
+	// below is the M2M fallback.
+	if handled, err := h.relayRegistryRead(c, "/api/v3/parties", prPartiesQuery(page, pageSize, name, search, partyID, role, activeOnly, certifiedOnly, mineOnly)); handled {
+		return err
+	}
+
 	// Role IS delegated, so it pre-filters the fetched set server-side.
 	claimModel := strings.HasPrefix(strings.TrimSpace(h.Config.SatelliteVersion), "3")
 	if search != "" || mineOnly || (claimModel && (activeOnly || certifiedOnly)) {
@@ -635,6 +650,10 @@ func (h *HandlerRegistry) GetParticipantDetail(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing participant id")
 	}
 
+	if handled, err := h.relayRegistryRead(c, "/api/v3/parties/"+url.PathEscape(id), nil); handled {
+		return err
+	}
+
 	party, err := h.fetchPartyByID(id)
 	if err != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, err.Error())
@@ -657,6 +676,10 @@ func (h *HandlerRegistry) GetParticipantHistory(c *fiber.Ctx) error {
 	}
 	if id == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing participant id")
+	}
+
+	if handled, err := h.relayRegistryRead(c, "/api/v3/parties/"+url.PathEscape(id)+"/history", nil); handled {
+		return err
 	}
 
 	client := &http.Client{}
