@@ -449,11 +449,25 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 // party creation applies. Pass-through on parse failure: the satellite then
 // produces the authoritative error.
 func normalizeClaimBody(body []byte) []byte {
+	return normalizeClaimBodyWith(body, satellite.NormalizeClaimDates)
+}
+
+// normalizeClaimCreateBody is normalizeClaimBody for claim CREATE bodies: it
+// also completes additionalInfo with the publiclyPublishable flag the satellite
+// requires whenever additionalInfo is present. PATCH bodies deliberately do not
+// get this (a partial update must not flip the flag).
+func normalizeClaimCreateBody(body []byte) []byte {
+	return normalizeClaimBodyWith(body, satellite.NormalizeClaimDates, satellite.NormalizeClaimAdditionalInfo)
+}
+
+func normalizeClaimBodyWith(body []byte, normalizers ...func(map[string]interface{})) []byte {
 	claim := map[string]interface{}{}
 	if err := json.Unmarshal(body, &claim); err != nil {
 		return body
 	}
-	satellite.NormalizeClaimDates(claim)
+	for _, normalize := range normalizers {
+		normalize(claim)
+	}
 	out, err := json.Marshal(claim)
 	if err != nil {
 		return body
@@ -592,7 +606,7 @@ func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
 	if id == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing party id")
 	}
-	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimBody(c.Body()))
+	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimCreateBody(c.Body()))
 }
 
 type ProposalData struct {
