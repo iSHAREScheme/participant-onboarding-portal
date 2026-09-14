@@ -707,6 +707,13 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 	if partyID == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Proposal is missing a party identifier")
 	}
+	// An uploaded certificate decides the party id (the registry enforces that
+	// binding at creation); store the aligned id so approval cannot fail on it.
+	if aligned, changed := alignPartyIDWithCertificate(partyID, proposalData.IDCheck.CertX5c); changed {
+		log.Printf("propose: party id %q replaced by the certificate-derived %q", partyID, aligned)
+		partyID = aligned
+		proposalData.IDCheck.PartyId = aligned
+	}
 	// KVK is optional: derive it from the party id when KVK-based (for the
 	// eHerkenning authorization match below and downstream display). May stay "".
 	proposalKvk := strings.TrimSpace(proposalData.IDCheck.KvkNumber)
@@ -1569,7 +1576,14 @@ func (h *HandlerParty) completeProposalV22(c *fiber.Ctx, proposal *models.Propos
 // register-new-party (/parties) endpoint, assembling the claim set from the
 // proposal plus the deployment's framework configuration.
 func (h *HandlerParty) completeProposalV3(c *fiber.Ctx, proposal *models.Proposal, registrarId string) error {
-	partyDID, eori := deriveV3Identity(proposal.PartyId)
+	// Proposals submitted before the certificate-derived id was stored (or edited
+	// by hand) still complete: the certificate decides the id here as well.
+	partyID := proposal.PartyId
+	if aligned, changed := alignPartyIDWithCertificate(partyID, proposal.CertX5c); changed {
+		log.Printf("complete: proposal %d party id %q replaced by the certificate-derived %q", proposal.ID, partyID, aligned)
+		partyID = aligned
+	}
+	partyDID, eori := deriveV3Identity(partyID)
 	if partyDID == "" {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "party_id is required")
 	}
@@ -1776,6 +1790,30 @@ func deriveV3Identity(rawID string) (did string, eori string) {
 	}
 	eori = normalizePartyID(trimmed)
 	return satellite.BuildDidFromPartyID(eori), eori
+}
+
+// alignPartyIDWithCertificate makes a proposal's party id follow its uploaded
+// eIDAS certificate. A v3 registry accepts a certificate-registered party only
+// under calcIshareDid(certificate organizationIdentifier), so when a certificate
+// is present the identifier derived from it is authoritative over whatever the
+// wizard or the applicant filled in (typically the legacy EU.EORI.NL.KVK<kvk>
+// form rebuilt from the KVK number after the certificate step). Without a
+// usable certificate the given id is kept. Returns the id that applies and
+// whether it differs from the given one.
+func alignPartyIDWithCertificate(partyID, certX5c string) (string, bool) {
+	partyID = strings.TrimSpace(partyID)
+	if strings.TrimSpace(certX5c) == "" {
+		return partyID, false
+	}
+	identifier, err := satellite.OrganizationIdentifierFromX5C(certX5c)
+	if err != nil {
+		return partyID, false
+	}
+	aligned := satellite.PartyIDFromOrganizationIdentifier(identifier)
+	if aligned == "" || strings.EqualFold(aligned, partyID) {
+		return partyID, false
+	}
+	return aligned, true
 }
 
 // cleanAliases trims, de-duplicates and drops empty alsoKnownAs entries.

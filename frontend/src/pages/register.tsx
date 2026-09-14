@@ -202,6 +202,10 @@ interface FormData {
     companyName: string
     kvkNumber: string
     partyId: string
+    // Party id derived from the uploaded eIDAS certificate's organizationIdentifier.
+    // A v3 registry accepts the party only under this id, so once set it takes
+    // precedence over the KVK-derived EU.EORI.NL.KVK<kvk> rebuilds below.
+    certPartyId?: string
     partyName: string
     // eIDAS certificate fields parsed at upload, sent with the proposal so the
     // backend can build the v3 x509Certificate identity claim at party creation.
@@ -724,7 +728,7 @@ const Register: NextPage = () => {
     // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect);
     // the guarded updater no-ops when unchanged, so this cannot loop.
     queueMicrotask(() => setFormData((prev) => {
-      const nextPartyId = prefilledPartyId || prev.idCheck.partyId;
+      const nextPartyId = prev.idCheck.certPartyId || prefilledPartyId || prev.idCheck.partyId;
       const nextPartyName = prefilledPartyName || prev.idCheck.partyName;
       const nextCompanyName = prefilledPartyName || prev.idCheck.companyName;
       const nextKvkNumber = kvkFromUserInfo || prev.idCheck.kvkNumber;
@@ -1263,7 +1267,9 @@ const Register: NextPage = () => {
         const proposalPartyIdFromKvk = proposalKvkNumber
           ? `EU.EORI.NL.KVK${proposalKvkNumber}`
           : ""
-        const resolvedPartyId = proposalPartyIdFromKvk || proposalPartyId
+        // The stored proposal id is authoritative (the backend aligns it with the
+        // certificate); only rebuild from the KVK when the proposal has none.
+        const resolvedPartyId = proposalPartyId || proposalPartyIdFromKvk
         const resolvedPartyName = prefilledPartyName || proposalPartyName
 
         // Update form data with existing proposal regardless of status
@@ -1526,7 +1532,9 @@ const Register: NextPage = () => {
         const partyNameFromCompany = prefilledPartyName
 
         setFormData((prev) => {
-          const nextPartyId = partyIdFromKvk || prev.idCheck.partyId
+          // The certificate-derived id (when a certificate was uploaded) must not be
+          // rebuilt into the KVK canonical form: the registry rejects that at approval.
+          const nextPartyId = prev.idCheck.certPartyId || partyIdFromKvk || prev.idCheck.partyId
           const nextPartyName = partyNameFromCompany || prev.idCheck.partyName
 
           if (
@@ -1710,7 +1718,8 @@ const Register: NextPage = () => {
           kvkNumber:
             prev.idCheck.kvkNumber || certFields?.kvkNumber || "",
           partyId:
-            prev.idCheck.partyId || certFields?.partyId || "",
+            certFields?.partyId || prev.idCheck.partyId || "",
+          certPartyId: certFields?.partyId || prev.idCheck.certPartyId,
           partyName:
             prev.idCheck.partyName || certFields?.organizationName || "",
           certSubjectName: certFields?.subjectName,
