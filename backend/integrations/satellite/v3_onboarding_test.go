@@ -169,3 +169,49 @@ func TestBuildParty22RequestUsesIDPAssertionAsSporWhenCertificateAbsent(t *testi
 		t.Fatalf("expected idp assertion in spor, got %#v", payload.Spor)
 	}
 }
+
+// A proposal with contact details produces a frameworkCompliance claim whose
+// additionalInfo must carry publiclyPublishable: the satellite requires it
+// whenever additionalInfo is present, and approving such proposals failed with
+// "additionalInfo.publiclyPublishable is required". A proposal without contact
+// details sends no additionalInfo at all.
+func TestBuildV3OnboardingClaimsAdditionalInfoCarriesPubliclyPublishable(t *testing.T) {
+	x5c, _ := testCertificateX5C(t, pkix.Name{CommonName: "WUR", Organization: []string{"WUR"}, Country: []string{"NL"}})
+
+	withContact, err := BuildV3OnboardingClaims(&models.Proposal{
+		CertX5c: x5c, CertX5tS256: "thumbprint", Website: "weshare.eu", ContactEmail: "angel@example.org",
+	}, minimalV3ClaimConfig())
+	if err != nil {
+		t.Fatalf("BuildV3OnboardingClaims: %v", err)
+	}
+	compliance := findClaimByType(t, withContact, "frameworkCompliance")
+	info, ok := compliance["additionalInfo"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("compliance claim lacks additionalInfo: %#v", compliance)
+	}
+	if info["publiclyPublishable"] != false {
+		t.Fatalf("publiclyPublishable = %v, want false", info["publiclyPublishable"])
+	}
+	if info["website"] != "https://weshare.eu" || info["companyEmail"] != "angel@example.org" {
+		t.Fatalf("contact details missing or unnormalised: %#v", info)
+	}
+
+	withoutContact, err := BuildV3OnboardingClaims(&models.Proposal{CertX5c: x5c, CertX5tS256: "thumbprint"}, minimalV3ClaimConfig())
+	if err != nil {
+		t.Fatalf("BuildV3OnboardingClaims: %v", err)
+	}
+	if _, present := findClaimByType(t, withoutContact, "frameworkCompliance")["additionalInfo"]; present {
+		t.Fatal("a proposal without contact details must not send additionalInfo")
+	}
+}
+
+func findClaimByType(t *testing.T, claims []map[string]interface{}, claimType string) map[string]interface{} {
+	t.Helper()
+	for _, claim := range claims {
+		if claim["type"] == claimType {
+			return claim
+		}
+	}
+	t.Fatalf("%s claim not found", claimType)
+	return nil
+}

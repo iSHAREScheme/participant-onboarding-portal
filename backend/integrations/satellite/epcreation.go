@@ -33,6 +33,35 @@ func NormalizeClaimDates(claim map[string]interface{}) {
 	}
 }
 
+// NormalizeClaimAdditionalInfo completes a claim's additionalInfo for CREATE
+// bodies. The satellite's v3 schema makes publiclyPublishable the one required
+// member of additionalInfo (OpenAPI: additionalInfo.required =
+// [publiclyPublishable]) and rejects the whole party or claim with
+// "additionalInfo.publiclyPublishable is required" when a website, e-mail or
+// phone is present without the flag. When the caller supplied additionalInfo
+// without it (or with null), default it to false — the same conservative
+// default the v2 ep_creation payloads use. An empty additionalInfo object is
+// dropped: it carries nothing and would be rejected for the same reason.
+// Create-only on purpose: a PATCH that touches one additionalInfo member must
+// not silently flip a party's publish flag.
+func NormalizeClaimAdditionalInfo(claim map[string]interface{}) {
+	raw, present := claim["additionalInfo"]
+	if !present {
+		return
+	}
+	info, ok := raw.(map[string]interface{})
+	if !ok {
+		return
+	}
+	if len(info) == 0 {
+		delete(claim, "additionalInfo")
+		return
+	}
+	if flag, ok := info["publiclyPublishable"]; !ok || flag == nil {
+		info["publiclyPublishable"] = false
+	}
+}
+
 type AgreementFile struct {
 	Hash       string
 	FileBase64 string
@@ -705,6 +734,7 @@ func BuildEpCreation30RequestFromRequest(request *requests.PartyV3CreateRequest,
 			normalized["status"] = "active"
 		}
 		NormalizeClaimDates(normalized)
+		NormalizeClaimAdditionalInfo(normalized)
 		claims = append(claims, normalized)
 	}
 

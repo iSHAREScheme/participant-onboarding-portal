@@ -72,6 +72,10 @@ func BuildV3OnboardingClaims(proposal *models.Proposal, cfg V3OnboardingClaimCon
 		additionalInfo["companyPhone"] = proposal.ContactPhone
 	}
 	if len(additionalInfo) > 0 {
+		// The satellite requires publiclyPublishable whenever additionalInfo is
+		// present; a proposal carries no publish preference, so default to false
+		// (not publicly published), as the v2 ep_creation payloads do.
+		additionalInfo["publiclyPublishable"] = false
 		compliance["additionalInfo"] = additionalInfo
 	}
 	claims = append(claims, compliance)
