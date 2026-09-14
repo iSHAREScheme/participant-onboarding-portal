@@ -293,14 +293,16 @@ const nl = {
       gettingLink: "Bezig met ophalen…",
       noWalletLink: "Kan op dit moment geen wallet-link genereren — probeer het later opnieuw.",
       types: {
-        PartyCredential: "Partij-credential",
-        iSHAREParticipantCredential: "iSHARE-deelnemerscredential",
+        PartyIdCredential: "Partij-ID-credential",
+        TrustedParticipantCredential: "Vertrouwde-deelnemercredential",
+        FrameworkComplianceCredential: "Framework-compliancecredential",
         DataspaceParticipantCredential: "Dataspace-deelnemerscredential"
       },
       typeDescriptions: {
-        PartyCredential: "Bewijst de identiteit van uw organisatie (partij-id en naam).",
-        iSHAREParticipantCredential: "Bewijst uw actieve deelname aan het iSHARE-framework.",
-        DataspaceParticipantCredential: "Bewijst uw lidmaatschap van een dataspace."
+        PartyIdCredential: "Bewijst de identiteit van uw organisatie (partij-id, naam en aliassen).",
+        TrustedParticipantCredential: "De alles-in-één credential: uw identiteit, frameworkdeelname en dataspace-lidmaatschappen.",
+        FrameworkComplianceCredential: "Bewijst uw actieve deelname aan het iSHARE-framework.",
+        DataspaceParticipantCredential: "Bewijst uw lidmaatschap van uw dataspaces."
       }
     }
   },

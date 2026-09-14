@@ -294,14 +294,16 @@ const en = {
       gettingLink: "Getting link…",
       noWalletLink: "Couldn't generate a wallet link right now — please try again later.",
       types: {
-        PartyCredential: "Party credential",
-        iSHAREParticipantCredential: "iSHARE participant credential",
+        PartyIdCredential: "Party ID credential",
+        TrustedParticipantCredential: "Trusted participant credential",
+        FrameworkComplianceCredential: "Framework compliance credential",
         DataspaceParticipantCredential: "Dataspace participant credential"
       },
       typeDescriptions: {
-        PartyCredential: "Proves your organisation's identity (its party id and name).",
-        iSHAREParticipantCredential: "Proves your active iSHARE framework participation.",
-        DataspaceParticipantCredential: "Proves your membership of a data space."
+        PartyIdCredential: "Proves your organisation's identity (its party id, name and aliases).",
+        TrustedParticipantCredential: "The all-in-one credential: your identity, framework participation and data space memberships.",
+        FrameworkComplianceCredential: "Proves your active iSHARE framework participation.",
+        DataspaceParticipantCredential: "Proves your membership of your data spaces."
       }
     }
   },

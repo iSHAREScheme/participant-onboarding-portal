@@ -24,15 +24,29 @@ interface OffersResponse {
   error?: string;
 }
 
-// The credential types the issuer can build from registry claims (it exposes no
-// "list eligible types" endpoint, so the portal presents this fixed catalogue and
-// the user requests each; the issuer issues only the ones buildable from their
-// claims). Keep in sync with the issuer's builders.
+// The party-level credential types the issuer builds from registry claims (its
+// /.well-known/openid-credential-issuer lists them; the AR-pushed
+// DataRightsCredential is not a party credential and is not offered here). The
+// issuer exposes no "list eligible types" endpoint, so the portal presents this
+// catalogue and the user requests each; the issuer issues only the ones buildable
+// from their claims. The issuer's v3 schema alignment (September 2026) renamed
+// PartyCredential to PartyIdCredential and superseded iSHAREParticipantCredential
+// with the consolidated TrustedParticipantCredential plus the modular
+// FrameworkComplianceCredential. Keep in sync with the issuer's builders.
 const CATALOGUE = [
-  "PartyCredential",
-  "iSHAREParticipantCredential",
+  "PartyIdCredential",
+  "TrustedParticipantCredential",
+  "FrameworkComplianceCredential",
   "DataspaceParticipantCredential",
 ];
+
+// Pre-rename type names an older issuer may still emit, mapped onto the canonical
+// ones so its offers render instead of falling through to "not available".
+const LEGACY_TYPES: Record<string, string> = {
+  PartyCredential: "PartyIdCredential",
+  iSHAREParticipantCredential: "TrustedParticipantCredential",
+};
+const canonicalType = (type: string): string => LEGACY_TYPES[type] ?? type;
 
 // Poll cadence while the issuer is still preparing credentials (after a request).
 const POLL_MS = 3000;
@@ -143,7 +157,7 @@ const CredentialsSection: React.FC = () => {
     const d = await poll();
     if (aliveRef.current) {
       const got = (d?.results || []).some(
-        (r) => r.credential_type === type && r.credential_offer_uri
+        (r) => canonicalType(r.credential_type) === type && r.credential_offer_uri
       );
       if (!got) setNoLink((s) => new Set(s).add(type));
       setBusy("");
@@ -193,7 +207,20 @@ const CredentialsSection: React.FC = () => {
 
   const status = data?.status || "none";
   const settled = !isProcessing(status);
-  const results = data?.results || [];
+  const results: OfferResult[] = (data?.results || []).map((r) => ({
+    ...r,
+    credential_type: canonicalType(r.credential_type),
+  }));
+  // Every catalogue type, plus any type the issuer returned that this bundle does
+  // not know yet: an offer in hand must never hide behind "not available" because
+  // of a name the catalogue predates (the label falls back to a de-camel-cased
+  // type name).
+  const catalogue = Array.from(
+    new Set([
+      ...CATALOGUE,
+      ...results.map((r) => r.credential_type).filter((t) => !!t),
+    ])
+  );
 
   // One issued offer card (QR + wallet hand-off).
   const renderOffer = (o: OfferResult, key: string): React.ReactNode => {
@@ -293,7 +320,7 @@ const CredentialsSection: React.FC = () => {
   // Each catalogue type renders either its issued offer(s) (QR) or a state card.
   const renderCatalogue = (): React.ReactNode => (
     <div className={styles.grid}>
-      {CATALOGUE.flatMap((type) => {
+      {catalogue.flatMap((type) => {
         const requesting = busy === `req:${type}`;
         const offers = results.filter(
           (r) => r.credential_type === type && r.credential_offer_uri
