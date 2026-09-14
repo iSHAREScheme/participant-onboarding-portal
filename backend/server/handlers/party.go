@@ -444,6 +444,10 @@ func (h *HandlerParty) forwardPartyWrite(c *fiber.Ctx, method, satellitePath str
 	return h.forwardPartyWriteBody(c, method, satellitePath, c.Body())
 }
 
+// errMissingOrInvalidPartyID is the 400 body for a party write whose route id is
+// absent or not a valid percent-encoded value.
+const errMissingOrInvalidPartyID = "missing or invalid party id"
+
 // partyPathParam returns a route parameter decoded from its percent-encoding.
 // Fiber hands parameters over as they appear in the request path (UnescapePath
 // is off), so a did:ishare id sent by the frontend as did%3Aishare%3A… arrives
@@ -553,7 +557,7 @@ func (h *HandlerParty) UpdateParty(c *fiber.Ctx) error {
 	}
 	id, err := partyPathParam(c, "id")
 	if err != nil || id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing or invalid party id")
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWrite(c, http.MethodPut, "/parties/"+url.PathEscape(id))
 }
@@ -574,7 +578,7 @@ func (h *HandlerParty) PatchParty(c *fiber.Ctx) error {
 	}
 	id, err := partyPathParam(c, "id")
 	if err != nil || id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing or invalid party id")
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWrite(c, http.MethodPatch, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id))
 }
@@ -618,7 +622,7 @@ func (h *HandlerParty) CreateClaim(c *fiber.Ctx) error {
 	}
 	id, err := partyPathParam(c, "id")
 	if err != nil || id == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing or invalid party id")
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	return h.forwardPartyWriteBody(c, http.MethodPost, h.Config.SatelliteV3Prefix()+"/parties/"+url.PathEscape(id)+"/claims", normalizeClaimCreateBody(c.Body()))
 }

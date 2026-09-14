@@ -208,7 +208,7 @@ func (h *HandlerPR) RedeliverIssuerDelivery(c *fiber.Ctx) error {
 func (h *HandlerPR) ReemitPartyEvents(c *fiber.Ctx) error {
 	partyID, err := partyPathParam(c, "partyId")
 	if err != nil || partyID == "" {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, "missing or invalid party id")
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, errMissingOrInvalidPartyID)
 	}
 	out, err := h.client.ReemitParty(prBearer(c), partyID)
 	if err != nil {
