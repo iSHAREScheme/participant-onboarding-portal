@@ -429,9 +429,9 @@ func (h *HandlerParty) partiesEndpointForVersion() string {
 }
 
 func truncateForLog(b []byte) string {
-	const max = 600
-	if len(b) > max {
-		return string(b[:max]) + "…"
+	const maxLogBytes = 600
+	if len(b) > maxLogBytes {
+		return string(b[:maxLogBytes]) + "…"
 	}
 	return string(b)
 }
