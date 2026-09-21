@@ -319,15 +319,14 @@ const AddClaimModal = ({
     </select>
   );
 
-  const field = (f: FieldSpec) => (
-    <div className={styles.formRow} key={f.key}>
-      <label className={styles.formLabel}>
-        {humanize(f.key)}
-        {f.required ? " *" : ""}
-      </label>
-      {f.kind === "dataspace" && (dataspacesLoading || dataspacesAvailable) ? (
-        dataspaceSelect(f)
-      ) : f.kind === "select" ? (
+  // The input control for one field. A dataspace field falls through to the text
+  // input when the registry's list is unavailable, so it is still fillable.
+  const fieldControl = (f: FieldSpec) => {
+    if (f.kind === "dataspace" && (dataspacesLoading || dataspacesAvailable)) {
+      return dataspaceSelect(f);
+    }
+    if (f.kind === "select") {
+      return (
         <select
           className={styles.formInput}
           value={form[f.key] ?? ""}
@@ -340,21 +339,35 @@ const AddClaimModal = ({
             </option>
           ))}
         </select>
-      ) : f.kind === "textarea" ? (
+      );
+    }
+    if (f.kind === "textarea") {
+      return (
         <textarea
           className={styles.formInput}
           rows={3}
           value={form[f.key] ?? ""}
           onChange={(ev) => set(f.key, ev.target.value)}
         />
-      ) : (
-        <input
-          className={styles.formInput}
-          type={f.kind === "date" ? "date" : "text"}
-          value={form[f.key] ?? ""}
-          onChange={(ev) => set(f.key, ev.target.value)}
-        />
-      )}
+      );
+    }
+    return (
+      <input
+        className={styles.formInput}
+        type={f.kind === "date" ? "date" : "text"}
+        value={form[f.key] ?? ""}
+        onChange={(ev) => set(f.key, ev.target.value)}
+      />
+    );
+  };
+
+  const field = (f: FieldSpec) => (
+    <div className={styles.formRow} key={f.key}>
+      <label className={styles.formLabel}>
+        {humanize(f.key)}
+        {f.required ? " *" : ""}
+      </label>
+      {fieldControl(f)}
     </div>
   );
 

@@ -10,11 +10,13 @@ const str = (v: any): string => (v === undefined || v === null ? "" : String(v))
  */
 export const partyAliases = (party: any, primaryId = ""): string[] => {
   const raw = party?.alsoKnownAs ?? party?.also_known_as ?? party?.aka;
-  return (Array.isArray(raw) ? raw : [])
+  const cleaned = (Array.isArray(raw) ? raw : [])
     .map(str)
     .map((alias) => alias.trim())
     .filter(Boolean)
     .filter((alias) => alias !== primaryId);
+  // De-duplicated so each alias can key its own chip.
+  return Array.from(new Set(cleaned));
 };
 
 /**
@@ -39,8 +41,8 @@ const PartyAliases = ({
       </span>
       {aliases.length > 0 ? (
         <div className={styles.chips}>
-          {aliases.map((alias, i) => (
-            <span className={styles.chip} key={i} title={alias}>
+          {aliases.map((alias) => (
+            <span className={styles.chip} key={alias} title={alias}>
               {alias}
             </span>
           ))}
