@@ -36,6 +36,13 @@ type OnboardingFlow struct {
 	SkipRoles          string `json:"skipRoles"`          // "true" | "false" | ""
 	ActiveRoles        string `json:"activeRoles"`        // comma-separated
 	AutoAcceptProposal string `json:"autoAcceptProposal"` // "true" | "false" | ""
+
+	// VcOnboarding overrides whether this flow offers credential-based
+	// onboarding ("true" | "false" | "" = inherit the deployment setting).
+	VcOnboarding string `json:"vcOnboarding"`
+	// VcAutoAccept overrides whether a presentation-verified proposal skips
+	// admin review on this flow ("true" | "false" | "" = inherit).
+	VcAutoAccept string `json:"vcAutoAccept"`
 }
 
 // ReservedFlowRoutes are portal paths a flow route may never shadow.

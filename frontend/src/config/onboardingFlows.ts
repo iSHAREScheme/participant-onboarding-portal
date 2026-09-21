@@ -46,6 +46,9 @@ export interface PublicOnboardingFlow {
   skipRoles?: string;
   activeRoles?: string;
   autoAcceptProposal?: string;
+  // Per-flow overrides for credential-based onboarding ("true"|"false"|"" = inherit).
+  vcOnboarding?: string;
+  vcAutoAccept?: string;
   theme?: PublicFlowTheme;
 }
 

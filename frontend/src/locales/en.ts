@@ -795,6 +795,33 @@ const en = {
       rejected: "Rejected"
     },
     idCheck: {
+      vc: {
+        intro: "Present credentials you already hold and we will fill in your application from them — no manual checks needed for what they prove.",
+        accepted: "This portal accepts:",
+        tabWallet: "Use your wallet",
+        tabDirect: "Paste or upload",
+        start: "Present credentials",
+        starting: "Preparing…",
+        scanHint: "Scan this code with your wallet app and approve sharing the requested credentials.",
+        waiting: "Waiting for your wallet…",
+        openWallet: "Open your wallet on this device",
+        pastePlaceholder: "Paste a verifiable presentation (JSON or JWT)",
+        verify: "Verify presentation",
+        verifying: "Verifying…",
+        verifiedTitle: "Credentials verified",
+        issuedBy: "Issued by",
+        field: "Filled in",
+        value: "Value",
+        stillNeedIdentity: "These credentials did not include an identity proof, so you still need an eIDAS certificate or eHerkenning to finish. Everything else has been filled in for you.",
+        presentAgain: "Present different credentials",
+        startFailed: "Could not start a credential request. Please try again.",
+        pollFailed: "Lost contact while waiting for your wallet. Please try again.",
+        verifyFailed: "That presentation could not be verified.",
+        readFailed: "That file could not be read.",
+        expired: "The credential request expired before your wallet responded.",
+        radioLabel: "with verifiable credentials",
+        radioInfo: "Present credentials you already hold, for example from another dataspace or your EUDI wallet. We verify them cryptographically and fill in your application from what they prove."
+      },
       title: "Identity check",
       subtitle: "For more certainty about your online identity, please identify yourself using one of the following methods.",
       eHerkenning: "eHerkenning",
@@ -1389,6 +1416,8 @@ const en = {
       }
     },
     publicOnboarding: {
+      vcOnboarding: "Credential onboarding",
+      vcAutoAccept: "Auto-accept verified credentials",
       title: "Public onboarding",
       hint: "Everything published is a flow in the list below - nothing is public implicitly. Anonymous visitors of unpublished routes are sent to the login screen.",
       enable: "Enable public onboarding",

@@ -450,6 +450,34 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
                         </div>
                         <div className={styles.flowField}>
                           <label className={styles.colorLabel}>
+                            {t("settings.publicOnboarding.vcOnboarding")}
+                          </label>
+                          <select
+                            className={styles.fontSelect}
+                            value={flow.vcOnboarding ?? ""}
+                            onChange={(e) => update(i, { vcOnboarding: e.target.value })}
+                          >
+                            <option value="">{t("settings.publicOnboarding.inherit")}</option>
+                            <option value="true">{t("settings.publicOnboarding.on")}</option>
+                            <option value="false">{t("settings.publicOnboarding.off")}</option>
+                          </select>
+                        </div>
+                        <div className={styles.flowField}>
+                          <label className={styles.colorLabel}>
+                            {t("settings.publicOnboarding.vcAutoAccept")}
+                          </label>
+                          <select
+                            className={styles.fontSelect}
+                            value={flow.vcAutoAccept ?? ""}
+                            onChange={(e) => update(i, { vcAutoAccept: e.target.value })}
+                          >
+                            <option value="">{t("settings.publicOnboarding.inherit")}</option>
+                            <option value="true">{t("settings.publicOnboarding.on")}</option>
+                            <option value="false">{t("settings.publicOnboarding.off")}</option>
+                          </select>
+                        </div>
+                        <div className={styles.flowField}>
+                          <label className={styles.colorLabel}>
                             {t("settings.onboarding.autoAccept")}
                           </label>
                           <select

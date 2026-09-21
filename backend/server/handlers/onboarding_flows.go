@@ -201,17 +201,22 @@ func publicFlowView(f models.OnboardingFlow, allAgreements []models.Agreement) f
 		agreementIds = []string{}
 	}
 	return fiber.Map{
-		"route":              f.Route,
-		"title":              f.Title,
-		"themeName":          f.ThemeName,
-		"description":        f.Description,
-		"dataspaceId":        f.DataspaceId,
-		"dataspaceTitle":     f.DataspaceTitle,
-		"agreementIds":       agreementIds,
-		"agreements":         publicViewAgreements(flowAgreements(allAgreements, f.AgreementIds)),
-		"authRegistryId":     f.AuthRegistryId,
-		"authRegistryName":   f.AuthRegistryName,
-		"authRegistryUrl":    f.AuthRegistryUrl,
+		"route":            f.Route,
+		"title":            f.Title,
+		"themeName":        f.ThemeName,
+		"description":      f.Description,
+		"dataspaceId":      f.DataspaceId,
+		"dataspaceTitle":   f.DataspaceTitle,
+		"agreementIds":     agreementIds,
+		"agreements":       publicViewAgreements(flowAgreements(allAgreements, f.AgreementIds)),
+		"authRegistryId":   f.AuthRegistryId,
+		"authRegistryName": f.AuthRegistryName,
+		"authRegistryUrl":  f.AuthRegistryUrl,
+		// Whether this flow offers credential-based onboarding. Only the flag
+		// travels publicly: the trusted-issuer list and resolver URLs are
+		// operator configuration and stay admin-only.
+		"vcOnboarding":       f.VcOnboarding,
+		"vcAutoAccept":       f.VcAutoAccept,
 		"defaultRole":        f.DefaultRole,
 		"skipRoles":          f.SkipRoles,
 		"activeRoles":        f.ActiveRoles,
@@ -276,12 +281,18 @@ func carryThemeAssets(entry, old map[string]interface{}) {
 // sanitizeFlowRoute keeps a submitted flow route only when it matches a
 // configured flow (unknown/garbage input degrades to "" = base flow).
 func sanitizeFlowRoute(h *HandlerParty, raw string) string {
-	route := strings.Trim(strings.TrimSpace(raw), "/")
-	if route == "" || !flowRoutePattern.MatchString(route) {
-		return ""
-	}
 	var settings models.Settings
 	if h.Server.DB.First(&settings).Error != nil {
+		return ""
+	}
+	return sanitizeFlowRouteIn(&settings, raw)
+}
+
+// sanitizeFlowRouteIn is the same check against already-loaded settings, for
+// callers that have them in hand (and for handlers other than HandlerParty).
+func sanitizeFlowRouteIn(settings *models.Settings, raw string) string {
+	route := strings.Trim(strings.TrimSpace(raw), "/")
+	if route == "" || !flowRoutePattern.MatchString(route) {
 		return ""
 	}
 	for _, f := range decodeFlows(settings.OnboardingFlows) {

@@ -793,6 +793,33 @@ const nl = {
       rejected: "Afgewezen"
     },
     idCheck: {
+      vc: {
+        intro: "Presenteer credentials die u al heeft; wij vullen uw aanvraag daarmee in — voor wat zij aantonen is geen handmatige controle nodig.",
+        accepted: "Dit portaal accepteert:",
+        tabWallet: "Gebruik uw wallet",
+        tabDirect: "Plakken of uploaden",
+        start: "Credentials presenteren",
+        starting: "Voorbereiden…",
+        scanHint: "Scan deze code met uw wallet-app en geef toestemming om de gevraagde credentials te delen.",
+        waiting: "Wachten op uw wallet…",
+        openWallet: "Open uw wallet op dit apparaat",
+        pastePlaceholder: "Plak een verifiable presentation (JSON of JWT)",
+        verify: "Presentatie verifiëren",
+        verifying: "Verifiëren…",
+        verifiedTitle: "Credentials geverifieerd",
+        issuedBy: "Uitgegeven door",
+        field: "Ingevuld",
+        value: "Waarde",
+        stillNeedIdentity: "Deze credentials bevatten geen identiteitsbewijs, dus u heeft nog een eIDAS-certificaat of eHerkenning nodig om af te ronden. De rest is al voor u ingevuld.",
+        presentAgain: "Andere credentials presenteren",
+        startFailed: "Kon geen credentialverzoek starten. Probeer het opnieuw.",
+        pollFailed: "Verbinding met uw wallet verloren. Probeer het opnieuw.",
+        verifyFailed: "Deze presentatie kon niet worden geverifieerd.",
+        readFailed: "Dit bestand kon niet worden gelezen.",
+        expired: "Het credentialverzoek is verlopen voordat uw wallet reageerde.",
+        radioLabel: "met verifiable credentials",
+        radioInfo: "Presenteer credentials die u al heeft, bijvoorbeeld uit een andere dataspace of uw EUDI-wallet. Wij verifiëren ze cryptografisch en vullen uw aanvraag in met wat zij aantonen."
+      },
       title: "Identiteitscontrole",
       subtitle: "Voor meer zekerheid over uw online identiteit, identificeert u zich alstublieft met een van de volgende methoden.",
       eHerkenning: "eHerkenning",
@@ -1386,6 +1413,8 @@ const nl = {
       }
     },
     publicOnboarding: {
+      vcOnboarding: "Onboarding met credentials",
+      vcAutoAccept: "Geverifieerde credentials automatisch accepteren",
       title: "Publieke onboarding",
       hint: "Alles wat gepubliceerd is, staat als flow in de lijst hieronder - niets is impliciet openbaar. Anonieme bezoekers van niet-gepubliceerde routes gaan naar het inlogscherm.",
       enable: "Publieke onboarding inschakelen",

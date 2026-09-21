@@ -93,6 +93,7 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 			"prConfigured":                     prConfigured,
 			"requireQualifiedEidasCertificate": false,
 			"publicOnboardingEnabled":          false,
+			"vcOnboardingEnabled":              false,
 			"onboardingFlows":                  []fiber.Map{},
 		})
 	}
@@ -107,11 +108,14 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"agreements":  publicViewAgreements(decodeAgreements(settings.Agreements)),
 		// Onboarding-flow config consumed by the public landing/header and the
 		// (authenticated) register flow.
-		"defaultAssociationName":           settings.DefaultAssociationName,
-		"skipRoles":                        settings.SkipRoles,
-		"activeRoles":                      settings.ActiveRoles,
-		"defaultRole":                      settings.DefaultRole,
-		"autoAcceptProposal":               settings.AutoAcceptProposal,
+		"defaultAssociationName": settings.DefaultAssociationName,
+		"skipRoles":              settings.SkipRoles,
+		"activeRoles":            settings.ActiveRoles,
+		"defaultRole":            settings.DefaultRole,
+		"autoAcceptProposal":     settings.AutoAcceptProposal,
+		// Deployment-wide switch for credential-based onboarding. Only the
+		// on/off flag is public; the trust configuration behind it is not.
+		"vcOnboardingEnabled":              policyFromSettings(&settings).Enabled,
 		"requireQualifiedEidasCertificate": settings.RequireQualifiedEidasCertificate,
 		// Topology flag — gates the registry-admin features in the UI.
 		"prConfigured": prConfigured,

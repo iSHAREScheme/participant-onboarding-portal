@@ -35,6 +35,7 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		&models.Organization{},
 		&models.OrganizationMember{},
 		&models.OrganizationIdpConnection{},
+		&models.VcPresentationSession{},
 	); err != nil {
 		log.Printf("Database migration failed: %v", err)
 		return nil, err // Return the error instead of calling log.Fatal
@@ -69,6 +70,28 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		}
 	}
 
+	// Add the credential-onboarding columns to proposals: how identity was
+	// proven, and the verified-presentation evidence behind a pre-filled form.
+	for _, col := range []string{
+		"id_check_method", "vc_holder", "vc_credential_types", "vc_issuers", "vc_prefill",
+	} {
+		if !db.Migrator().HasColumn(&models.Proposal{}, col) {
+			if err := db.Exec("ALTER TABLE proposals ADD COLUMN " + col + " TEXT").Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !db.Migrator().HasColumn(&models.Proposal{}, "vc_verified") {
+		if err := db.Exec("ALTER TABLE proposals ADD COLUMN vc_verified BOOLEAN DEFAULT 0").Error; err != nil {
+			return nil, err
+		}
+	}
+	if !db.Migrator().HasColumn(&models.Proposal{}, "vc_verified_at") {
+		if err := db.Exec("ALTER TABLE proposals ADD COLUMN vc_verified_at DATETIME").Error; err != nil {
+			return nil, err
+		}
+	}
+
 	// Add satellite-connection override columns to settings (non-secret).
 	for _, col := range []string{
 		"satellite_base_url", "satellite_iss", "satellite_aud", "satellite_version",
@@ -76,7 +99,7 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		"satellite_token_endpoint", "satellite_token_scope", "dataspace_title",
 		"auth_registry_id", "auth_registry_name", "auth_registry_url",
 		"default_association_name", "skip_roles", "active_roles", "default_role",
-		"auto_accept_proposal",
+		"auto_accept_proposal", "vc_onboarding", "vc_auto_accept_verified",
 	} {
 		if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, col) {
 			if err := db.Exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT").Error; err != nil {

@@ -1,10 +1,11 @@
 import { isSatelliteOperator } from "utils/roles";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { NextPage } from "next";
 import { useRouter } from "next/router";
 import styles from "styles/Register.module.css";
 import { useKeycloak } from "@react-keycloak/web";
 import ProtectedRoute from "../components/ProtectedRoute";
+import VcPresentation, { type VcPresentationValue } from "../components/VcPresentation";
 import { useLanguage } from "../context/LanguageContext";
 import { FormInput, Tooltip, Loading } from "../components";
 import Placeholder from "../components/Placeholder";
@@ -198,7 +199,7 @@ interface FormData {
     useM2M: "yes" | "no" | ""
   }
   idCheck: {
-    idCheckMethod?: string // e.g., "eherkenning" or "eidas"
+    idCheckMethod?: string // "eherkenning" | "eidas" | "vc"
     companyName: string
     kvkNumber: string
     partyId: string
@@ -243,6 +244,10 @@ interface FormData {
   signingMethod: {
     method: "eherkenning" | "manual" | ""
   }
+  // Set once a verifiable presentation has been verified. Only the id is
+  // submitted: the backend re-reads every verified value from the session, so
+  // the pre-filled fields below are convenience, not evidence.
+  vcSessionId?: string
 }
 
 
@@ -383,6 +388,7 @@ const Register: NextPage = () => {
     defaultRole: "",
     autoAccept: "",
     requireQualifiedEidasCertificate: false,
+    vcOnboardingEnabled: false,
   })
   // Public onboarding flows + theme library (raw, from admin settings). When
   // the user arrived through a flow route (?flow=…), that flow's overrides win
@@ -422,6 +428,10 @@ const Register: NextPage = () => {
   const autoAcceptProposal =
     (activeFlow?.autoAcceptProposal || obSettings.autoAccept) === "true"
   const skipRoleStep = (activeFlow?.skipRoles || obSettings.skipRoles) === "true"
+  // Credential-based onboarding: deployment setting, overridden per flow.
+  const vcOnboardingEnabled =
+    activeFlow?.vcOnboarding === "true" ||
+    (activeFlow?.vcOnboarding !== "false" && obSettings.vcOnboardingEnabled)
   const idpOnly = parseBoolEnv(env.NEXT_PUBLIC_IDP_ONLY)
   const keycloakIdp = env.NEXT_PUBLIC_KEYCLOAK_IDP
   const eherkenningAlias =
@@ -874,6 +884,58 @@ const Register: NextPage = () => {
 
   const canGoBack = currentStep > firstInteractiveStep
 
+  // The verified presentation backing this application, if any.
+  const [vcVerification, setVcVerification] = useState<VcPresentationValue | null>(null)
+  // Project the verifier's dotted field names onto the wizard's form state.
+  // Only fields the credential actually proved are written; the applicant's own
+  // answers elsewhere are left untouched.
+  const applyVerifiedFields = useCallback((fields: Record<string, string>) => {
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        idCheck: { ...prev.idCheck },
+        location: { ...prev.location },
+        association: { ...prev.association },
+        account: { ...prev.account },
+      }
+      const put = (section: "idCheck" | "location" | "association" | "account", key: string, value: string) => {
+        if (value) (next[section] as Record<string, unknown>)[key] = value
+      }
+      for (const [field, value] of Object.entries(fields ?? {})) {
+        const [section, key] = field.split(".")
+        if (section === "idCheck" || section === "location" || section === "association" || section === "account") {
+          put(section, key, value)
+        }
+      }
+      next.idCheck.idCheckMethod = "vc"
+      // A party id proven by a credential is as binding as one read off a
+      // certificate, so keep it out of reach of the KVK-derived rebuilds.
+      if (fields["idCheck.partyId"]) next.idCheck.certPartyId = fields["idCheck.partyId"]
+      return next
+    })
+  }, [])
+
+  const handleVcVerified = useCallback(
+    (value: VcPresentationValue) => {
+      setVcVerification(value)
+      applyVerifiedFields(value.result.fields ?? {})
+      setFormData((prev) => ({ ...prev, vcSessionId: value.sessionId }))
+    },
+    [applyVerifiedFields]
+  )
+
+  const handleVcCleared = useCallback(() => {
+    setVcVerification(null)
+    setFormData((prev) => ({
+      ...prev,
+      vcSessionId: undefined,
+      idCheck: {
+        ...prev.idCheck,
+        idCheckMethod: prev.idCheck.idCheckMethod === "vc" ? undefined : prev.idCheck.idCheckMethod,
+      },
+    }))
+  }, [])
+
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
   const [isStaticAuthRegistry, setIsStaticAuthRegistry] = useState(false)
@@ -1075,6 +1137,15 @@ const Register: NextPage = () => {
           return true
         }
 
+        // A verified presentation that also carried an identity proof (an x509
+        // certificate or an IdP assertion) is equivalent: the registry gets the
+        // identity claim it requires without the applicant uploading anything.
+        // A presentation without one still leaves this step unsatisfied — that
+        // is exactly what makes the onboarding partial.
+        if (vcVerification?.result?.identitySatisfied) {
+          return true
+        }
+
         const eidasFile = data.eidasCert ?? uploadedFile
         if (eidasFile) {
           if (!(await preValidateEidasCert(
@@ -1181,6 +1252,7 @@ const Register: NextPage = () => {
         autoAccept: settingsData.autoAcceptProposal || "",
         requireQualifiedEidasCertificate:
           settingsData.requireQualifiedEidasCertificate === true,
+        vcOnboardingEnabled: settingsData.vcOnboardingEnabled === true,
       })
       setAllAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
@@ -1469,6 +1541,11 @@ const Register: NextPage = () => {
         }
 
         if (useAutoAcceptProposal) formDataWithoutFile.status = "signed"
+
+        // The verified presentation travels as an id only. The backend reloads
+        // the session and overwrites whatever this form claims for the fields
+        // the credential proved, so tampering here changes nothing.
+        formDataWithoutFile.vcSessionId = vcVerification?.sessionId
 
         formDataToSend.append("data", JSON.stringify(formDataWithoutFile));
 
@@ -2301,6 +2378,37 @@ const Register: NextPage = () => {
                     {/* <p>{t("register.idCheck.eidasCertificate")}</p> */}
                     <p>{t("register.idCheck.subtitle")}</p>
                     <div className={styles.radioGroup}>
+                      {vcOnboardingEnabled && (
+                        <div className={styles.radioOption}>
+                          <input
+                            type="radio"
+                            id="vc"
+                            name="identityMethod"
+                            value="vc"
+                            checked={formData.idCheck.idCheckMethod === "vc"}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                idCheck: { ...formData.idCheck, idCheckMethod: "vc" },
+                              })
+                            }
+                          />
+                          <label htmlFor="vc">
+                            <strong>{t("register.idCheck.vc.radioLabel")}</strong>
+                          </label>
+                          <Tooltip content={t("register.idCheck.vc.radioInfo")}>
+                            <span className={styles.infoIcon}>ⓘ</span>
+                          </Tooltip>
+                          {formData.idCheck.idCheckMethod === "vc" && (
+                            <VcPresentation
+                              flowRoute={flowRouteParam}
+                              value={vcVerification}
+                              onVerified={handleVcVerified}
+                              onCleared={handleVcCleared}
+                            />
+                          )}
+                        </div>
+                      )}
                       {eherkenningConfigured && !alwaysEherkenning && <div className={styles.radioOption}>
                         <input
                           type="radio"
@@ -2407,6 +2515,22 @@ const Register: NextPage = () => {
                       {t("register.idCheck.subtitle", { id: "eHerkenning" })}
                     </p>
                     {renderEherkenningAction()}
+                    {vcOnboardingEnabled && (
+                      <div className={styles.radioOption}>
+                        <label htmlFor="vc-only">
+                          <strong>{t("register.idCheck.vc.radioLabel")}</strong>
+                        </label>
+                        <Tooltip content={t("register.idCheck.vc.radioInfo")}>
+                          <span className={styles.infoIcon}>ⓘ</span>
+                        </Tooltip>
+                        <VcPresentation
+                          flowRoute={flowRouteParam}
+                          value={vcVerification}
+                          onVerified={handleVcVerified}
+                          onCleared={handleVcCleared}
+                        />
+                      </div>
+                    )}
                     <p className={styles.infoText}>
                       {t("register.idCheck.info", { id: "eHerkenning" })}
                       <a

@@ -5,6 +5,7 @@ import OnboardingFlowsSettings, {
   withFlowKeys,
 } from "../components/OnboardingFlowsSettings";
 import ThemeAssetsUploader from "../components/ThemeAssetsUploader";
+import VcOnboardingSettings from "../components/VcOnboardingSettings";
 import { NextPage } from "next";
 import styles from "../styles/Settings.module.css";
 import AdminRoute from "components/AdminRoute";
@@ -1313,6 +1314,9 @@ const Settings: NextPage = () => {
             onEnabledChange={setPublicOnboardingEnabled}
             onFlowsChange={setOnboardingFlows}
           />
+          {/* Credential-based onboarding saves through its own endpoint, so it
+              is self-contained rather than part of the general settings form. */}
+          <VcOnboardingSettings />
           {/* Onboarding flow */}
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>{t("settings.onboarding.flowTitle")}</h2>
