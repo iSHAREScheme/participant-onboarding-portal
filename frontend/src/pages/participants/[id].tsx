@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import AdminRoute from "components/AdminRoute";
 import ParticipantEditForm from "components/ParticipantEditForm";
 import ClaimEditModal from "components/ClaimEditModal";
+import PartyAliases from "components/PartyAliases";
 import AddClaimModal from "components/AddClaimModal";
 import { Skeleton } from "components";
 import API from "api/client";
@@ -347,15 +348,6 @@ const ParticipantDetail: NextPage = () => {
     (satelliteIsV3 ? hasRealComplianceClaim : version.startsWith("2.2")) && owned;
   const partyName = party ? str(party.party_name ?? party.name) : "";
   const partyId = party ? str(party.party_id ?? party.id) : "";
-  // EORI/DID aliases (v3 `alsoKnownAs`; tolerate snake_case / aka). Drop blanks
-  // and the primary id so it isn't repeated as its own alias.
-  const aliases: string[] = asArray(
-    party?.alsoKnownAs ?? party?.also_known_as ?? party?.aka
-  )
-    .map(str)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((a) => a !== partyId);
   // Registrar id: v3 keeps it per-claim, so fall back to the first claim's value.
   const claimRegistrarId = Array.isArray(party?.claims)
     ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
@@ -859,22 +851,7 @@ const ParticipantDetail: NextPage = () => {
                 </div>
               </div>
 
-              {/* Aliases belong with the party's other identity facts, so the
-                  row is always rendered — "none registered" is information too. */}
-              <div className={styles.akaRow}>
-                <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
-                {aliases.length > 0 ? (
-                  <div className={styles.chips}>
-                    {aliases.map((a, i) => (
-                      <span className={styles.chip} key={i} title={a}>
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className={styles.factValue}>—</span>
-                )}
-              </div>
+              <PartyAliases party={party} primaryId={partyId} />
 
               {(registrarId || capabilityUrl) && (
                 <div className={styles.keyFacts}>

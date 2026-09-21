@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import ProtectedRoute from "components/ProtectedRoute";
 import { Skeleton } from "components";
 import CredentialsSection from "components/CredentialsSection";
+import PartyAliases from "components/PartyAliases";
 import API from "api/client";
 import { useLanguage } from "../context/LanguageContext";
 import styles from "styles/ParticipantDetail.module.css";
@@ -101,14 +102,6 @@ const MyParty: NextPage = () => {
     return label === key ? humanize(type) : label;
   };
 
-  // Aliases / identity surfaced in the summary header.
-  const aliases: string[] = asArray(
-    party?.alsoKnownAs ?? party?.also_known_as ?? party?.aka
-  )
-    .map(str)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((a) => a !== str(party?.party_id ?? party?.id));
   const claimRegistrarId = Array.isArray(party?.claims)
     ? str((party.claims.find((c: any) => str(c?.registrarId)) || {}).registrarId)
     : "";
@@ -282,22 +275,7 @@ const MyParty: NextPage = () => {
                 </div>
                 <span className={styles.schema}>{t("party.admitted")}</span>
               </div>
-              {/* Aliases belong with the party's other identity facts, so the
-                  row is always rendered — "none registered" is information too. */}
-              <div className={styles.akaRow}>
-                <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
-                {aliases.length > 0 ? (
-                  <div className={styles.chips}>
-                    {aliases.map((a, i) => (
-                      <span className={styles.chip} key={i} title={a}>
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className={styles.factValue}>—</span>
-                )}
-              </div>
+              <PartyAliases party={party} primaryId={id} />
               {(registrarId || capabilityUrl) && (
                 <div className={styles.keyFacts}>
                   {registrarId && (
