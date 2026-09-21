@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "api/client";
+import { useDataspaces } from "hooks";
 import { useLanguage } from "../../context/LanguageContext";
 import { extractCertificateFields } from "util/certificate";
 import styles from "styles/ParticipantDetail.module.css";
@@ -9,7 +10,7 @@ import styles from "styles/ParticipantDetail.module.css";
 // additional active certificate — the previous certificate claim keeps its own
 // status until it expires or an operator revokes it from its claim card.
 
-type Kind = "text" | "select" | "date" | "textarea";
+type Kind = "text" | "select" | "date" | "textarea" | "dataspace";
 
 interface FieldSpec {
   key: string;
@@ -48,7 +49,7 @@ const TYPE_FIELDS: Record<string, FieldSpec[]> = {
     { key: "name", kind: "text", required: true },
     { key: "authRegistryId", kind: "text", required: true },
     { key: "authUrl", kind: "text", required: true },
-    { key: "dataspaceId", kind: "text", required: false },
+    { key: "dataspaceId", kind: "dataspace", required: false },
     { key: "serviceProviderPartyId", kind: "text", required: false },
   ],
   frameworkAgreement: [
@@ -69,20 +70,20 @@ const TYPE_FIELDS: Record<string, FieldSpec[]> = {
     { key: "certificateType", kind: "text", required: true },
   ],
   dataspaceMembership: [
-    { key: "dataspaceId", kind: "text", required: true },
+    { key: "dataspaceId", kind: "dataspace", required: true },
     { key: "legalAdherence", kind: "select", required: true, options: YESNONA },
   ],
   // agreementType/roleId are free text: dataspaces define their own agreement
   // and role vocabularies (no scheme whitelist on the satellite).
   dataspaceAgreement: [
-    { key: "dataspaceId", kind: "text", required: true },
+    { key: "dataspaceId", kind: "dataspace", required: true },
     { key: "agreementType", kind: "text", required: true },
     { key: "agreementId", kind: "text", required: true },
     { key: "title", kind: "text", required: true },
     { key: "verificationHash", kind: "text", required: false },
   ],
   dataspaceRole: [
-    { key: "dataspaceId", kind: "text", required: true },
+    { key: "dataspaceId", kind: "dataspace", required: true },
     { key: "roleId", kind: "text", required: true },
     { key: "title", kind: "text", required: false },
     { key: "loa", kind: "select", required: true, options: LOA },
@@ -181,6 +182,13 @@ const AddClaimModal = ({
   };
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Registered dataspaces, so every dataspaceId is chosen from the registry's
+  // own list instead of typed by hand.
+  const {
+    optionsWith: dataspaceOptions,
+    loading: dataspacesLoading,
+    available: dataspacesAvailable,
+  } = useDataspaces();
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -290,13 +298,36 @@ const AddClaimModal = ({
     }
   };
 
+  // A dataspace field is a dropdown over the registry's dataspaces, so a claim
+  // can only be written against a dataspace that actually exists. The list is a
+  // convenience: when it cannot be loaded (registry unreachable, or none
+  // registered) the field degrades to free text so claim creation is never
+  // blocked by the selector.
+  const dataspaceSelect = (f: FieldSpec) => (
+    <select
+      className={styles.formInput}
+      value={form[f.key] ?? ""}
+      disabled={dataspacesLoading}
+      onChange={(ev) => set(f.key, ev.target.value)}
+    >
+      <option value="">{dataspacesLoading ? e("dataspacesLoading") : "—"}</option>
+      {dataspaceOptions(form[f.key] ?? "").map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+
   const field = (f: FieldSpec) => (
     <div className={styles.formRow} key={f.key}>
       <label className={styles.formLabel}>
         {humanize(f.key)}
         {f.required ? " *" : ""}
       </label>
-      {f.kind === "select" ? (
+      {f.kind === "dataspace" && (dataspacesLoading || dataspacesAvailable) ? (
+        dataspaceSelect(f)
+      ) : f.kind === "select" ? (
         <select
           className={styles.formInput}
           value={form[f.key] ?? ""}

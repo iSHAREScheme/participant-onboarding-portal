@@ -211,6 +211,7 @@ const en = {
         addClaimCertUpload: "Certificate file",
         addClaimCertRequired: "Certificate file",
         addClaimCertHint: "The new certificate is registered as an additional active certificate. The previous certificate keeps its own status until it expires or is revoked from its claim card.",
+        dataspacesLoading: "Loading dataspaces…",
         save: "Save",
         saving: "Saving…",
         saveClaim: "Save claim",
