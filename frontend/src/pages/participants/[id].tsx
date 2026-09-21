@@ -859,9 +859,11 @@ const ParticipantDetail: NextPage = () => {
                 </div>
               </div>
 
-              {aliases.length > 0 && (
-                <div className={styles.akaRow}>
-                  <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
+              {/* Aliases belong with the party's other identity facts, so the
+                  row is always rendered — "none registered" is information too. */}
+              <div className={styles.akaRow}>
+                <span className={styles.akaLabel}>{f("alsoKnownAs")}</span>
+                {aliases.length > 0 ? (
                   <div className={styles.chips}>
                     {aliases.map((a, i) => (
                       <span className={styles.chip} key={i} title={a}>
@@ -869,8 +871,10 @@ const ParticipantDetail: NextPage = () => {
                       </span>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <span className={styles.factValue}>—</span>
+                )}
+              </div>
 
               {(registrarId || capabilityUrl) && (
                 <div className={styles.keyFacts}>
