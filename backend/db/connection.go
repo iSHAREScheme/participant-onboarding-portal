@@ -18,6 +18,13 @@ type columnSpec struct {
 	definition string
 }
 
+// Column definitions used by the migration lists below.
+const (
+	textColumn      = "TEXT"
+	boolFalseColumn = "BOOLEAN DEFAULT 0"
+	dateTimeColumn  = "DATETIME"
+)
+
 func Init(config *cfg.Config) (*gorm.DB, error) {
 	dataSourceName := config.SQLiteDBName
 
@@ -63,12 +70,12 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 // the credential-onboarding evidence behind a pre-filled form.
 func ensureProposalColumns(db *gorm.DB) error {
 	columns := []columnSpec{
-		{"signed_agreement_paths", "TEXT"},
-		{"signed_via", "TEXT"},
-		{"cert_subject_name", "TEXT"}, {"cert_x5c", "TEXT"}, {"cert_x5t_s256", "TEXT"}, {"idp_assertion", "TEXT"},
-		{"id_check_method", "TEXT"}, {"vc_holder", "TEXT"}, {"vc_credential_types", "TEXT"}, {"vc_issuers", "TEXT"}, {"vc_prefill", "TEXT"},
-		{"vc_verified", "BOOLEAN DEFAULT 0"},
-		{"vc_verified_at", "DATETIME"},
+		{"signed_agreement_paths", textColumn},
+		{"signed_via", textColumn},
+		{"cert_subject_name", textColumn}, {"cert_x5c", textColumn}, {"cert_x5t_s256", textColumn}, {"idp_assertion", textColumn},
+		{"id_check_method", textColumn}, {"vc_holder", textColumn}, {"vc_credential_types", textColumn}, {"vc_issuers", textColumn}, {"vc_prefill", textColumn},
+		{"vc_verified", boolFalseColumn},
+		{"vc_verified_at", dateTimeColumn},
 	}
 	return addMissingColumns(db, &models.Proposal{}, "proposals", columns)
 }
@@ -88,13 +95,13 @@ func ensureSettingsColumns(db *gorm.DB) error {
 		"default_association_name", "skip_roles", "active_roles", "default_role",
 		"auto_accept_proposal", "vc_onboarding", "vc_auto_accept_verified", "identity_methods",
 	} {
-		columns = append(columns, columnSpec{name, "TEXT"})
+		columns = append(columns, columnSpec{name, textColumn})
 	}
 	// Boolean guards default to false so existing rows get their built-ins
 	// seeded once on the next startup.
 	columns = append(columns,
-		columnSpec{"agreements_initialized", "BOOLEAN DEFAULT 0"},
-		columnSpec{"prefill_auth_registry", "BOOLEAN DEFAULT 0"},
+		columnSpec{"agreements_initialized", boolFalseColumn},
+		columnSpec{"prefill_auth_registry", boolFalseColumn},
 	)
 	return addMissingColumns(db, &models.Settings{}, "settings", columns)
 }
