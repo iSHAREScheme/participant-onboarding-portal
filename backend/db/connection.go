@@ -99,7 +99,7 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 		"satellite_token_endpoint", "satellite_token_scope", "dataspace_title",
 		"auth_registry_id", "auth_registry_name", "auth_registry_url",
 		"default_association_name", "skip_roles", "active_roles", "default_role",
-		"auto_accept_proposal", "vc_onboarding", "vc_auto_accept_verified",
+		"auto_accept_proposal", "vc_onboarding", "vc_auto_accept_verified", "identity_methods",
 	} {
 		if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, col) {
 			if err := db.Exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT").Error; err != nil {

@@ -81,21 +81,6 @@ func policyFromSettings(settings *models.Settings) verification.TrustPolicy {
 	return policy
 }
 
-// vcEnabledForRoute layers the per-flow override on top of the deployment
-// setting, mirroring how every other onboarding default resolves.
-func vcEnabledForRoute(settings *models.Settings, policy verification.TrustPolicy, route string) bool {
-	enabled := policy.Enabled
-	if flow := flowByRoute(settings, route); flow != nil {
-		switch strings.TrimSpace(flow.VcOnboarding) {
-		case "true":
-			enabled = true
-		case "false":
-			enabled = false
-		}
-	}
-	return enabled
-}
-
 // vcAutoAcceptForRoute reports whether a presentation-verified proposal skips
 // admin review, deployment default first and the flow override on top.
 func vcAutoAcceptForRoute(settings *models.Settings, route string) bool {
@@ -103,7 +88,7 @@ func vcAutoAcceptForRoute(settings *models.Settings, route string) bool {
 	if settings != nil {
 		auto = strings.TrimSpace(settings.VcAutoAcceptVerified) == "true"
 	}
-	if flow := flowByRoute(settings, route); flow != nil {
+	if flow := flowAtRoute(settings, route); flow != nil {
 		switch strings.TrimSpace(flow.VcAutoAccept) {
 		case "true":
 			auto = true
@@ -154,8 +139,8 @@ func (h *HandlerVcOnboarding) CreateSession(c *fiber.Ctx) error {
 	_ = json.Unmarshal(c.Body(), &body)
 	route := sanitizeFlowRouteIn(&settings, body.FlowRoute)
 
-	if !vcEnabledForRoute(&settings, policy, route) {
-		return responses.ErrorResponse(c, fiber.StatusNotImplemented, "Credential-based onboarding is not enabled")
+	if !identityMethodOffered(&settings, route, models.IdentityMethodVC) {
+		return responses.ErrorResponse(c, fiber.StatusNotImplemented, "Verifiable Credentials are not accepted on this onboarding flow")
 	}
 	base := strings.TrimRight(strings.TrimSpace(h.Config.VcVerifierBaseUrl), "/")
 	if base == "" {
@@ -268,7 +253,15 @@ func (h *HandlerVcOnboarding) SubmitResponse(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Missing vp_token")
 	}
 
-	policy := h.loadPolicy()
+	var settings models.Settings
+	_ = h.Server.DB.First(&settings).Error
+	if !identityMethodOffered(&settings, session.FlowRoute, models.IdentityMethodVC) {
+		// Switched off between showing the QR code and the wallet answering.
+		h.failSession(session, "Verifiable Credentials are no longer accepted on this onboarding flow")
+		return responses.ErrorResponse(c, fiber.StatusForbidden, "Verifiable Credentials are no longer accepted on this onboarding flow")
+	}
+
+	policy := policyFromSettings(&settings)
 	result, err := h.verifier(policy).Verify([]byte(vpToken), verification.Expectation{
 		Nonce:    session.Nonce,
 		Audience: session.Audience,
@@ -350,8 +343,8 @@ func (h *HandlerVcOnboarding) VerifyDirect(c *fiber.Ctx) error {
 		return responses.ErrorResponse(c, fiber.StatusBadRequest, "Invalid request body")
 	}
 	route := sanitizeFlowRouteIn(&settings, body.FlowRoute)
-	if !vcEnabledForRoute(&settings, policy, route) {
-		return responses.ErrorResponse(c, fiber.StatusNotImplemented, "Credential-based onboarding is not enabled")
+	if !identityMethodOffered(&settings, route, models.IdentityMethodVC) {
+		return responses.ErrorResponse(c, fiber.StatusNotImplemented, "Verifiable Credentials are not accepted on this onboarding flow")
 	}
 
 	presentation := strings.TrimSpace(body.Presentation)

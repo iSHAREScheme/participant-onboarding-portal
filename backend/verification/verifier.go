@@ -95,11 +95,9 @@ func (v *Verifier) now() time.Time {
 }
 
 // Verify checks a vp_token end to end and projects it onto onboarding fields.
+// It does not decide whether VCs are offered on a given flow — callers check
+// the flow's identity verification methods before they get here.
 func (v *Verifier) Verify(rawPresentation []byte, expect Expectation) (*Result, error) {
-	if !v.Policy.Enabled {
-		return nil, fmt.Errorf("credential-based onboarding is not enabled on this deployment")
-	}
-
 	parsed, err := ParsePresentation(rawPresentation)
 	if err != nil {
 		return nil, err

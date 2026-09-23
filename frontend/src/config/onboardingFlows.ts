@@ -46,8 +46,10 @@ export interface PublicOnboardingFlow {
   skipRoles?: string;
   activeRoles?: string;
   autoAcceptProposal?: string;
-  // Per-flow overrides for credential-based onboarding ("true"|"false"|"" = inherit).
-  vcOnboarding?: string;
+  // Identity verification methods this flow offers (comma-separated, see
+  // config/identityMethods; "" = inherit the deployment choice).
+  identityMethods?: string;
+  // Skip admin review for VC-verified applications ("true"|"false"|"" = inherit).
   vcAutoAccept?: string;
   theme?: PublicFlowTheme;
 }

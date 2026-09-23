@@ -216,13 +216,18 @@
   color: #92400e;
 }
 
-.reset {
-  background: none;
-  border: none;
-  color: var(--text-secondary, #013a57);
-  text-decoration: underline;
-  cursor: pointer;
-  font-size: 0.83rem;
-  padding: 0;
-  margin-top: 0.6rem;
+/* The buttons themselves come from the wizard (Register.module.css), so they
+   match Continue / Back / Browse files exactly and follow the flow's theme.
+   Only what the wizard does not define is added here. */
+.resetButton {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+/* The wizard's primary button has no disabled state; Verify stays disabled
+   until something is pasted, so it needs one. */
+.panel button:disabled,
+.verified button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

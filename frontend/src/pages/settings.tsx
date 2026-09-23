@@ -6,6 +6,13 @@ import OnboardingFlowsSettings, {
 } from "../components/OnboardingFlowsSettings";
 import ThemeAssetsUploader from "../components/ThemeAssetsUploader";
 import VcOnboardingSettings from "../components/VcOnboardingSettings";
+import IdentityMethodsSettings from "../components/IdentityMethodsSettings";
+import {
+  DEFAULT_IDENTITY_METHODS,
+  parseIdentityMethods,
+  serializeIdentityMethods,
+  type IdentityMethod,
+} from "config/identityMethods";
 import { NextPage } from "next";
 import styles from "../styles/Settings.module.css";
 import AdminRoute from "components/AdminRoute";
@@ -292,6 +299,9 @@ const Settings: NextPage = () => {
   const [activeRoles, setActiveRoles] = useState<string[]>([]);
   const [defaultRole, setDefaultRole] = useState("");
   const [autoAcceptProposal, setAutoAcceptProposal] = useState(false);
+  const [identityMethods, setIdentityMethods] = useState<IdentityMethod[]>(
+    parseIdentityMethods(DEFAULT_IDENTITY_METHODS)
+  );
   const [requireQualifiedEidasCertificate, setRequireQualifiedEidasCertificate] =
     useState(false);
   // Agreements (structured: built-in / uploaded PDF / URL with optional fetch auth)
@@ -399,6 +409,7 @@ const Settings: NextPage = () => {
       );
       setDefaultRole(data.defaultRole || "");
       setAutoAcceptProposal(data.autoAcceptProposal === "true");
+      setIdentityMethods(parseIdentityMethods(data.identityMethods || DEFAULT_IDENTITY_METHODS));
       setRequireQualifiedEidasCertificate(
         data.requireQualifiedEidasCertificate === true
       );
@@ -764,6 +775,7 @@ const Settings: NextPage = () => {
         activeRoles: activeRoles.join(","),
         defaultRole,
         autoAcceptProposal: autoAcceptProposal ? "true" : "false",
+        identityMethods: serializeIdentityMethods(identityMethods),
         requireQualifiedEidasCertificate,
         publicOnboardingEnabled,
         onboardingFlows: onboardingFlows.map(stripFlowKey),
@@ -1316,7 +1328,8 @@ const Settings: NextPage = () => {
           />
           {/* Credential-based onboarding saves through its own endpoint, so it
               is self-contained rather than part of the general settings form. */}
-          <VcOnboardingSettings />
+          <IdentityMethodsSettings value={identityMethods} onChange={setIdentityMethods} />
+          <VcOnboardingSettings vcEnabled={identityMethods.includes("vc")} />
           {/* Onboarding flow */}
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>{t("settings.onboarding.flowTitle")}</h2>

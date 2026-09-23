@@ -43,37 +43,6 @@ func settingsWithFlows(t *testing.T, flows []models.OnboardingFlow) *models.Sett
 	return &models.Settings{OnboardingFlows: datatypes.JSON(encoded)}
 }
 
-// TestVcEnabledForRouteHonoursFlowOverride verifies the layering every other
-// onboarding default uses: deployment setting first, flow override on top.
-func TestVcEnabledForRouteHonoursFlowOverride(t *testing.T) {
-	settings := settingsWithFlows(t, []models.OnboardingFlow{
-		{Route: "opt-in", VcOnboarding: "true"},
-		{Route: "opt-out", VcOnboarding: "false"},
-		{Route: "inherit"},
-	})
-
-	for _, tc := range []struct {
-		name           string
-		deploymentWide bool
-		route          string
-		want           bool
-	}{
-		{"flow enables what the deployment disabled", false, "opt-in", true},
-		{"flow disables what the deployment enabled", true, "opt-out", false},
-		{"empty override inherits the deployment setting", true, "inherit", true},
-		{"empty override inherits a disabled deployment", false, "inherit", false},
-		{"unknown route falls back to the deployment setting", true, "nope", true},
-		{"base url falls back to the deployment setting", false, "", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			policy := verification.TrustPolicy{Enabled: tc.deploymentWide}
-			if got := vcEnabledForRoute(settings, policy, tc.route); got != tc.want {
-				t.Errorf("vcEnabledForRoute(%q) = %t, want %t", tc.route, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestVcAutoAcceptForRouteHonoursFlowOverride(t *testing.T) {
 	settings := settingsWithFlows(t, []models.OnboardingFlow{
 		{Route: "auto", VcAutoAccept: "true"},
@@ -310,9 +279,6 @@ func TestPolicyFromSettingsFallsBackToDefaults(t *testing.T) {
 	}
 	// The packaged default must never trust an issuer or switch itself on.
 	def := policyFromSettings(nil)
-	if def.Enabled {
-		t.Error("credential onboarding must be off until an operator enables it")
-	}
 	for _, accepted := range def.AcceptedTypes {
 		if len(accepted.Issuers) != 0 {
 			t.Errorf("%s ships with trusted issuers; it must start empty", accepted.Type)
@@ -329,7 +295,6 @@ func TestFullSettingsHidesTrustPolicy(t *testing.T) {
 	database := newVcTestDB(t)
 
 	policy := verification.DefaultTrustPolicy()
-	policy.Enabled = true
 	policy.AcceptedTypes[0].Issuers = []verification.TrustedIssuer{{
 		DID:         "did:ishare:EU.NL.NTRNL-10000000",
 		ResolverURL: "https://issuer.internal.example/.well-known/did.json",
@@ -338,7 +303,7 @@ func TestFullSettingsHidesTrustPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode policy: %v", err)
 	}
-	if err := database.Create(&models.Settings{VcOnboarding: datatypes.JSON(encoded)}).Error; err != nil {
+	if err := database.Create(&models.Settings{VcOnboarding: datatypes.JSON(encoded), IdentityMethods: "eidas,vc"}).Error; err != nil {
 		t.Fatalf("seed settings: %v", err)
 	}
 
@@ -366,8 +331,8 @@ func TestFullSettingsHidesTrustPolicy(t *testing.T) {
 	if _, present := payload["vcOnboarding"]; present {
 		t.Error("/settings must not carry the vcOnboarding policy")
 	}
-	// The onboarding form reads this flag to decide whether to offer the option.
-	if enabled, ok := payload["vcOnboardingEnabled"].(bool); !ok || !enabled {
-		t.Errorf("vcOnboardingEnabled = %v, want true", payload["vcOnboardingEnabled"])
+	// The onboarding form reads which identity methods are offered from here.
+	if got := payload["identityMethods"]; got != "eidas,vc" {
+		t.Errorf("identityMethods = %v, want %q", got, "eidas,vc")
 	}
 }

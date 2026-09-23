@@ -6,6 +6,7 @@ import API, {
 } from "api/client";
 import { useLanguage } from "../../context/LanguageContext";
 import styles from "styles/components/VcPresentation.module.css";
+import wizard from "styles/Register.module.css";
 
 // Credential-based onboarding, applicant side.
 //
@@ -92,6 +93,8 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
 
   // Guards the poll loop against running on after unmount or reset.
   const activeSession = useRef<string | null>(null);
+  // The native file input is hidden behind a styled button, like the eIDAS upload.
+  const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => () => {
     activeSession.current = null;
   }, []);
@@ -249,7 +252,7 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
           </div>
         ))}
 
-        <button type="button" className={styles.reset} onClick={reset}>
+        <button type="button" className={`${wizard.backButton} ${styles.resetButton}`} onClick={reset}>
           {t("register.idCheck.vc.presentAgain")}
         </button>
       </div>
@@ -310,7 +313,7 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
             </div>
           ) : (
             <div className={styles.actions}>
-              <button type="button" onClick={start} disabled={starting}>
+              <button type="button" className={wizard.continueButton} onClick={start} disabled={starting}>
                 {starting
                   ? t("register.idCheck.vc.starting")
                   : t("register.idCheck.vc.start")}
@@ -328,8 +331,22 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
             spellCheck={false}
           />
           <div className={styles.actions}>
-            <input type="file" accept=".json,.jwt,.txt,application/json" onChange={onFile} />
-            <button type="button" onClick={submitDirect} disabled={submitting || !pasted.trim()}>
+            <input
+              ref={fileInput}
+              type="file"
+              className={wizard.hiddenInput}
+              accept=".json,.jwt,.txt,application/json"
+              onChange={onFile}
+            />
+            <button type="button" className={wizard.browseButton} onClick={() => fileInput.current?.click()}>
+              {t("register.idCheck.vc.chooseFile")}
+            </button>
+            <button
+              type="button"
+              className={wizard.continueButton}
+              onClick={submitDirect}
+              disabled={submitting || !pasted.trim()}
+            >
               {submitting
                 ? t("register.idCheck.vc.verifying")
                 : t("register.idCheck.vc.verify")}

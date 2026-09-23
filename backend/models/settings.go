@@ -52,6 +52,11 @@ type Settings struct {
 	ActiveRoles            string `json:"activeRoles"`
 	DefaultRole            string `json:"defaultRole"`
 	AutoAcceptProposal     string `json:"autoAcceptProposal"`
+	// IdentityMethods is the comma-separated list of identity verification
+	// methods applicants may use (see models.KnownIdentityMethods). Empty means
+	// DefaultIdentityMethods, which keeps Verifiable Credentials off until an
+	// admin turns them on. An onboarding flow may override it.
+	IdentityMethods string `json:"identityMethods"`
 	// RequireQualifiedEidasCertificate enables the optional ETSI qualified-
 	// certificate rule during eIDAS upload. Its zero value intentionally leaves
 	// that rule disabled while retaining parsing, expiry and registry trust checks.

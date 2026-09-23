@@ -128,7 +128,6 @@ func envelopePresentation(credentialJWTs ...string) []byte {
 // the fixture issuer.
 func policyTrusting(resolverURL string) TrustPolicy {
 	policy := DefaultTrustPolicy()
-	policy.Enabled = true
 	policy.StatusCheck = StatusCheckSoft
 	for i := range policy.AcceptedTypes {
 		policy.AcceptedTypes[i].Issuers = []TrustedIssuer{{
@@ -355,17 +354,6 @@ func TestVerifyRejectsUnsecuredEmbeddedCredential(t *testing.T) {
 
 	if _, err := verifier.Verify(raw, Expectation{}); err == nil {
 		t.Fatal("an unsecured embedded credential must be rejected")
-	}
-}
-
-func TestVerifyRejectsWhenDisabled(t *testing.T) {
-	issuer := newIssuerFixture(t)
-	policy := policyTrusting(issuer.resolverURL)
-	policy.Enabled = false
-
-	_, err := NewVerifier(policy).Verify(envelopePresentation(signCredential(t, issuer.key, trustedParticipantCredential())), Expectation{})
-	if err == nil || !strings.Contains(err.Error(), "not enabled") {
-		t.Fatalf("expected a disabled-feature error, got %v", err)
 	}
 }
 

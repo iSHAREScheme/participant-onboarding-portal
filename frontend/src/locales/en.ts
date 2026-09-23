@@ -259,8 +259,8 @@ const en = {
     },
     credentials: {
       title: "Credentials",
-      description: "Add your organisation's verifiable credentials to a wallet. Scan a QR code with your wallet app, or open it on this device.",
-      vcLabel: "Verifiable credential",
+      description: "Add your organisation's Verifiable Credentials (VCs) to a wallet. Scan a QR code with your wallet app, or open it on this device.",
+      vcLabel: "Verifiable Credential",
       notConfigured: "Credential issuance is not configured yet. Please contact your association.",
       empty: "No credentials are available for your party yet.",
       unavailable: "The credential issuer is temporarily unavailable. Please try again in a moment.",
@@ -278,7 +278,7 @@ const en = {
       expired: "This offer has expired — refresh to get a new one.",
       preparing: {
         title: "Preparing your credentials…",
-        message: "Your verifiable credentials are being issued. This can take a moment after admission."
+        message: "Your Verifiable Credentials are being issued. This can take a moment after admission."
       },
       failed: {
         title: "Credential issuance didn't complete",
@@ -287,7 +287,7 @@ const en = {
       request: "Request",
       requesting: "Requesting…",
       requestSectionTitle: "Available credentials",
-      requestSectionHint: "Request the verifiable credentials your organisation is entitled to. Once issued, add them to a wallet.",
+      requestSectionHint: "Request the Verifiable Credentials your organisation is entitled to. Once issued, add them to a wallet.",
       notAvailable: "Not available for your party.",
       issued: "This credential has been issued.",
       getWalletLink: "Get wallet link",
@@ -795,13 +795,15 @@ const en = {
       rejected: "Rejected"
     },
     idCheck: {
+      noMethods: "No identity verification method is available for this onboarding. Please contact the portal administrator.",
       vc: {
-        lockedNote: "Fields filled from your verified credentials are locked — they are taken from the credential itself, not from this form.",
-        intro: "Present credentials you already hold and we will fill in your application from them — no manual checks needed for what they prove.",
+        chooseFile: "Choose file",
+        lockedNote: "Fields filled from your Verifiable Credentials are locked — they come from the credential itself, not from this form.",
+        intro: "Present Verifiable Credentials (VCs) you already hold and we will fill in your application from them — no manual checks needed for what they prove.",
         accepted: "This portal accepts:",
         tabWallet: "Use your wallet",
         tabDirect: "Paste or upload",
-        start: "Present credentials",
+        start: "Present VCs",
         starting: "Preparing…",
         scanHint: "Scan this code with your wallet app and approve sharing the requested credentials.",
         waiting: "Waiting for your wallet…",
@@ -809,19 +811,19 @@ const en = {
         pastePlaceholder: "Paste a verifiable presentation (JSON or JWT)",
         verify: "Verify presentation",
         verifying: "Verifying…",
-        verifiedTitle: "Credentials verified",
+        verifiedTitle: "VCs verified",
         issuedBy: "Issued by",
         field: "Filled in",
         value: "Value",
-        stillNeedIdentity: "These credentials did not include an identity proof, so you still need an eIDAS certificate or eHerkenning to finish. Everything else has been filled in for you.",
-        presentAgain: "Present different credentials",
+        stillNeedIdentity: "These VCs did not include an identity proof, so you still need an eIDAS certificate or eHerkenning to finish. Everything else has been filled in for you.",
+        presentAgain: "Present different VCs",
         startFailed: "Could not start a credential request. Please try again.",
         pollFailed: "Lost contact while waiting for your wallet. Please try again.",
         verifyFailed: "That presentation could not be verified.",
         readFailed: "That file could not be read.",
         expired: "The credential request expired before your wallet responded.",
-        radioLabel: "with verifiable credentials",
-        radioInfo: "Present credentials you already hold, for example from another dataspace or your EUDI wallet. We verify them cryptographically and fill in your application from what they prove."
+        radioLabel: "with Verifiable Credentials (VCs)",
+        radioInfo: "Present Verifiable Credentials you already hold, for example from another dataspace or your EUDI wallet. We verify them cryptographically and fill in your application from what they prove."
       },
       title: "Identity check",
       subtitle: "For more certainty about your online identity, please identify yourself using one of the following methods.",
@@ -1335,7 +1337,7 @@ const en = {
       cancel: "Cancel",
       secretKept: "•••••••• (leave blank to keep)",
       vcIssuer: {
-        title: "Verifiable credential issuer",
+        title: "Verifiable Credential issuer",
         hint: "The external iSHARE VC issuer the participant dashboard polls for credential offers. Leave blank to disable the credentials section.",
         urlLabel: "Issuer base URL",
         urlPlaceholder: "https://issuer.example.com",
@@ -1416,9 +1418,18 @@ const en = {
         testFailed: "SMTP test failed"
       }
     },
+    identityMethods: {
+      title: "Identity verification",
+      hint: "Choose how applicants may prove who they are. Each onboarding flow can override this, so every dataspace's onboarding offers exactly the options it accepts.",
+      eidas: "eIDAS certificate",
+      eherkenning: "eHerkenning",
+      vc: "Verifiable Credentials (VCs)",
+      vcHint: "Off by default: applicants cannot present Verifiable Credentials until this is enabled and at least one issuer is trusted below.",
+      eherkenningHint: "Requires an eHerkenning identity provider, configured under Authentication. Until one exists, eHerkenning is not offered even when selected.",
+      flowLabel: "Identity verification",
+    },
     publicOnboarding: {
-      vcOnboarding: "Credential onboarding",
-      vcAutoAccept: "Auto-accept verified credentials",
+      vcAutoAccept: "Auto-accept VC-verified applications",
       title: "Public onboarding",
       hint: "Everything published is a flow in the list below - nothing is public implicitly. Anonymous visitors of unpublished routes are sent to the login screen.",
       enable: "Enable public onboarding",

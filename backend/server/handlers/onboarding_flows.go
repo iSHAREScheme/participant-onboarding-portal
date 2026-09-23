@@ -48,6 +48,9 @@ func validateFlows(flows []models.OnboardingFlow) error {
 		if err := validateFlowAuthRegistryURL(n, f.AuthRegistryUrl); err != nil {
 			return err
 		}
+		if _, err := models.ParseIdentityMethods(f.IdentityMethods); err != nil {
+			return fmt.Errorf("flow %d: %w", n, err)
+		}
 	}
 	return nil
 }
@@ -212,10 +215,10 @@ func publicFlowView(f models.OnboardingFlow, allAgreements []models.Agreement) f
 		"authRegistryId":   f.AuthRegistryId,
 		"authRegistryName": f.AuthRegistryName,
 		"authRegistryUrl":  f.AuthRegistryUrl,
-		// Whether this flow offers credential-based onboarding. Only the flag
-		// travels publicly: the trusted-issuer list and resolver URLs are
-		// operator configuration and stay admin-only.
-		"vcOnboarding":       f.VcOnboarding,
+		// The flow's identity-method override ("" = inherit the deployment
+		// choice). Only which methods are offered travels publicly; the
+		// trusted-issuer list behind VCs stays admin-only.
+		"identityMethods":    f.IdentityMethods,
 		"vcAutoAccept":       f.VcAutoAccept,
 		"defaultRole":        f.DefaultRole,
 		"skipRoles":          f.SkipRoles,

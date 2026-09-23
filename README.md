@@ -30,9 +30,22 @@ The frontend reads `NEXT_PUBLIC_*` values from `/env.js`, generated at container
 
 Note: Security headers (including CSP) are not set by the frontend app; configure them at your reverse proxy. Admin routes are controlled at runtime via `NEXT_PUBLIC_DISABLE_ADMIN_ROUTES`.
 
-## Onboarding with verifiable credentials
+## Identity verification
 
-Applicants can present credentials they already hold instead of typing their
+The identity check is the first onboarding step, before role selection and
+M2M, so everything after it builds on a verified identity. Which methods an
+applicant may use is chosen in **Settings → Onboarding → Identity
+verification**: eIDAS certificate, eHerkenning, and Verifiable Credentials
+(VCs). Each onboarding flow can override the choice, so every dataspace's
+onboarding offers exactly the identity options it accepts.
+
+The default is eIDAS + eHerkenning, which is what the portal offered before
+the setting existed. eHerkenning is only offered when an eHerkenning identity
+provider is configured. **VCs are off by default.**
+
+## Onboarding with Verifiable Credentials (VCs)
+
+Applicants can present Verifiable Credentials they already hold instead of typing their
 organisation's details and proving identity by hand. The portal verifies the
 presentation and fills in whatever it proved; anything it did not prove is
 completed the usual way — hence *partial* onboarding.
@@ -71,9 +84,10 @@ the claim-to-field mapping. Defaults ship for the iSHARE v3 credential profile
 and an EUDI legal-person profile, but **no issuer is trusted out of the box**,
 so nothing verifies until an operator names one.
 
-Two switches control how much manual work this removes, each overridable per
-onboarding flow: whether the flow offers credential onboarding at all, and
-whether a verified application skips admin review.
+Two settings control how much manual work this removes, each overridable per
+onboarding flow: whether VCs are offered at all (an identity verification
+method, see above — off by default), and whether a VC-verified application
+skips admin review.
 
 ### What it cannot do on its own
 

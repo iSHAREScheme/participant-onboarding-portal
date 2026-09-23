@@ -385,8 +385,9 @@ export interface VcAcceptedType {
   mappings: VcClaimMapping[]
 }
 
+// Trust configuration only. Whether VCs are offered at all is an identity
+// verification method (settings.identityMethods), not part of the policy.
 export interface VcTrustPolicy {
-  enabled: boolean
   statusCheck: 'required' | 'soft' | 'off'
   requireHolderBinding: boolean
   acceptedTypes: VcAcceptedType[]

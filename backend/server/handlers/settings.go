@@ -54,7 +54,7 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 			"themes":                           nil,
 			"activeTheme":                      "",
 			"requireQualifiedEidasCertificate": false,
-			"vcOnboardingEnabled":              false,
+			"identityMethods":                  models.DefaultIdentityMethods,
 		})
 	}
 
@@ -72,7 +72,9 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 	// admin-gated /settings/vc-onboarding.
 	if payload, err := settingsAsMap(settings); err == nil {
 		delete(payload, "vcOnboarding")
-		payload["vcOnboardingEnabled"] = policyFromSettings(&settings).Enabled
+		// Serve the resolved deployment choice, so callers never need to know
+		// the default: an unset value arrives as eIDAS + eHerkenning, VCs off.
+		payload["identityMethods"] = strings.Join(deploymentIdentityMethods(&settings), ",")
 		return c.JSON(payload)
 	}
 	return c.JSON(settings)
@@ -104,7 +106,7 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 			"prConfigured":                     prConfigured,
 			"requireQualifiedEidasCertificate": false,
 			"publicOnboardingEnabled":          false,
-			"vcOnboardingEnabled":              false,
+			"identityMethods":                  models.DefaultIdentityMethods,
 			"onboardingFlows":                  []fiber.Map{},
 		})
 	}
@@ -124,9 +126,9 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"activeRoles":            settings.ActiveRoles,
 		"defaultRole":            settings.DefaultRole,
 		"autoAcceptProposal":     settings.AutoAcceptProposal,
-		// Deployment-wide switch for credential-based onboarding. Only the
-		// on/off flag is public; the trust configuration behind it is not.
-		"vcOnboardingEnabled":              policyFromSettings(&settings).Enabled,
+		// Which identity verification methods the deployment offers (resolved,
+		// so an unset value arrives as the default). Flows may override it.
+		"identityMethods":                  strings.Join(deploymentIdentityMethods(&settings), ","),
 		"requireQualifiedEidasCertificate": settings.RequireQualifiedEidasCertificate,
 		// Topology flag — gates the registry-admin features in the UI.
 		"prConfigured": prConfigured,
@@ -190,6 +192,7 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		ActiveRoles                      *string         `json:"activeRoles"`
 		DefaultRole                      *string         `json:"defaultRole"`
 		AutoAcceptProposal               *string         `json:"autoAcceptProposal"`
+		IdentityMethods                  *string         `json:"identityMethods"`
 		RequireQualifiedEidasCertificate *bool           `json:"requireQualifiedEidasCertificate"`
 	}
 
@@ -294,6 +297,13 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.AutoAcceptProposal != nil {
 		settings.AutoAcceptProposal = strings.TrimSpace(*input.AutoAcceptProposal)
+	}
+	if input.IdentityMethods != nil {
+		normalized, err := normalizeIdentityMethods(*input.IdentityMethods)
+		if err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
+		settings.IdentityMethods = normalized
 	}
 	if input.RequireQualifiedEidasCertificate != nil {
 		settings.RequireQualifiedEidasCertificate = *input.RequireQualifiedEidasCertificate

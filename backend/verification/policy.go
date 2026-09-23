@@ -100,9 +100,12 @@ type AcceptedCredentialType struct {
 }
 
 // TrustPolicy is the whole VC-onboarding configuration.
+//
+// Whether VCs are offered at all is NOT part of the policy: that is decided by
+// the identity verification methods a deployment or onboarding flow enables
+// (models.IdentityMethodVC). The policy only says what counts as trustworthy
+// once they are.
 type TrustPolicy struct {
-	// Enabled gates the entire feature for the deployment.
-	Enabled bool `json:"enabled"`
 	// StatusCheck is one of StatusCheckRequired / StatusCheckSoft / StatusCheckOff.
 	StatusCheck string `json:"statusCheck"`
 	// RequireHolderBinding rejects an unsecured presentation. The published
@@ -268,10 +271,9 @@ func StringValue(value any) (string, bool) {
 // enumerates the iSHARE v3 credential types and an EUDI-wallet organisational
 // profile, with mappings wired to the real schema field names but with NO
 // trusted issuers: nothing verifies until an operator names the issuers their
-// dataspace trusts.
+// dataspace trusts, even once VCs are enabled as an identity method.
 func DefaultTrustPolicy() TrustPolicy {
 	return TrustPolicy{
-		Enabled:     false,
 		StatusCheck: StatusCheckSoft,
 		AcceptedTypes: []AcceptedCredentialType{
 			{

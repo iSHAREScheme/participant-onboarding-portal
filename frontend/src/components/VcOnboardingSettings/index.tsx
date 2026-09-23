@@ -38,7 +38,14 @@ const emptyType = (): VcAcceptedType => ({
   mappings: [],
 });
 
-const VcOnboardingSettings: React.FC = () => {
+interface Props {
+  // Whether VCs are currently enabled as an identity method. That switch lives
+  // on the Identity verification card (it is one method among several), so this
+  // card only reflects it, live, as the admin toggles it.
+  vcEnabled: boolean;
+}
+
+const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -118,24 +125,19 @@ const VcOnboardingSettings: React.FC = () => {
   if (!policy) return null;
 
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHeader}>
-        <h3 className={styles.cardTitle}>Onboarding with verifiable credentials</h3>
-      </div>
+    <section className={styles.card}>
+      <h2 className={styles.cardTitle}>Onboarding with Verifiable Credentials (VCs)</h2>
       <p className={styles.cardHint}>
-        Let applicants present credentials they already hold instead of typing their details
-        and proving identity by hand. Whatever a credential proves is filled in and treated as
-        verified; anything it does not prove still has to be completed the usual way.
+        Let applicants present Verifiable Credentials they already hold instead of typing their
+        details and proving identity by hand. Whatever a credential proves is filled in and
+        treated as verified; anything it does not prove still has to be completed the usual way.
       </p>
 
-      <label className={styles.checkboxLabel}>
-        <input
-          type="checkbox"
-          checked={policy.enabled}
-          onChange={(e) => setPolicy({ ...policy, enabled: e.target.checked })}
-        />
-        Offer credential-based onboarding
-      </label>
+      <p className={styles.helperText}>
+        {vcEnabled
+          ? "VCs are enabled under Identity verification above. Applicants can present credentials from the issuers trusted below."
+          : "VCs are currently off. Enable them under Identity verification above; you can configure trusted issuers here in the meantime, and nothing is accepted until then."}
+      </p>
 
       <label className={styles.checkboxLabel}>
         <input
@@ -164,6 +166,7 @@ const VcOnboardingSettings: React.FC = () => {
         <label htmlFor="vc-status-check">Revocation checking</label>
         <select
           id="vc-status-check"
+          className={styles.fontSelect}
           value={policy.statusCheck || "soft"}
           onChange={(e) =>
             setPolicy({ ...policy, statusCheck: e.target.value as VcTrustPolicy["statusCheck"] })
@@ -214,11 +217,11 @@ const VcOnboardingSettings: React.FC = () => {
       </button>
 
       <div className={styles.editorActions}>
-        <button type="button" onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save credential settings"}
+        <button type="button" className={styles.saveButton} onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save VC settings"}
         </button>
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -258,7 +261,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
           <button type="button" className={styles.idpActionBtn} onClick={() => setOpen(!open)}>
             {open ? "Close" : "Edit"}
           </button>
-          <button type="button" className={styles.idpActionDanger} onClick={onRemove}>
+          <button type="button" className={`${styles.idpActionBtn} ${styles.idpActionDanger}`} onClick={onRemove}>
             Remove
           </button>
         </div>
@@ -270,6 +273,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             <div className={styles.formGroup}>
               <label>Credential type</label>
               <input
+                className={styles.input}
                 value={accepted.type}
                 placeholder="TrustedParticipantCredential"
                 onChange={(e) => onChange({ type: e.target.value })}
@@ -278,6 +282,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             <div className={styles.formGroup}>
               <label>Display name</label>
               <input
+                className={styles.input}
                 value={accepted.label ?? ""}
                 placeholder="iSHARE Trusted Participant"
                 onChange={(e) => onChange({ label: e.target.value })}
@@ -294,6 +299,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
           {(accepted.issuers ?? []).map((issuer, i) => (
             <div className={styles.configRow} key={i}>
               <input
+                className={styles.input}
                 value={issuer.did}
                 placeholder="did:ishare:EU.NL.NTRNL-10000000"
                 onChange={(e) =>
@@ -305,6 +311,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
                 }
               />
               <input
+                className={styles.input}
                 value={issuer.name ?? ""}
                 placeholder="Name shown to applicants"
                 onChange={(e) =>
@@ -316,6 +323,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
                 }
               />
               <input
+                className={styles.input}
                 value={issuer.resolverUrl ?? ""}
                 placeholder="https://issuer.example.com/.well-known/did.json"
                 onChange={(e) =>
@@ -328,7 +336,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
               />
               <button
                 type="button"
-                className={styles.idpActionDanger}
+                className={`${styles.idpActionBtn} ${styles.idpActionDanger}`}
                 onClick={() =>
                   onChange({ issuers: accepted.issuers.filter((_, j) => j !== i) })
                 }
@@ -358,6 +366,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
           {(accepted.mappings ?? []).map((mapping, i) => (
             <div className={styles.configRow} key={i}>
               <input
+                className={styles.input}
                 value={mapping.path}
                 placeholder="credentialSubject.name"
                 onChange={(e) =>
@@ -369,6 +378,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
                 }
               />
               <select
+                className={styles.fontSelect}
                 value={mapping.field}
                 onChange={(e) =>
                   onChange({
@@ -387,7 +397,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
               </select>
               <button
                 type="button"
-                className={styles.idpActionDanger}
+                className={`${styles.idpActionBtn} ${styles.idpActionDanger}`}
                 onClick={() =>
                   onChange({ mappings: accepted.mappings.filter((_, j) => j !== i) })
                 }
