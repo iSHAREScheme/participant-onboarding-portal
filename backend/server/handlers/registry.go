@@ -205,28 +205,7 @@ func firstString(m map[string]interface{}, keys ...string) string {
 // whose rows live under "data" (older builds used "dataspaces").
 func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 	out := []fiber.Map{}
-	var arr []interface{}
-
-	container := claims["dataspacesInfo"]
-	if container == nil {
-		container = claims["dataspace_info"]
-	}
-	switch v := container.(type) {
-	case []interface{}:
-		arr = v
-	case map[string]interface{}:
-		if inner, ok := v["data"].([]interface{}); ok {
-			arr = inner
-		} else if inner, ok := v["dataspaces"].([]interface{}); ok {
-			arr = inner
-		}
-	}
-	if arr == nil {
-		if v, ok := claims["dataspaces"].([]interface{}); ok {
-			arr = v
-		}
-	}
-	for _, item := range arr {
+	for _, item := range dataspaceRows(claims) {
 		m, ok := item.(map[string]interface{})
 		if !ok {
 			continue
@@ -244,6 +223,31 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 		})
 	}
 	return out
+}
+
+// dataspaceRows locates the dataspace array in a decoded dataspaces token: v3
+// nests it under dataspacesInfo.data, legacy 2.x under dataspace_info (as a
+// list or a {data|dataspaces} object), and some builds put it at the top level.
+func dataspaceRows(claims map[string]interface{}) []interface{} {
+	container := claims["dataspacesInfo"]
+	if container == nil {
+		container = claims["dataspace_info"]
+	}
+	switch v := container.(type) {
+	case []interface{}:
+		return v
+	case map[string]interface{}:
+		if inner, ok := v["data"].([]interface{}); ok {
+			return inner
+		}
+		if inner, ok := v["dataspaces"].([]interface{}); ok {
+			return inner
+		}
+	}
+	if v, ok := claims["dataspaces"].([]interface{}); ok {
+		return v
+	}
+	return nil
 }
 
 // extractCatalogueEntries normalises the agreements or roles a dataspace (or

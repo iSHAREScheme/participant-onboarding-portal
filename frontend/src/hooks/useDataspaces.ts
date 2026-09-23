@@ -27,7 +27,12 @@ export const parseCatalogue = (raw: unknown): CatalogueEntry[] =>
           id: String(entry?.id ?? "").trim(),
           title: String(entry?.title ?? "").trim(),
           ...(Array.isArray(entry?.agreements)
-            ? { agreements: entry.agreements.map((a: unknown) => String(a ?? "").trim()).filter(Boolean) }
+            ? {
+                agreements: entry.agreements
+                  .filter((a: unknown): a is string => typeof a === "string")
+                  .map((a: string) => a.trim())
+                  .filter(Boolean),
+              }
             : {}),
         }))
         .filter((entry: CatalogueEntry) => entry.id !== "")

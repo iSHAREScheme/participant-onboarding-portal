@@ -408,24 +408,31 @@ const AddClaimModal = ({
     </select>
   );
 
-  // The catalogue control for a dependent field, or null when the field should
-  // stay free text (catalogue unavailable, or the parent defines no entries).
+  // A dependent field scoped to the chosen dataspace: null keeps it free text
+  // (registry list unavailable, or the dataspace defines no entries).
+  const dataspaceCatalogueControl = (f: FieldSpec) => {
+    if (!dataspacesLoading && !dataspacesAvailable) return null;
+    const dataspaceId = form.dataspaceId ?? "";
+    if (!dataspaceId) return pickParentFirst(e("pickDataspaceFirst"));
+    const entries =
+      f.kind === "dataspaceAgreement" ? dataspaceAgreementsFor(dataspaceId) : dataspaceRolesFor(dataspaceId);
+    if (!dataspacesLoading && entries.length === 0) return null;
+    return catalogueSelect(f, entries, dataspacesLoading);
+  };
+
+  // agreementType of a frameworkAgreement, scoped to the entered framework.
+  const frameworkCatalogueControl = (f: FieldSpec) => {
+    const frameworkId = form.frameworkId ?? "";
+    if (!frameworkId) return pickParentFirst(e("pickFrameworkFirst"));
+    const entries = frameworkAgreementsFor(frameworkId);
+    if (!frameworksLoading && entries.length === 0) return null;
+    return catalogueSelect(f, entries, frameworksLoading);
+  };
+
+  // The catalogue control for a dependent field, or null for a plain field.
   const catalogueControl = (f: FieldSpec) => {
-    if (f.kind === "dataspaceAgreement" || f.kind === "dataspaceRole") {
-      if (!dataspacesLoading && !dataspacesAvailable) return null;
-      const dataspaceId = form.dataspaceId ?? "";
-      if (!dataspaceId) return pickParentFirst(e("pickDataspaceFirst"));
-      const entries = f.kind === "dataspaceAgreement" ? dataspaceAgreementsFor(dataspaceId) : dataspaceRolesFor(dataspaceId);
-      if (!dataspacesLoading && entries.length === 0) return null;
-      return catalogueSelect(f, entries, dataspacesLoading);
-    }
-    if (f.kind === "frameworkAgreement") {
-      const frameworkId = form.frameworkId ?? "";
-      if (!frameworkId) return pickParentFirst(e("pickFrameworkFirst"));
-      const entries = frameworkAgreementsFor(frameworkId);
-      if (!frameworksLoading && entries.length === 0) return null;
-      return catalogueSelect(f, entries, frameworksLoading);
-    }
+    if (f.kind === "dataspaceAgreement" || f.kind === "dataspaceRole") return dataspaceCatalogueControl(f);
+    if (f.kind === "frameworkAgreement") return frameworkCatalogueControl(f);
     return null;
   };
 
