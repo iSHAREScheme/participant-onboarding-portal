@@ -1,11 +1,37 @@
 import { useEffect, useState } from "react";
 import API from "api/client";
 
+/** One agreement or role a dataspace or framework defines. */
+export interface CatalogueEntry {
+  id: string;
+  title: string;
+  /** For a role: the agreement ids it requires. */
+  agreements?: string[];
+}
+
 /** A dataspace as registered in the Participant Registry. */
 export interface Dataspace {
   id: string;
   title: string;
+  /** The agreements this dataspace defines (agreementType vocabulary). */
+  agreements?: CatalogueEntry[];
+  /** The roles this dataspace defines (roleId vocabulary). */
+  roles?: CatalogueEntry[];
 }
+
+/** Normalise a registry catalogue list ({id, title, agreements?}[]) defensively. */
+export const parseCatalogue = (raw: unknown): CatalogueEntry[] =>
+  Array.isArray(raw)
+    ? raw
+        .map((entry: any) => ({
+          id: String(entry?.id ?? "").trim(),
+          title: String(entry?.title ?? "").trim(),
+          ...(Array.isArray(entry?.agreements)
+            ? { agreements: entry.agreements.map((a: unknown) => String(a ?? "").trim()).filter(Boolean) }
+            : {}),
+        }))
+        .filter((entry: CatalogueEntry) => entry.id !== "")
+    : [];
 
 /** A ready-made option for a <select> / <FormSelect>. */
 export interface DataspaceOption {
@@ -50,6 +76,8 @@ export const useDataspaces = (enabled = true) => {
             .map((d: any) => ({
               id: String(d?.id ?? "").trim(),
               title: String(d?.title ?? "").trim(),
+              agreements: parseCatalogue(d?.agreements),
+              roles: parseCatalogue(d?.roles),
             }))
             .filter((d: Dataspace) => d.id !== "")
         );
@@ -93,12 +121,22 @@ export const useDataspaces = (enabled = true) => {
   const titleFor = (id: string): string =>
     dataspaces.find((ds) => ds.id === id)?.title ?? "";
 
+  /** The agreements a dataspace defines; empty when unknown or none registered. */
+  const agreementsFor = (id: string): CatalogueEntry[] =>
+    dataspaces.find((ds) => ds.id === id)?.agreements ?? [];
+
+  /** The roles a dataspace defines; empty when unknown or none registered. */
+  const rolesFor = (id: string): CatalogueEntry[] =>
+    dataspaces.find((ds) => ds.id === id)?.roles ?? [];
+
   return {
     dataspaces,
     options,
     optionsWith,
     labelFor,
     titleFor,
+    agreementsFor,
+    rolesFor,
     loading,
     available: dataspaces.length > 0,
   };

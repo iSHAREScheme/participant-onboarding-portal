@@ -236,7 +236,48 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 			continue
 		}
 		title := firstString(m, "title", "dataspace_title")
-		out = append(out, fiber.Map{"id": id, "title": title})
+		out = append(out, fiber.Map{
+			"id":         id,
+			"title":      title,
+			"agreements": extractCatalogueEntries(m["agreements"]),
+			"roles":      extractCatalogueEntries(m["roles"]),
+		})
+	}
+	return out
+}
+
+// extractCatalogueEntries normalises the agreements or roles a dataspace (or
+// framework) defines to {id, title[, agreements]} rows, so the claim forms can
+// offer them as choices for agreementType / roleId. Legacy 2.x satellites do not
+// publish them; the result is then an empty list, never nil, so the frontend
+// sees one shape on every satellite version.
+func extractCatalogueEntries(raw interface{}) []fiber.Map {
+	out := []fiber.Map{}
+	entries, ok := raw.([]interface{})
+	if !ok {
+		return out
+	}
+	for _, entry := range entries {
+		m, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := firstString(m, "id")
+		if id == "" {
+			continue
+		}
+		row := fiber.Map{"id": id, "title": firstString(m, "title")}
+		// A role may list the agreement ids it requires.
+		if required, ok := m["agreements"].([]interface{}); ok {
+			ids := make([]string, 0, len(required))
+			for _, v := range required {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					ids = append(ids, strings.TrimSpace(s))
+				}
+			}
+			row["agreements"] = ids
+		}
+		out = append(out, row)
 	}
 	return out
 }
@@ -299,6 +340,10 @@ func extractFrameworks(claims map[string]interface{}) ([]fiber.Map, fiber.Map) {
 				row[key] = val
 			}
 		}
+		// The framework's agreement and role catalogue, in the same shape the
+		// dataspace rows use, so claim forms can offer them for frameworkAgreement.
+		row["agreements"] = extractCatalogueEntries(m["agreements"])
+		row["roles"] = extractCatalogueEntries(m["roles"])
 		out = append(out, row)
 	}
 	return out, pagination
