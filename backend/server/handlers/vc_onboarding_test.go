@@ -3,8 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
 
 	"gorm.io/datatypes"
 	"gorm.io/driver/sqlite"
@@ -312,5 +317,57 @@ func TestPolicyFromSettingsFallsBackToDefaults(t *testing.T) {
 		if len(accepted.Issuers) != 0 {
 			t.Errorf("%s ships with trusted issuers; it must start empty", accepted.Type)
 		}
+	}
+}
+
+// TestFullSettingsHidesTrustPolicy guards a real leak: /settings is
+// authenticated but NOT admin-gated, so any signed-in applicant can read it.
+// The credential trust policy (issuer DIDs, key-resolution URLs) is operator
+// configuration and must not travel there — only the on/off flag the
+// onboarding form needs.
+func TestFullSettingsHidesTrustPolicy(t *testing.T) {
+	database := newVcTestDB(t)
+
+	policy := verification.DefaultTrustPolicy()
+	policy.Enabled = true
+	policy.AcceptedTypes[0].Issuers = []verification.TrustedIssuer{{
+		DID:         "did:ishare:EU.NL.NTRNL-10000000",
+		ResolverURL: "https://issuer.internal.example/.well-known/did.json",
+	}}
+	encoded, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatalf("encode policy: %v", err)
+	}
+	if err := database.Create(&models.Settings{VcOnboarding: datatypes.JSON(encoded)}).Error; err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	app := fiber.New()
+	handler := NewHandlerSettings(&s.Server{DB: database}, &config.Config{})
+	app.Get("/settings", handler.GetSettings)
+
+	response, err := app.Test(httptest.NewRequest("GET", "/settings", nil))
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	if strings.Contains(string(body), "resolverUrl") || strings.Contains(string(body), "issuer.internal.example") {
+		t.Errorf("/settings leaked the credential trust policy: %s", body)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if _, present := payload["vcOnboarding"]; present {
+		t.Error("/settings must not carry the vcOnboarding policy")
+	}
+	// The onboarding form reads this flag to decide whether to offer the option.
+	if enabled, ok := payload["vcOnboardingEnabled"].(bool); !ok || !enabled {
+		t.Errorf("vcOnboardingEnabled = %v, want true", payload["vcOnboardingEnabled"])
 	}
 }

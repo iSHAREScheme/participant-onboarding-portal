@@ -54,6 +54,7 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 			"themes":                           nil,
 			"activeTheme":                      "",
 			"requireQualifiedEidasCertificate": false,
+			"vcOnboardingEnabled":              false,
 		})
 	}
 
@@ -64,6 +65,16 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 		settings.Agreements = datatypes.JSON(redacted)
 	}
 
+	// The credential-onboarding trust policy (issuer DIDs, key-resolution URLs,
+	// claim mappings) is admin-only configuration, and this endpoint is
+	// authenticated but NOT admin-gated. Replace it with the single boolean the
+	// onboarding form actually needs; the full policy is served only by the
+	// admin-gated /settings/vc-onboarding.
+	if payload, err := settingsAsMap(settings); err == nil {
+		delete(payload, "vcOnboarding")
+		payload["vcOnboardingEnabled"] = policyFromSettings(&settings).Enabled
+		return c.JSON(payload)
+	}
 	return c.JSON(settings)
 }
 
@@ -528,4 +539,18 @@ func (h *HandlerSettings) GetFavicon(c *fiber.Ctx) error {
 	}
 
 	return c.SendFile(settings.FaviconPath)
+}
+
+// settingsAsMap renders the settings row as a generic map so a handler can drop
+// or add individual keys before serving it.
+func settingsAsMap(settings models.Settings) (map[string]interface{}, error) {
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
