@@ -273,15 +273,21 @@ func extractCatalogueEntries(raw interface{}) []fiber.Map {
 		row := fiber.Map{"id": id, "title": firstString(m, "title")}
 		// A role may list the agreement ids it requires.
 		if required, ok := m["agreements"].([]interface{}); ok {
-			ids := make([]string, 0, len(required))
-			for _, v := range required {
-				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
-					ids = append(ids, strings.TrimSpace(s))
-				}
-			}
-			row["agreements"] = ids
+			row["agreements"] = nonEmptyStrings(required)
 		}
 		out = append(out, row)
+	}
+	return out
+}
+
+// nonEmptyStrings keeps the trimmed, non-empty string members of a decoded
+// JSON array and drops everything else.
+func nonEmptyStrings(values []interface{}) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, strings.TrimSpace(s))
+		}
 	}
 	return out
 }
