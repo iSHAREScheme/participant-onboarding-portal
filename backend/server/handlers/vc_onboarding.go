@@ -21,6 +21,12 @@ import (
 	"gorm.io/datatypes"
 )
 
+// User-facing errors of the credential-onboarding endpoints.
+const (
+	errPresentationSessionStart = "Could not start a presentation session"
+	errRecordVerification       = "Could not record the verification"
+)
+
 // Credential-based onboarding: the applicant presents credentials they already
 // hold, the portal verifies them, and the onboarding form is pre-filled from
 // what was proven rather than from what was typed.
@@ -155,15 +161,15 @@ func (h *HandlerVcOnboarding) CreateSession(c *fiber.Ctx) error {
 
 	id, err := randomToken()
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not start a presentation session")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errPresentationSessionStart)
 	}
 	nonce, err := randomToken()
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not start a presentation session")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errPresentationSessionStart)
 	}
 	state, err := randomToken()
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not start a presentation session")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errPresentationSessionStart)
 	}
 
 	now := time.Now()
@@ -179,7 +185,7 @@ func (h *HandlerVcOnboarding) CreateSession(c *fiber.Ctx) error {
 		ExpiresAt:        now.Add(vcSessionTTL),
 	}
 	if err := h.Server.DB.Create(&session).Error; err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not start a presentation session")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errPresentationSessionStart)
 	}
 	h.pruneExpiredSessions()
 
@@ -370,11 +376,11 @@ func (h *HandlerVcOnboarding) VerifyDirect(c *fiber.Ctx) error {
 
 	id, err := randomToken()
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not record the verification")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errRecordVerification)
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not record the verification")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errRecordVerification)
 	}
 	now := time.Now()
 	session := models.VcPresentationSession{
@@ -389,7 +395,7 @@ func (h *HandlerVcOnboarding) VerifyDirect(c *fiber.Ctx) error {
 		VerifiedAt:       &now,
 	}
 	if err := h.Server.DB.Create(&session).Error; err != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not record the verification")
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, errRecordVerification)
 	}
 	h.pruneExpiredSessions()
 

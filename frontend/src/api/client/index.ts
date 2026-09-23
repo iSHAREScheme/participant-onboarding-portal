@@ -370,11 +370,15 @@ export interface VcTrustedIssuer {
   did: string
   name?: string
   resolverUrl?: string
+  // Client-only stable row identity for the settings editor; stripped before save.
+  clientKey?: string
 }
 
 export interface VcClaimMapping {
   path: string
   field: string
+  // Client-only stable row identity for the settings editor; stripped before save.
+  clientKey?: string
 }
 
 export interface VcAcceptedType {

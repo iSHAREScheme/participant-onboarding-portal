@@ -344,26 +344,32 @@ func (v *Verifier) applyMappings(result *Result) {
 			continue
 		}
 		for _, mapping := range accepted.Mappings {
-			if !MappableFields[mapping.Field] {
-				continue
-			}
-			if _, taken := result.Fields[mapping.Field]; taken {
-				continue
-			}
-			raw, ok := ExtractPath(credential.Claims, mapping.Path)
-			if !ok {
-				continue
-			}
-			value, ok := StringValue(raw)
-			if !ok {
-				continue
-			}
-			result.Fields[mapping.Field] = value
-			result.FieldSources[mapping.Field] = credential.Type
-			if IdentityFields[mapping.Field] {
-				result.IdentitySatisfied = true
-			}
+			applyMapping(result, credential, mapping)
 		}
+	}
+}
+
+// applyMapping writes one mapped claim onto the result unless the field is not
+// mappable, already filled by an earlier credential, or absent from this one.
+func applyMapping(result *Result, credential VerifiedCredential, mapping ClaimMapping) {
+	if !MappableFields[mapping.Field] {
+		return
+	}
+	if _, taken := result.Fields[mapping.Field]; taken {
+		return
+	}
+	raw, ok := ExtractPath(credential.Claims, mapping.Path)
+	if !ok {
+		return
+	}
+	value, ok := StringValue(raw)
+	if !ok {
+		return
+	}
+	result.Fields[mapping.Field] = value
+	result.FieldSources[mapping.Field] = credential.Type
+	if IdentityFields[mapping.Field] {
+		result.IdentitySatisfied = true
 	}
 }
 

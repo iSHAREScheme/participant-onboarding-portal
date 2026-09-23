@@ -178,10 +178,10 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
   const onFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPasted(String(reader.result ?? ""));
-    reader.onerror = () => setError(t("register.idCheck.vc.readFailed"));
-    reader.readAsText(file);
+    file
+      .text()
+      .then((text) => setPasted(text))
+      .catch(() => setError(t("register.idCheck.vc.readFailed")));
     // Allow re-selecting the same file after a failed attempt.
     event.target.value = "";
   }, [t]);
@@ -196,7 +196,7 @@ const VcPresentation: React.FC<Props> = ({ flowRoute, value, onVerified, onClear
   // ---- Verified state ------------------------------------------------------
   if (value) {
     const { result } = value;
-    const filled = Object.keys(result.fields ?? {}).sort();
+    const filled = Object.keys(result.fields ?? {}).sort((a, b) => a.localeCompare(b));
     return (
       <div className={styles.verified}>
         <div className={styles.verifiedHead}>

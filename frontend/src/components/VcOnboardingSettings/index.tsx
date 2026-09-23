@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import API, {
   type VcAcceptedType,
   type VcTrustPolicy,
@@ -38,6 +38,33 @@ const emptyType = (): VcAcceptedType => ({
   mappings: [],
 });
 
+// Stable identity for editor rows (issuers, mappings) that have no natural key:
+// their content is what the admin edits, so it cannot serve as a React key.
+let clientKeyCounter = 0;
+const newClientKey = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `row-${Date.now()}-${++clientKeyCounter}`;
+
+const withClientKeys = (policy: VcTrustPolicy): VcTrustPolicy => ({
+  ...policy,
+  acceptedTypes: (policy.acceptedTypes ?? []).map((accepted) => ({
+    ...accepted,
+    issuers: (accepted.issuers ?? []).map((issuer) => ({ ...issuer, clientKey: issuer.clientKey ?? newClientKey() })),
+    mappings: (accepted.mappings ?? []).map((mapping) => ({ ...mapping, clientKey: mapping.clientKey ?? newClientKey() })),
+  })),
+});
+
+const stripClientKeys = (policy: VcTrustPolicy): VcTrustPolicy => ({
+  ...policy,
+  acceptedTypes: (policy.acceptedTypes ?? []).map((accepted) => ({
+    ...accepted,
+    issuers: (accepted.issuers ?? []).map(({ clientKey: _key, ...issuer }) => issuer),
+    mappings: (accepted.mappings ?? []).map(({ clientKey: _key, ...mapping }) => mapping),
+  })),
+});
+
+const pluralize = (count: number, singular: string, plural: string): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
 interface Props {
   // Whether VCs are currently enabled as an identity method. That switch lives
   // on the Identity verification card (it is one method among several), so this
@@ -63,7 +90,7 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
   const load = useCallback(async () => {
     try {
       const { data } = await new API().fetchVcPolicy();
-      setPolicy(data.policy);
+      setPolicy(withClientKeys(data.policy));
       setAutoAccept(data.autoAcceptVerified);
       setFields(data.mappableFields ?? []);
       setVerifierBaseUrl(data.verifierBaseUrl ?? "");
@@ -83,7 +110,7 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
     if (!policy) return;
     setSaving(true);
     try {
-      await new API().updateVcPolicy(policy, autoAccept);
+      await new API().updateVcPolicy(stripClientKeys(policy), autoAccept);
       toast.success("Credential onboarding configuration saved");
     } catch (err) {
       const detail = (err as { response?: { data?: { message?: string; error?: string } } })
@@ -145,7 +172,7 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
           checked={autoAccept}
           onChange={(e) => setAutoAccept(e.target.checked)}
         />
-        Skip admin review for applications backed by a verified presentation
+        <span>Skip admin review for applications backed by a verified presentation</span>
       </label>
 
       <label className={styles.checkboxLabel}>
@@ -154,7 +181,7 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
           checked={policy.requireHolderBinding}
           onChange={(e) => setPolicy({ ...policy, requireHolderBinding: e.target.checked })}
         />
-        Require the wallet to sign the presentation itself (holder binding)
+        <span>Require the wallet to sign the presentation itself (holder binding)</span>
       </label>
       <p className={styles.helperText}>
         The published iSHARE example presentations are unsigned — the credentials inside carry
@@ -236,7 +263,12 @@ interface TypeEditorProps {
 
 const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onChange, onRemove }) => {
   const [open, setOpen] = useState(false);
+  const fieldId = useId();
   const issuerCount = accepted.issuers?.length ?? 0;
+  const mappingCount = accepted.mappings?.length ?? 0;
+  const issuerSummary =
+    issuerCount === 0 ? "no trusted issuer — not accepted" : pluralize(issuerCount, "trusted issuer", "trusted issuers");
+  const mappingSummary = pluralize(mappingCount, "mapped field", "mapped fields");
 
   return (
     <div className={styles.idpEditor}>
@@ -250,12 +282,9 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
           <span className={styles.idpName}>{accepted.label || accepted.type || "New type"}</span>
         </label>
         <span className={styles.idpMeta}>
-          {issuerCount === 0
-            ? "no trusted issuer — not accepted"
-            : `${issuerCount} trusted issuer${issuerCount === 1 ? "" : "s"}`}
+          {issuerSummary}
           {" · "}
-          {accepted.mappings?.length ?? 0} mapped field
-          {(accepted.mappings?.length ?? 0) === 1 ? "" : "s"}
+          {mappingSummary}
         </span>
         <div className={styles.idpActions}>
           <button type="button" className={styles.idpActionBtn} onClick={() => setOpen(!open)}>
@@ -271,8 +300,9 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
         <div>
           <div className={styles.fieldRow}>
             <div className={styles.formGroup}>
-              <label>Credential type</label>
+              <label htmlFor={`${fieldId}-type`}>Credential type</label>
               <input
+                id={`${fieldId}-type`}
                 className={styles.input}
                 value={accepted.type}
                 placeholder="TrustedParticipantCredential"
@@ -280,8 +310,9 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
               />
             </div>
             <div className={styles.formGroup}>
-              <label>Display name</label>
+              <label htmlFor={`${fieldId}-label`}>Display name</label>
               <input
+                id={`${fieldId}-label`}
                 className={styles.input}
                 value={accepted.label ?? ""}
                 placeholder="iSHARE Trusted Participant"
@@ -297,7 +328,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             URL of its DID document or JWKS.
           </p>
           {(accepted.issuers ?? []).map((issuer, i) => (
-            <div className={styles.configRow} key={i}>
+            <div className={styles.configRow} key={issuer.clientKey}>
               <input
                 className={styles.input}
                 value={issuer.did}
@@ -349,7 +380,9 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             type="button"
             className={styles.addButton}
             onClick={() =>
-              onChange({ issuers: [...(accepted.issuers ?? []), { did: "", name: "", resolverUrl: "" }] })
+              onChange({
+                issuers: [...(accepted.issuers ?? []), { did: "", name: "", resolverUrl: "", clientKey: newClientKey() }],
+              })
             }
           >
             Add issuer
@@ -364,7 +397,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             supply the identity proof, so the applicant skips the certificate step entirely.
           </p>
           {(accepted.mappings ?? []).map((mapping, i) => (
-            <div className={styles.configRow} key={i}>
+            <div className={styles.configRow} key={mapping.clientKey}>
               <input
                 className={styles.input}
                 value={mapping.path}
@@ -410,7 +443,7 @@ const AcceptedTypeEditor: React.FC<TypeEditorProps> = ({ accepted, fields, onCha
             type="button"
             className={styles.addButton}
             onClick={() =>
-              onChange({ mappings: [...(accepted.mappings ?? []), { path: "", field: "" }] })
+              onChange({ mappings: [...(accepted.mappings ?? []), { path: "", field: "", clientKey: newClientKey() }] })
             }
           >
             Add mapping

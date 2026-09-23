@@ -44,6 +44,12 @@ const (
 	FieldContactPhone = "account.phone"
 )
 
+// Credential paths shared by the default mappings of the iSHARE v3 profile.
+const (
+	pathCredentialSubjectID   = "credentialSubject.id"
+	pathCredentialSubjectName = "credentialSubject.name"
+)
+
 // MappableFields is the closed set of targets a ClaimMapping may write to.
 var MappableFields = map[string]bool{
 	FieldCompanyName: true, FieldKvkNumber: true, FieldPartyID: true,
@@ -151,10 +157,8 @@ func (a *AcceptedCredentialType) IssuerEntry(did string) *TrustedIssuer {
 
 // Validate reports configuration errors an operator should see at save time.
 func (p *TrustPolicy) Validate() error {
-	switch strings.TrimSpace(p.StatusCheck) {
-	case "", StatusCheckRequired, StatusCheckSoft, StatusCheckOff:
-	default:
-		return fmt.Errorf("statusCheck must be one of %q, %q or %q", StatusCheckRequired, StatusCheckSoft, StatusCheckOff)
+	if err := validateStatusCheck(p.StatusCheck); err != nil {
+		return err
 	}
 	seen := map[string]bool{}
 	for _, accepted := range p.AcceptedTypes {
@@ -166,26 +170,58 @@ func (p *TrustPolicy) Validate() error {
 			return fmt.Errorf("credential type %q is configured twice", name)
 		}
 		seen[name] = true
-		for _, issuer := range accepted.Issuers {
-			if strings.TrimSpace(issuer.DID) == "" {
-				return fmt.Errorf("%s: an issuer entry is missing its DID", name)
-			}
-			if url := strings.TrimSpace(issuer.ResolverURL); url != "" &&
-				!strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-				return fmt.Errorf("%s: resolver URL for %q must be http(s)", name, issuer.DID)
-			}
-			if strings.TrimSpace(issuer.ResolverURL) == "" && !strings.HasPrefix(issuer.DID, "did:web:") && issuer.DID != "*" {
-				return fmt.Errorf("%s: issuer %q needs a resolver URL (only did:web resolves without one)", name, issuer.DID)
-			}
+		if err := accepted.validate(name); err != nil {
+			return err
 		}
-		for _, mapping := range accepted.Mappings {
-			if strings.TrimSpace(mapping.Path) == "" {
-				return fmt.Errorf("%s: a mapping is missing its credential path", name)
-			}
-			if !MappableFields[mapping.Field] {
-				return fmt.Errorf("%s: %q is not an onboarding field that can be pre-filled", name, mapping.Field)
-			}
+	}
+	return nil
+}
+
+func validateStatusCheck(value string) error {
+	switch strings.TrimSpace(value) {
+	case "", StatusCheckRequired, StatusCheckSoft, StatusCheckOff:
+		return nil
+	default:
+		return fmt.Errorf("statusCheck must be one of %q, %q or %q", StatusCheckRequired, StatusCheckSoft, StatusCheckOff)
+	}
+}
+
+// validate checks one accepted type's issuers and mappings; name is the trimmed
+// type used to attribute the error.
+func (a *AcceptedCredentialType) validate(name string) error {
+	for _, issuer := range a.Issuers {
+		if err := issuer.validate(name); err != nil {
+			return err
 		}
+	}
+	for _, mapping := range a.Mappings {
+		if err := mapping.validate(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (i *TrustedIssuer) validate(name string) error {
+	if strings.TrimSpace(i.DID) == "" {
+		return fmt.Errorf("%s: an issuer entry is missing its DID", name)
+	}
+	resolverURL := strings.TrimSpace(i.ResolverURL)
+	if resolverURL != "" && !isHTTPURL(resolverURL) {
+		return fmt.Errorf("%s: resolver URL for %q must be http(s)", name, i.DID)
+	}
+	if resolverURL == "" && !strings.HasPrefix(i.DID, "did:web:") && i.DID != "*" {
+		return fmt.Errorf("%s: issuer %q needs a resolver URL (only did:web resolves without one)", name, i.DID)
+	}
+	return nil
+}
+
+func (m *ClaimMapping) validate(name string) error {
+	if strings.TrimSpace(m.Path) == "" {
+		return fmt.Errorf("%s: a mapping is missing its credential path", name)
+	}
+	if !MappableFields[m.Field] {
+		return fmt.Errorf("%s: %q is not an onboarding field that can be pre-filled", name, m.Field)
 	}
 	return nil
 }
@@ -199,23 +235,39 @@ func ExtractPath(document any, path string) (any, bool) {
 			return nil, false
 		}
 		name, indices := splitIndices(segment)
-		if name != "" {
-			object, ok := current.(map[string]any)
-			if !ok {
-				return nil, false
-			}
-			current, ok = object[name]
-			if !ok {
-				return nil, false
-			}
+		var ok bool
+		if current, ok = descendField(current, name); !ok {
+			return nil, false
 		}
-		for _, index := range indices {
-			list, ok := current.([]any)
-			if !ok || index < 0 || index >= len(list) {
-				return nil, false
-			}
-			current = list[index]
+		if current, ok = descendIndices(current, indices); !ok {
+			return nil, false
 		}
+	}
+	return current, true
+}
+
+// descendField steps into an object member; an empty name is a pure index
+// segment ("[0]") and leaves the value untouched.
+func descendField(current any, name string) (any, bool) {
+	if name == "" {
+		return current, true
+	}
+	object, ok := current.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	value, ok := object[name]
+	return value, ok
+}
+
+// descendIndices steps through consecutive array indices ("[0][1]").
+func descendIndices(current any, indices []int) (any, bool) {
+	for _, index := range indices {
+		list, ok := current.([]any)
+		if !ok || index < 0 || index >= len(list) {
+			return nil, false
+		}
+		current = list[index]
 	}
 	return current, true
 }
@@ -281,9 +333,9 @@ func DefaultTrustPolicy() TrustPolicy {
 				Label:   "iSHARE Trusted Participant",
 				Enabled: true,
 				Mappings: []ClaimMapping{
-					{Path: "credentialSubject.id", Field: FieldPartyID},
-					{Path: "credentialSubject.name", Field: FieldPartyName},
-					{Path: "credentialSubject.name", Field: FieldCompanyName},
+					{Path: pathCredentialSubjectID, Field: FieldPartyID},
+					{Path: pathCredentialSubjectName, Field: FieldPartyName},
+					{Path: pathCredentialSubjectName, Field: FieldCompanyName},
 					{Path: "credentialSubject.frameworks[0].capabilityUrl", Field: FieldCapabilitiesURL},
 					{Path: "credentialSubject.frameworks[0].additionalInfo.website", Field: FieldWebsite},
 					{Path: "credentialSubject.frameworks[0].additionalInfo.companyEmail", Field: FieldContactEmail},
@@ -301,9 +353,9 @@ func DefaultTrustPolicy() TrustPolicy {
 				Label:   "iSHARE Party Identifier",
 				Enabled: true,
 				Mappings: []ClaimMapping{
-					{Path: "credentialSubject.id", Field: FieldPartyID},
-					{Path: "credentialSubject.name", Field: FieldPartyName},
-					{Path: "credentialSubject.name", Field: FieldCompanyName},
+					{Path: pathCredentialSubjectID, Field: FieldPartyID},
+					{Path: pathCredentialSubjectName, Field: FieldPartyName},
+					{Path: pathCredentialSubjectName, Field: FieldCompanyName},
 				},
 			},
 			{
@@ -311,9 +363,9 @@ func DefaultTrustPolicy() TrustPolicy {
 				Label:   "iSHARE Dataspace Participant",
 				Enabled: true,
 				Mappings: []ClaimMapping{
-					{Path: "credentialSubject.id", Field: FieldPartyID},
-					{Path: "credentialSubject.name", Field: FieldPartyName},
-					{Path: "credentialSubject.name", Field: FieldCompanyName},
+					{Path: pathCredentialSubjectID, Field: FieldPartyID},
+					{Path: pathCredentialSubjectName, Field: FieldPartyName},
+					{Path: pathCredentialSubjectName, Field: FieldCompanyName},
 				},
 			},
 			{
@@ -321,7 +373,7 @@ func DefaultTrustPolicy() TrustPolicy {
 				Label:   "iSHARE Framework Compliance",
 				Enabled: true,
 				Mappings: []ClaimMapping{
-					{Path: "credentialSubject.id", Field: FieldPartyID},
+					{Path: pathCredentialSubjectID, Field: FieldPartyID},
 					{Path: "credentialSubject.frameworks[0].capabilityUrl", Field: FieldCapabilitiesURL},
 					{Path: "credentialSubject.frameworks[0].additionalInfo.website", Field: FieldWebsite},
 					{Path: "credentialSubject.frameworks[0].additionalInfo.companyEmail", Field: FieldContactEmail},

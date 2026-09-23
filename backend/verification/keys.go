@@ -117,11 +117,21 @@ func (r *HTTPKeyResolver) ResolveKey(issuer, kid, resolverURL string) (crypto.Pu
 	return nil, fmt.Errorf("issuer %q publishes no key with id %q", issuer, kid)
 }
 
+const (
+	httpScheme  = "http://"
+	httpsScheme = "https://"
+)
+
+// isHTTPURL reports whether value starts with an http or https scheme.
+func isHTTPURL(value string) bool {
+	return strings.HasPrefix(value, httpScheme) || strings.HasPrefix(value, httpsScheme)
+}
+
 // keyDocumentURL decides where an issuer's keys are published and whether that
 // location came from the operator (trusted) or from the presentation (guarded).
 func keyDocumentURL(issuer, resolverURL string) (string, bool, error) {
 	if trimmed := strings.TrimSpace(resolverURL); trimmed != "" {
-		if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		if !isHTTPURL(trimmed) {
 			return "", false, fmt.Errorf("resolver URL for %q must be http(s)", issuer)
 		}
 		return trimmed, true, nil
@@ -152,9 +162,9 @@ func didWebDocumentURL(did string) (string, bool) {
 		return "", false
 	}
 	if len(segments) == 1 {
-		return "https://" + host + "/.well-known/did.json", true
+		return httpsScheme + host + "/.well-known/did.json", true
 	}
-	return "https://" + host + "/" + strings.Join(segments[1:], "/") + "/did.json", true
+	return httpsScheme + host + "/" + strings.Join(segments[1:], "/") + "/did.json", true
 }
 
 func (r *HTTPKeyResolver) load(docURL string, operatorSupplied bool) (cachedKeyDoc, error) {

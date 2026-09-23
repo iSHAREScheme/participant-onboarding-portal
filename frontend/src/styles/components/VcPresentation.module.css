@@ -171,7 +171,8 @@
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 50%;
-  background: #16a34a;
+  /* green-700: 5.0:1 against the white glyph (WCAG AA for small text) */
+  background: #15803d;
   color: #fff;
   font-size: 0.75rem;
   flex: none;
@@ -202,7 +203,7 @@
   border-bottom: 1px solid #dcfce7;
   color: #374151;
   vertical-align: top;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .source {

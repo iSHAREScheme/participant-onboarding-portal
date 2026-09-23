@@ -1021,7 +1021,7 @@ const Register: NextPage = () => {
   )
 
   const verifiedLockNote = (...sections: string[]) =>
-    sections.some(stepHasVerifiedFields) ? (
+    sections.some((section) => stepHasVerifiedFields(section)) ? (
       <p className={styles.infoText}>{t("register.idCheck.vc.lockedNote")}</p>
     ) : null
 
@@ -1243,7 +1243,7 @@ const Register: NextPage = () => {
           return false;
         }
 
-      case steps.idCheck: // ID Check
+      case steps.idCheck: { // ID Check
         // Any identity method this flow offers satisfies the step: a ready
         // eHerkenning identity, a VC presentation that carried an identity proof,
         // or a valid uploaded eIDAS certificate. A proof only counts on a flow
@@ -1276,6 +1276,7 @@ const Register: NextPage = () => {
 
         setValidationError("register.validation.identityRequired")
         return false
+      }
 
       case steps.location: // Location
         if (
