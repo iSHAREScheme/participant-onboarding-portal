@@ -794,6 +794,7 @@ const nl = {
     },
     idCheck: {
       vc: {
+        lockedNote: "Velden die uit uw geverifieerde credentials zijn ingevuld, zijn vergrendeld — ze komen uit de credential zelf en niet uit dit formulier.",
         intro: "Presenteer credentials die u al heeft; wij vullen uw aanvraag daarmee in — voor wat zij aantonen is geen handmatige controle nodig.",
         accepted: "Dit portaal accepteert:",
         tabWallet: "Gebruik uw wallet",

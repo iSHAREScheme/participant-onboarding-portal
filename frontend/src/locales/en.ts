@@ -796,6 +796,7 @@ const en = {
     },
     idCheck: {
       vc: {
+        lockedNote: "Fields filled from your verified credentials are locked — they are taken from the credential itself, not from this form.",
         intro: "Present credentials you already hold and we will fill in your application from them — no manual checks needed for what they prove.",
         accepted: "This portal accepts:",
         tabWallet: "Use your wallet",

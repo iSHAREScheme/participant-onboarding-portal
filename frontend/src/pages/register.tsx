@@ -936,6 +936,28 @@ const Register: NextPage = () => {
     }))
   }, [])
 
+  // A field filled from a verified credential is not the applicant's to change.
+  // The backend re-reads every verified value from the presentation session when
+  // the proposal is submitted and writes it over whatever the form sent, so an
+  // edit here would be silently discarded — better to not offer it at all.
+  const isVerifiedField = useCallback(
+    (path: string) => Boolean(vcVerification?.result?.fields?.[path]),
+    [vcVerification]
+  )
+
+  // Does this step contain any locked field? Used to explain the padlocks once
+  // per step rather than per input.
+  const stepHasVerifiedFields = useCallback(
+    (section: string) =>
+      Object.keys(vcVerification?.result?.fields ?? {}).some((f) => f.startsWith(section + ".")),
+    [vcVerification]
+  )
+
+  const verifiedLockNote = (...sections: string[]) =>
+    sections.some(stepHasVerifiedFields) ? (
+      <p className={styles.infoText}>{t("register.idCheck.vc.lockedNote")}</p>
+    ) : null
+
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
   const [isStaticAuthRegistry, setIsStaticAuthRegistry] = useState(false)
@@ -1439,6 +1461,10 @@ const Register: NextPage = () => {
     field: string,
     value: any
   ) => {
+    // Second line of defence behind the disabled inputs: whatever the markup
+    // does, a verified value cannot be edited away here either.
+    if (isVerifiedField(`${String(step)}.${field}`)) return
+
     setFormData((prev) => {
       // if (shouldPreselectDataConsumer && step === "roles") {
       //   return {
@@ -2555,12 +2581,14 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {t("register.location.subtitle")}
               </p>
+              {verifiedLockNote("idCheck", "location")}
             </div>
             <div>
               <div className={styles.formAndInfo}>
                 <div className={styles.formSection}>
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("idCheck.partyId")}
                       label={t("register.idCheck.partyId")}
                       id="partyId"
                       name="partyId"
@@ -2576,6 +2604,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("idCheck.partyName")}
                       label={t("register.idCheck.partyName")}
                       id="partyName"
                       name="partyName"
@@ -2595,6 +2624,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.address")}
                       label={t("register.location.placeholders.address")}
                       id="address"
                       name="address"
@@ -2610,6 +2640,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.zipCode")}
                       label={t("register.location.placeholders.zipCode")}
                       id="zipCode"
                       name="zipCode"
@@ -2625,6 +2656,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.city")}
                       label={t("register.location.placeholders.city")}
                       id="city"
                       name="city"
@@ -2640,6 +2672,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.country")}
                       label={t("register.location.placeholders.country")}
                       id="country"
                       name="country"
@@ -2655,6 +2688,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.website")}
                       label={t("register.location.placeholders.website")}
                       id="website"
                       name="website"
@@ -2683,6 +2717,7 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {isSingleAssociation ? t("register.association.singleSubtitle") : t("register.association.subtitle")}
               </p>
+              {verifiedLockNote("association")}
             </div>
 
             <div className={styles.associationContainer}>
@@ -2735,6 +2770,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("association.authRegistryUrl")}
                   label={t("register.association.authRegistryUrl")}
                   id="authRegistryUrl"
                   name="authRegistryUrl"
@@ -2757,6 +2793,7 @@ const Register: NextPage = () => {
               {!hideCapabilitiesUrlField && (
                 <div className={styles.inputGroup}>
                   <FormInput
+                      disabled={isVerifiedField("association.capabilitiesUrl")}
                     label={t("register.association.capabilitiesUrl")}
                     id="capabilitiesUrl"
                     name="capabilitiesUrl"
@@ -2843,11 +2880,13 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {t("register.account.subtitle")}
               </p>
+              {verifiedLockNote("account")}
             </div>
 
             <div className={styles.formSection}>
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.name")}
                   label={t("register.account.placeholders.name")}
                   id="name"
                   name="name"
@@ -2863,6 +2902,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.email")}
                   label={t("register.account.placeholders.email")}
                   id="email"
                   name="email"
@@ -2878,6 +2918,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.phone")}
                   label={t("register.account.placeholders.phone")}
                   id="phone"
                   name="phone"
