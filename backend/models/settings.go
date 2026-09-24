@@ -52,6 +52,11 @@ type Settings struct {
 	ActiveRoles            string `json:"activeRoles"`
 	DefaultRole            string `json:"defaultRole"`
 	AutoAcceptProposal     string `json:"autoAcceptProposal"`
+	// IdentityMethods is the comma-separated list of identity verification
+	// methods applicants may use (see models.KnownIdentityMethods). Empty means
+	// DefaultIdentityMethods, which keeps Verifiable Credentials off until an
+	// admin turns them on. An onboarding flow may override it.
+	IdentityMethods string `json:"identityMethods"`
 	// RequireQualifiedEidasCertificate enables the optional ETSI qualified-
 	// certificate rule during eIDAS upload. Its zero value intentionally leaves
 	// that rule disabled while retaining parsing, expiry and registry trust checks.
@@ -78,4 +83,14 @@ type Settings struct {
 	// portal proxies admin actions to (forwarding the operator's token). Non-secret,
 	// admin-editable; overrides the PR_API_BASE_URL env default when set.
 	PrApiBaseUrl string `json:"prApiBaseUrl"`
+
+	// VcOnboarding is the marshalled verification.TrustPolicy: which credential
+	// types this deployment accepts, which issuers may sign them, and how their
+	// claims pre-fill the onboarding form. Empty means the packaged default
+	// (every iSHARE type known, no issuer trusted yet, feature off).
+	VcOnboarding datatypes.JSON `gorm:"type:json" json:"vcOnboarding"`
+	// VcAutoAcceptVerified is the deployment default for skipping admin review
+	// when a proposal was pre-filled from a verified presentation
+	// ("true"/"false"; empty means false). An onboarding flow may override it.
+	VcAutoAcceptVerified string `json:"vcAutoAcceptVerified"`
 }

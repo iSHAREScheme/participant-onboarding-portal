@@ -36,6 +36,16 @@ type OnboardingFlow struct {
 	SkipRoles          string `json:"skipRoles"`          // "true" | "false" | ""
 	ActiveRoles        string `json:"activeRoles"`        // comma-separated
 	AutoAcceptProposal string `json:"autoAcceptProposal"` // "true" | "false" | ""
+
+	// IdentityMethods overrides which identity verification methods this flow
+	// offers (comma-separated, see models.KnownIdentityMethods; "" = inherit the
+	// deployment setting). This is what lets one deployment onboard a dataspace
+	// that accepts only eIDAS seals alongside another that onboards from
+	// Verifiable Credentials.
+	IdentityMethods string `json:"identityMethods"`
+	// VcAutoAccept overrides whether a presentation-verified proposal skips
+	// admin review on this flow ("true" | "false" | "" = inherit).
+	VcAutoAccept string `json:"vcAutoAccept"`
 }
 
 // ReservedFlowRoutes are portal paths a flow route may never shadow.

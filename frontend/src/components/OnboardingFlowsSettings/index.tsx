@@ -7,6 +7,12 @@ import { useState } from "react";
 import styles from "../../styles/Settings.module.css";
 import { useLanguage } from "../../context/LanguageContext";
 import {
+  DEFAULT_IDENTITY_METHODS,
+  IDENTITY_METHODS,
+  parseIdentityMethods,
+  serializeIdentityMethods,
+} from "../../config/identityMethods";
+import {
   FLOW_ROUTE_PATTERN,
   RESERVED_FLOW_ROUTES,
   type PublicOnboardingFlow,
@@ -446,6 +452,59 @@ const OnboardingFlowsSettings: React.FC<Props> = ({
                             <option value="false">
                               {t("settings.publicOnboarding.off")}
                             </option>
+                          </select>
+                        </div>
+                        <div className={styles.flowField}>
+                          <label className={styles.colorLabel}>
+                            {t("settings.identityMethods.flowLabel")}
+                          </label>
+                          {/* Empty = inherit the deployment's identity methods. */}
+                          <label className={styles.checkboxLabel}>
+                            <input
+                              type="checkbox"
+                              checked={!flow.identityMethods}
+                              onChange={(e) =>
+                                update(i, {
+                                  identityMethods: e.target.checked ? "" : DEFAULT_IDENTITY_METHODS,
+                                })
+                              }
+                            />
+                            {t("settings.publicOnboarding.inherit")}
+                          </label>
+                          {IDENTITY_METHODS.map((method) => {
+                            const selected = parseIdentityMethods(flow.identityMethods)
+                            return (
+                              <label key={method} className={styles.checkboxLabel}>
+                                <input
+                                  type="checkbox"
+                                  disabled={!flow.identityMethods}
+                                  checked={selected.includes(method)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...selected, method]
+                                      : selected.filter((m) => m !== method)
+                                    // A flow must always leave applicants a way to prove identity.
+                                    if (next.length === 0) return
+                                    update(i, { identityMethods: serializeIdentityMethods(next) })
+                                  }}
+                                />
+                                {t(`settings.identityMethods.${method}`)}
+                              </label>
+                            )
+                          })}
+                        </div>
+                        <div className={styles.flowField}>
+                          <label className={styles.colorLabel}>
+                            {t("settings.publicOnboarding.vcAutoAccept")}
+                          </label>
+                          <select
+                            className={styles.fontSelect}
+                            value={flow.vcAutoAccept ?? ""}
+                            onChange={(e) => update(i, { vcAutoAccept: e.target.value })}
+                          >
+                            <option value="">{t("settings.publicOnboarding.inherit")}</option>
+                            <option value="true">{t("settings.publicOnboarding.on")}</option>
+                            <option value="false">{t("settings.publicOnboarding.off")}</option>
                           </select>
                         </div>
                         <div className={styles.flowField}>

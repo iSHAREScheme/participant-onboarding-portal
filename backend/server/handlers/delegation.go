@@ -53,8 +53,22 @@ type createMemberRequest struct {
 }
 
 func currentClaims(c *fiber.Ctx) *middlewares.KeycloakClaims {
+	if c == nil {
+		return nil
+	}
 	claims, _ := c.Locals("claims").(*middlewares.KeycloakClaims)
 	return claims
+}
+
+// currentUsername is the authenticated caller's Keycloak username, or "" when
+// the request carries no usable identity. It is the ownership key for rows a
+// user may only read back for themselves.
+func currentUsername(c *fiber.Ctx) string {
+	claims := currentClaims(c)
+	if claims == nil {
+		return ""
+	}
+	return strings.TrimSpace(claims.PreferredUsername)
 }
 
 func strictLegalEntityIdentifier(claims *middlewares.KeycloakClaims) string {

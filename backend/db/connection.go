@@ -12,6 +12,19 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// columnSpec is one nullable column an older database may still lack.
+type columnSpec struct {
+	name       string
+	definition string
+}
+
+// Column definitions used by the migration lists below.
+const (
+	textColumn      = "TEXT"
+	boolFalseColumn = "BOOLEAN DEFAULT 0"
+	dateTimeColumn  = "DATETIME"
+)
+
 func Init(config *cfg.Config) (*gorm.DB, error) {
 	dataSourceName := config.SQLiteDBName
 
@@ -23,81 +36,87 @@ func Init(config *cfg.Config) (*gorm.DB, error) {
 	db, err := gorm.Open(sqlite.Open(dataSourceName), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
-	// Modify this section to handle migration errors better
 	if err = db.AutoMigrate(
 		&models.Proposal{},
 		&models.Settings{},
 		&models.Organization{},
 		&models.OrganizationMember{},
 		&models.OrganizationIdpConnection{},
+		&models.VcPresentationSession{},
 	); err != nil {
 		log.Printf("Database migration failed: %v", err)
-		return nil, err // Return the error instead of calling log.Fatal
+		return nil, err
 	}
 
-	// Verify the table exists
 	if !db.Migrator().HasTable(&models.Proposal{}) {
 		return nil, fmt.Errorf("proposals table was not created successfully")
 	}
-
-	// Add SignedAgreementPaths column if it doesn't exist
-	if !db.Migrator().HasColumn(&models.Proposal{}, "signed_agreement_paths") {
-		if err := db.Exec("ALTER TABLE proposals ADD COLUMN signed_agreement_paths TEXT").Error; err != nil {
-			return nil, err
-		}
+	if err := ensureProposalColumns(db); err != nil {
+		return nil, err
 	}
-
-	// Add SignedVia column if it doesn't exist (records manual vs eHerkenning signing)
-	if !db.Migrator().HasColumn(&models.Proposal{}, "signed_via") {
-		if err := db.Exec("ALTER TABLE proposals ADD COLUMN signed_via TEXT").Error; err != nil {
-			return nil, err
-		}
+	if err := ensureSettingsColumns(db); err != nil {
+		return nil, err
 	}
+	return db, nil
+}
 
-	// Add identity-proof columns (eIDAS cert / eHerkenning assertion) used to
-	// build the mandatory v3 identity claim at party creation.
-	for _, col := range []string{"cert_subject_name", "cert_x5c", "cert_x5t_s256", "idp_assertion"} {
-		if !db.Migrator().HasColumn(&models.Proposal{}, col) {
-			if err := db.Exec("ALTER TABLE proposals ADD COLUMN " + col + " TEXT").Error; err != nil {
-				return nil, err
-			}
-		}
+// ensureProposalColumns adds the columns AutoMigrate cannot add to a database
+// created by an older release: the signed-agreement bookkeeping, the identity
+// proof (eIDAS cert / eHerkenning assertion) behind the v3 identity claim, and
+// the credential-onboarding evidence behind a pre-filled form.
+func ensureProposalColumns(db *gorm.DB) error {
+	columns := []columnSpec{
+		{"signed_agreement_paths", textColumn},
+		{"signed_via", textColumn},
+		{"cert_subject_name", textColumn}, {"cert_x5c", textColumn}, {"cert_x5t_s256", textColumn}, {"idp_assertion", textColumn},
+		{"id_check_method", textColumn}, {"vc_holder", textColumn}, {"vc_credential_types", textColumn}, {"vc_issuers", textColumn}, {"vc_prefill", textColumn},
+		{"vc_verified", boolFalseColumn},
+		{"vc_verified_at", dateTimeColumn},
 	}
+	return addMissingColumns(db, &models.Proposal{}, "proposals", columns)
+}
 
-	// Add satellite-connection override columns to settings (non-secret).
-	for _, col := range []string{
+// ensureSettingsColumns adds the non-secret satellite-connection overrides, the
+// onboarding configuration and the one-time seed guards to an older settings table.
+func ensureSettingsColumns(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&models.Settings{}) {
+		return nil
+	}
+	columns := []columnSpec{}
+	for _, name := range []string{
 		"satellite_base_url", "satellite_iss", "satellite_aud", "satellite_version",
 		"satellite_ep_creation_endpoint", "satellite_parties_endpoint",
 		"satellite_token_endpoint", "satellite_token_scope", "dataspace_title",
 		"auth_registry_id", "auth_registry_name", "auth_registry_url",
 		"default_association_name", "skip_roles", "active_roles", "default_role",
-		"auto_accept_proposal",
+		"auto_accept_proposal", "vc_onboarding", "vc_auto_accept_verified", "identity_methods",
 	} {
-		if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, col) {
-			if err := db.Exec("ALTER TABLE settings ADD COLUMN " + col + " TEXT").Error; err != nil {
-				return nil, err
-			}
+		columns = append(columns, columnSpec{name, textColumn})
+	}
+	// Boolean guards default to false so existing rows get their built-ins
+	// seeded once on the next startup.
+	columns = append(columns,
+		columnSpec{"agreements_initialized", boolFalseColumn},
+		columnSpec{"prefill_auth_registry", boolFalseColumn},
+	)
+	return addMissingColumns(db, &models.Settings{}, "settings", columns)
+}
+
+// addMissingColumns issues ALTER TABLE ... ADD COLUMN for each column the model's
+// table lacks. Names and definitions come from the fixed lists above, never from
+// input.
+func addMissingColumns(db *gorm.DB, model interface{}, table string, columns []columnSpec) error {
+	for _, column := range columns {
+		if db.Migrator().HasColumn(model, column.name) {
+			continue
+		}
+		if err := db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column.name + " " + column.definition).Error; err != nil {
+			return err
 		}
 	}
-
-	// One-time seed guard for the bundled agreements (boolean; defaults to false
-	// so existing rows get their built-ins seeded once on the next startup).
-	if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, "agreements_initialized") {
-		if err := db.Exec("ALTER TABLE settings ADD COLUMN agreements_initialized BOOLEAN DEFAULT 0").Error; err != nil {
-			return nil, err
-		}
-	}
-
-	if db.Migrator().HasTable(&models.Settings{}) && !db.Migrator().HasColumn(&models.Settings{}, "prefill_auth_registry") {
-		if err := db.Exec("ALTER TABLE settings ADD COLUMN prefill_auth_registry BOOLEAN DEFAULT 0").Error; err != nil {
-			return nil, err
-		}
-	}
-
-	return db, nil
+	return nil
 }

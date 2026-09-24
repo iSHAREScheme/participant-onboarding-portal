@@ -54,6 +54,7 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 			"themes":                           nil,
 			"activeTheme":                      "",
 			"requireQualifiedEidasCertificate": false,
+			"identityMethods":                  models.DefaultIdentityMethods,
 		})
 	}
 
@@ -64,6 +65,18 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 		settings.Agreements = datatypes.JSON(redacted)
 	}
 
+	// The credential-onboarding trust policy (issuer DIDs, key-resolution URLs,
+	// claim mappings) is admin-only configuration, and this endpoint is
+	// authenticated but NOT admin-gated. Replace it with the single boolean the
+	// onboarding form actually needs; the full policy is served only by the
+	// admin-gated /settings/vc-onboarding.
+	if payload, err := settingsAsMap(settings); err == nil {
+		delete(payload, "vcOnboarding")
+		// Serve the resolved deployment choice, so callers never need to know
+		// the default: an unset value arrives as eIDAS + eHerkenning, VCs off.
+		payload["identityMethods"] = strings.Join(deploymentIdentityMethods(&settings), ",")
+		return c.JSON(payload)
+	}
 	return c.JSON(settings)
 }
 
@@ -93,6 +106,7 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 			"prConfigured":                     prConfigured,
 			"requireQualifiedEidasCertificate": false,
 			"publicOnboardingEnabled":          false,
+			"identityMethods":                  models.DefaultIdentityMethods,
 			"onboardingFlows":                  []fiber.Map{},
 		})
 	}
@@ -107,11 +121,14 @@ func (h *HandlerSettings) GetPublicSettings(c *fiber.Ctx) error {
 		"agreements":  publicViewAgreements(decodeAgreements(settings.Agreements)),
 		// Onboarding-flow config consumed by the public landing/header and the
 		// (authenticated) register flow.
-		"defaultAssociationName":           settings.DefaultAssociationName,
-		"skipRoles":                        settings.SkipRoles,
-		"activeRoles":                      settings.ActiveRoles,
-		"defaultRole":                      settings.DefaultRole,
-		"autoAcceptProposal":               settings.AutoAcceptProposal,
+		"defaultAssociationName": settings.DefaultAssociationName,
+		"skipRoles":              settings.SkipRoles,
+		"activeRoles":            settings.ActiveRoles,
+		"defaultRole":            settings.DefaultRole,
+		"autoAcceptProposal":     settings.AutoAcceptProposal,
+		// Which identity verification methods the deployment offers (resolved,
+		// so an unset value arrives as the default). Flows may override it.
+		"identityMethods":                  strings.Join(deploymentIdentityMethods(&settings), ","),
 		"requireQualifiedEidasCertificate": settings.RequireQualifiedEidasCertificate,
 		// Topology flag — gates the registry-admin features in the UI.
 		"prConfigured": prConfigured,
@@ -175,6 +192,7 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 		ActiveRoles                      *string         `json:"activeRoles"`
 		DefaultRole                      *string         `json:"defaultRole"`
 		AutoAcceptProposal               *string         `json:"autoAcceptProposal"`
+		IdentityMethods                  *string         `json:"identityMethods"`
 		RequireQualifiedEidasCertificate *bool           `json:"requireQualifiedEidasCertificate"`
 	}
 
@@ -279,6 +297,13 @@ func (h *HandlerSettings) UpdateSettings(c *fiber.Ctx) error {
 	}
 	if input.AutoAcceptProposal != nil {
 		settings.AutoAcceptProposal = strings.TrimSpace(*input.AutoAcceptProposal)
+	}
+	if input.IdentityMethods != nil {
+		normalized, err := normalizeIdentityMethods(*input.IdentityMethods)
+		if err != nil {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
+		settings.IdentityMethods = normalized
 	}
 	if input.RequireQualifiedEidasCertificate != nil {
 		settings.RequireQualifiedEidasCertificate = *input.RequireQualifiedEidasCertificate
@@ -524,4 +549,18 @@ func (h *HandlerSettings) GetFavicon(c *fiber.Ctx) error {
 	}
 
 	return c.SendFile(settings.FaviconPath)
+}
+
+// settingsAsMap renders the settings row as a generic map so a handler can drop
+// or add individual keys before serving it.
+func settingsAsMap(settings models.Settings) (map[string]interface{}, error) {
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		return nil, err
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }

@@ -637,10 +637,12 @@ type ProposalData struct {
 		UseM2M string `json:"useM2M"`
 	} `json:"m2m"`
 	IDCheck struct {
-		CompanyName string `json:"companyName"`
-		KvkNumber   string `json:"kvkNumber"`
-		PartyId     string `json:"partyId"`
-		PartyName   string `json:"partyName"`
+		// IdCheckMethod is how identity was proven: "eherkenning", "eidas" or "vc".
+		IdCheckMethod string `json:"idCheckMethod"`
+		CompanyName   string `json:"companyName"`
+		KvkNumber     string `json:"kvkNumber"`
+		PartyId       string `json:"partyId"`
+		PartyName     string `json:"partyName"`
 		// eIDAS certificate fields captured at the identity-check step, used to
 		// build the v3 x509Certificate identity claim at party creation.
 		CertSubjectName string `json:"certSubjectName"`
@@ -667,6 +669,10 @@ type ProposalData struct {
 	} `json:"account"`
 	KeycloakUsername string `json:"keycloakUsername"`
 	Status           string `json:"status"`
+	// VcSessionId names a verified presentation session. The browser sends only
+	// the id: every value it proved is re-read from the session server-side, so
+	// a tampered form body cannot claim a field was verified when it was not.
+	VcSessionId string `json:"vcSessionId"`
 	// FlowRoute is the public onboarding flow the applicant came through
 	// ("" = base URL). Validated against the configured flows on receipt.
 	FlowRoute string `json:"flowRoute"`
@@ -832,20 +838,29 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}(),
 		CreatedAt:        time.Now(),
 		KeycloakUsername: ownerUsername,
+		IdCheckMethod:    strings.TrimSpace(proposalData.IDCheck.IdCheckMethod),
 		CertSubjectName:  proposalData.IDCheck.CertSubjectName,
 		CertX5c:          proposalData.IDCheck.CertX5c,
 		CertX5tS256:      proposalData.IDCheck.CertX5tS256,
+	}
+
+	// A verified presentation overrides whatever the browser submitted for the
+	// fields it proved, and may skip admin review when the flow allows it.
+	if err := h.applyVerifiedPresentation(c, &proposal, proposalData.VcSessionId); err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 
 	result := h.Server.DB.Create(&proposal)
 	if result.Error != nil {
 		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save proposal to database: "+result.Error.Error())
 	}
+	h.markPresentationConsumed(proposalData.VcSessionId)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Your proposal has been successfully saved.",
-		"id":      proposal.ID,
-		"status":  proposal.Status,
+		"message":    "Your proposal has been successfully saved.",
+		"id":         proposal.ID,
+		"status":     proposal.Status,
+		"vcVerified": proposal.VcVerified,
 	})
 }
 

@@ -1,10 +1,16 @@
 import { isSatelliteOperator } from "utils/roles";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { NextPage } from "next";
 import { useRouter } from "next/router";
 import styles from "styles/Register.module.css";
 import { useKeycloak } from "@react-keycloak/web";
 import ProtectedRoute from "../components/ProtectedRoute";
+import VcPresentation, { type VcPresentationValue } from "../components/VcPresentation";
+import {
+  DEFAULT_IDENTITY_METHODS,
+  parseIdentityMethods,
+  type IdentityMethod,
+} from "config/identityMethods";
 import { useLanguage } from "../context/LanguageContext";
 import { FormInput, Tooltip, Loading } from "../components";
 import Placeholder from "../components/Placeholder";
@@ -29,10 +35,13 @@ import { getKeycloakUserInfo, refreshKeycloakUserInfo } from "util/keycloakUserI
 const KVK_BASE_URL = 'https://developers.kvk.nl/api/v2'
 
 // Step indices
+// The identity check opens the wizard: an applicant proves who they are before
+// choosing roles or M2M, so the later steps build on a verified identity (and on
+// whatever a presented credential already filled in).
 const StepsV1 = {
-  role: 0,
-  m2m: 1,
-  idCheck: 2,
+  idCheck: 0,
+  role: 1,
+  m2m: 2,
   location: 3,
   association: 4,
   account: 5,
@@ -46,9 +55,9 @@ const StepsV1 = {
 }
 
 const StepsV2 = {
-  role: 0,
+  idCheck: 0,
+  role: 1,
   // m2m,
-  idCheck: 1,
   location: 2,
   association: 3,
   account: 4,
@@ -61,8 +70,8 @@ const StepsV2 = {
   rejected: 10
 }
 const StepsV3 = {
-  role: 0,
-  idCheck: 1,
+  idCheck: 0,
+  role: 1,
   location: 2,
   account: 3,
   confirm: 4,
@@ -95,8 +104,15 @@ const REGISTER_STATE_DB_NAME = "register:form-state"
 const REGISTER_STATE_STORE = "state"
 const REGISTER_STATE_KEY_PREFIX = "user:"
 
+// Bump whenever the step order changes. A step index saved under an older order
+// now points at a different step, so it is not restored (the form data still
+// is): an applicant mid-onboarding restarts at the first step rather than
+// landing on an unexpected one.
+const REGISTER_STEP_ORDER = 2
+
 type PersistedRegisterState = {
   currentStep: number
+  stepOrder?: number
   formData: FormData
 }
 
@@ -198,7 +214,7 @@ interface FormData {
     useM2M: "yes" | "no" | ""
   }
   idCheck: {
-    idCheckMethod?: string // e.g., "eherkenning" or "eidas"
+    idCheckMethod?: string // "eherkenning" | "eidas" | "vc"
     companyName: string
     kvkNumber: string
     partyId: string
@@ -243,6 +259,10 @@ interface FormData {
   signingMethod: {
     method: "eherkenning" | "manual" | ""
   }
+  // Set once a verifiable presentation has been verified. Only the id is
+  // submitted: the backend re-reads every verified value from the session, so
+  // the pre-filled fields below are convenience, not evidence.
+  vcSessionId?: string
 }
 
 
@@ -377,12 +397,16 @@ const Register: NextPage = () => {
   // Onboarding-flow config from admin settings (fetched in fetchSettings below);
   // "" means "use the NEXT_PUBLIC_* env default", so the initial render matches
   // the env-only behaviour until settings load.
+  // Until the deployment's settings arrive the identity methods are only the
+  // built-in default, so nothing may be preselected from them yet.
+  const [identitySettingsLoaded, setIdentitySettingsLoaded] = useState(false)
   const [obSettings, setObSettings] = useState({
     skipRoles: "",
     activeRoles: "",
     defaultRole: "",
     autoAccept: "",
     requireQualifiedEidasCertificate: false,
+    identityMethods: DEFAULT_IDENTITY_METHODS,
   })
   // Public onboarding flows + theme library (raw, from admin settings). When
   // the user arrived through a flow route (?flow=…), that flow's overrides win
@@ -416,7 +440,6 @@ const Register: NextPage = () => {
   }, [activeFlow, themeLibrary])
   const baseUrl = env.NEXT_PUBLIC_BASE_SERVER_URL
   const alwaysM2M = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_M2M)
-  const alwaysEherkenning = parseBoolEnv(env.NEXT_PUBLIC_ALWAYS_EHERKENNING)
   // Onboarding-flow flags come from DB settings (Settings → Onboarding); an unset
   // value defaults to false. They are no longer mirrored into window.__ENV.
   const autoAcceptProposal =
@@ -434,6 +457,18 @@ const Register: NextPage = () => {
   const eherkenningConfigured = Boolean(
     keycloakIdp && keycloakIdp !== "undefined" && keycloakIdp !== ""
   )
+
+  // Identity verification methods this flow offers: the flow's own override,
+  // else the deployment choice (served already resolved, so VCs are off unless
+  // an admin enabled them). eHerkenning also needs a broker: without one it
+  // cannot be offered, whatever the setting says.
+  const offeredIdentityMethods = parseIdentityMethods(
+    activeFlow?.identityMethods || obSettings.identityMethods
+  ).filter((m) => m !== "eherkenning" || eherkenningConfigured)
+  const offersIdentityMethod = (m: IdentityMethod) => offeredIdentityMethods.includes(m)
+  const vcOnboardingEnabled = offersIdentityMethod("vc")
+  const eherkenningOffered = offersIdentityMethod("eherkenning")
+  const eidasOffered = offersIdentityMethod("eidas")
 
   const steps = alwaysM2M ? StepsV2 : StepsV1
   const activeRoles = (
@@ -454,7 +489,21 @@ const Register: NextPage = () => {
     [defaultRoleValue]
   )
 
-  const firstInteractiveStep = skipRoleStep ? (steps.role ?? 0) + 1 : (steps.role ?? 0)
+  // The wizard always opens on the identity check. The role step, when skipped,
+  // sits in the middle of the order now, so navigation steps over it rather than
+  // the wizard starting past it.
+  const firstInteractiveStep = steps.idCheck
+  const isSkippedStep = (step: number) => skipRoleStep && step === steps.role
+  const stepAfter = (step: number) => {
+    let next = step + 1
+    while (isSkippedStep(next)) next += 1
+    return next
+  }
+  const stepBefore = (step: number) => {
+    let prev = step - 1
+    while (prev > firstInteractiveStep && isSkippedStep(prev)) prev -= 1
+    return Math.max(prev, firstInteractiveStep)
+  }
   const useAutoAcceptProposal = autoAcceptProposal
   const registerStateKey = useMemo(() => {
     const rawSub = keycloak?.tokenParsed?.sub
@@ -616,7 +665,7 @@ const Register: NextPage = () => {
           return next
         })
 
-        if (typeof stored.currentStep === "number") {
+        if (typeof stored.currentStep === "number" && stored.stepOrder === REGISTER_STEP_ORDER) {
           setCurrentStep(stored.currentStep)
         }
       } finally {
@@ -838,6 +887,7 @@ const Register: NextPage = () => {
 
       await persistRegisterState(registerStateKey, {
         currentStep,
+        stepOrder: REGISTER_STEP_ORDER,
         formData,
       })
     }
@@ -873,6 +923,107 @@ const Register: NextPage = () => {
     .filter((key) => !(skipRoleStep && key === "role"))
 
   const canGoBack = currentStep > firstInteractiveStep
+
+  // The verified presentation backing this application, if any.
+  const [vcVerification, setVcVerification] = useState<VcPresentationValue | null>(null)
+  // Project the verifier's dotted field names onto the wizard's form state.
+  // Only fields the credential actually proved are written; the applicant's own
+  // answers elsewhere are left untouched.
+  const applyVerifiedFields = useCallback((fields: Record<string, string>) => {
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        idCheck: { ...prev.idCheck },
+        location: { ...prev.location },
+        association: { ...prev.association },
+        account: { ...prev.account },
+      }
+      const put = (section: "idCheck" | "location" | "association" | "account", key: string, value: string) => {
+        if (value) (next[section] as Record<string, unknown>)[key] = value
+      }
+      for (const [field, value] of Object.entries(fields ?? {})) {
+        const [section, key] = field.split(".")
+        if (section === "idCheck" || section === "location" || section === "association" || section === "account") {
+          put(section, key, value)
+        }
+      }
+      next.idCheck.idCheckMethod = "vc"
+      // A party id proven by a credential is as binding as one read off a
+      // certificate, so keep it out of reach of the KVK-derived rebuilds.
+      if (fields["idCheck.partyId"]) next.idCheck.certPartyId = fields["idCheck.partyId"]
+      return next
+    })
+  }, [])
+
+  const handleVcVerified = useCallback(
+    (value: VcPresentationValue) => {
+      setVcVerification(value)
+      applyVerifiedFields(value.result.fields ?? {})
+      setFormData((prev) => ({ ...prev, vcSessionId: value.sessionId }))
+    },
+    [applyVerifiedFields]
+  )
+
+  const handleVcCleared = useCallback(() => {
+    setVcVerification(null)
+    setFormData((prev) => ({
+      ...prev,
+      vcSessionId: undefined,
+      idCheck: {
+        ...prev.idCheck,
+        idCheckMethod: prev.idCheck.idCheckMethod === "vc" ? undefined : prev.idCheck.idCheckMethod,
+      },
+    }))
+  }, [])
+
+  // A reload (or the eHerkenning redirect) restores the saved form, session id
+  // included, but not the verification held in memory — so the verified fields
+  // would quietly unlock. Recover it from the backend, which scopes the session
+  // to this applicant; if it is gone or no longer verified, forget it so the
+  // applicant simply presents again.
+  const restoringVcSession = formData.vcSessionId
+  useEffect(() => {
+    if (!restoringVcSession || vcVerification) return
+    let cancelled = false
+    new API()
+      .fetchVcSession(restoringVcSession)
+      .then(({ data }) => {
+        if (cancelled) return
+        if (data.status === "verified" && data.result) {
+          setVcVerification({ sessionId: restoringVcSession, result: data.result })
+        } else {
+          handleVcCleared()
+        }
+      })
+      .catch(() => {
+        if (!cancelled) handleVcCleared()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [restoringVcSession, vcVerification, handleVcCleared])
+
+  // A field filled from a verified credential is not the applicant's to change.
+  // The backend re-reads every verified value from the presentation session when
+  // the proposal is submitted and writes it over whatever the form sent, so an
+  // edit here would be silently discarded — better to not offer it at all.
+  const isVerifiedField = useCallback(
+    (path: string) => Boolean(vcVerification?.result?.fields?.[path]),
+    [vcVerification]
+  )
+
+  // Does this step contain any locked field? Used to explain the padlocks once
+  // per step rather than per input.
+  const stepHasVerifiedFields = useCallback(
+    (section: string) =>
+      Object.keys(vcVerification?.result?.fields ?? {}).some((f) => f.startsWith(section + ".")),
+    [vcVerification]
+  )
+
+  const verifiedLockNote = (...sections: string[]) =>
+    sections.some((section) => stepHasVerifiedFields(section)) ? (
+      <p className={styles.infoText}>{t("register.idCheck.vc.lockedNote")}</p>
+    ) : null
 
   const [isChecked, setIsChecked] = useState(false)
   const [isSingleAssociation, setIsSingleAssociation] = useState(false)
@@ -976,6 +1127,9 @@ const Register: NextPage = () => {
   ])
 
   useEffect(() => {
+    // An eHerkenning session only counts on a flow that offers eHerkenning; on a
+    // flow limited to eIDAS or VCs it must not pick the method for the applicant.
+    if (!eherkenningOffered) return
     if (!canUseCurrentEherkenning && !canUseFreshEherkenningLink) return
 
     // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
@@ -989,15 +1143,19 @@ const Register: NextPage = () => {
         },
       }
     }))
-  }, [canUseCurrentEherkenning, canUseFreshEherkenningLink])
+  }, [eherkenningOffered, canUseCurrentEherkenning, canUseFreshEherkenningLink])
 
   useEffect(() => {
     const isHumanFlow = formData.m2m.useM2M === "no" && !alwaysM2M
-    if (!isHumanFlow) return
+    if (!isHumanFlow || !eherkenningOffered) return
 
     // Deferred off the effect's synchronous path (react-hooks/set-state-in-effect).
     queueMicrotask(() => setFormData((prev) => {
-      if (prev.idCheck.idCheckMethod === "eherkenning") return prev
+      // The identity step now comes BEFORE the M2M question, so by the time M2M
+      // is answered the applicant has usually proven their identity already.
+      // Only fill in a method that was never chosen — never overwrite an eIDAS
+      // or VC identity they completed.
+      if (prev.idCheck.idCheckMethod) return prev
       return {
         ...prev,
         idCheck: {
@@ -1006,7 +1164,24 @@ const Register: NextPage = () => {
         },
       }
     }))
-  }, [formData.m2m.useM2M, alwaysM2M])
+  }, [formData.m2m.useM2M, alwaysM2M, eherkenningOffered])
+
+  // Keep the chosen identity method valid for this flow once its settings are
+  // known: drop a choice the flow does not offer (e.g. restored from an earlier
+  // visit) and, when the flow offers exactly one method, preselect it so its
+  // panel is open straight away.
+  const offeredIdentityMethodsKey = offeredIdentityMethods.join(",")
+  useEffect(() => {
+    if (!identitySettingsLoaded) return
+    const offered = offeredIdentityMethodsKey ? offeredIdentityMethodsKey.split(",") : []
+    queueMicrotask(() => setFormData((prev) => {
+      const current = prev.idCheck.idCheckMethod
+      if (current && offered.includes(current)) return prev
+      const next = offered.length === 1 ? offered[0] : undefined
+      if (next === current) return prev
+      return { ...prev, idCheck: { ...prev.idCheck, idCheckMethod: next } }
+    }))
+  }, [identitySettingsLoaded, offeredIdentityMethodsKey])
 
   useEffect(() => {
     let cancelled = false
@@ -1068,14 +1243,26 @@ const Register: NextPage = () => {
           return false;
         }
 
-      case steps.idCheck: // ID Check
-        // Selection is optional: user can continue with either a ready eHerkenning identity
-        // or a valid uploaded eIDAS certificate.
-        if (canUseCurrentEherkenning || canUseFreshEherkenningLink) {
+      case steps.idCheck: { // ID Check
+        // Any identity method this flow offers satisfies the step: a ready
+        // eHerkenning identity, a VC presentation that carried an identity proof,
+        // or a valid uploaded eIDAS certificate. A proof only counts on a flow
+        // that offers its method — an admin limiting a dataspace to eIDAS must
+        // not see applicants slip through on a leftover eHerkenning session.
+        if (eherkenningOffered && (canUseCurrentEherkenning || canUseFreshEherkenningLink)) {
           return true
         }
 
-        const eidasFile = data.eidasCert ?? uploadedFile
+        // A verified presentation that also carried an identity proof (an x509
+        // certificate or an IdP assertion) is equivalent: the registry gets the
+        // identity claim it requires without the applicant uploading anything.
+        // A presentation without one still leaves this step unsatisfied — that
+        // is exactly what makes the onboarding partial.
+        if (vcOnboardingEnabled && vcVerification?.result?.identitySatisfied) {
+          return true
+        }
+
+        const eidasFile = eidasOffered ? (data.eidasCert ?? uploadedFile) : undefined
         if (eidasFile) {
           if (!(await preValidateEidasCert(
             eidasFile,
@@ -1089,6 +1276,7 @@ const Register: NextPage = () => {
 
         setValidationError("register.validation.identityRequired")
         return false
+      }
 
       case steps.location: // Location
         if (
@@ -1181,7 +1369,9 @@ const Register: NextPage = () => {
         autoAccept: settingsData.autoAcceptProposal || "",
         requireQualifiedEidasCertificate:
           settingsData.requireQualifiedEidasCertificate === true,
+        identityMethods: settingsData.identityMethods || DEFAULT_IDENTITY_METHODS,
       })
+      setIdentitySettingsLoaded(true)
       setAllAgreements(
         Array.isArray(settingsData.agreements) ? settingsData.agreements : []
       )
@@ -1367,6 +1557,10 @@ const Register: NextPage = () => {
     field: string,
     value: any
   ) => {
+    // Second line of defence behind the disabled inputs: whatever the markup
+    // does, a verified value cannot be edited away here either.
+    if (isVerifiedField(`${String(step)}.${field}`)) return
+
     setFormData((prev) => {
       // if (shouldPreselectDataConsumer && step === "roles") {
       //   return {
@@ -1409,7 +1603,7 @@ const Register: NextPage = () => {
       //   setCurrentStep((prev) => prev + 2) // skip ID-check step if user is already authenticated with e-herkenning
       // }
       // else
-      setCurrentStep((prev) => prev + 1);
+      setCurrentStep((prev) => stepAfter(prev));
     } else if (currentStep === steps.signingMethod) {
       // Navigate from signing method to agreements
       setCurrentStep(steps.agreement);
@@ -1469,6 +1663,11 @@ const Register: NextPage = () => {
         }
 
         if (useAutoAcceptProposal) formDataWithoutFile.status = "signed"
+
+        // The verified presentation travels as an id only. The backend reloads
+        // the session and overwrites whatever this form claims for the fields
+        // the credential proved, so tampering here changes nothing.
+        formDataWithoutFile.vcSessionId = vcVerification?.sessionId
 
         formDataToSend.append("data", JSON.stringify(formDataWithoutFile));
 
@@ -1586,7 +1785,7 @@ const Register: NextPage = () => {
     }
     if (!canGoBack)
       return
-    setCurrentStep((prev) => Math.max(prev - 1, firstInteractiveStep))
+    setCurrentStep((prev) => stepBefore(prev))
   };
 
   const handleSignAndCommit = async () => {
@@ -1827,7 +2026,7 @@ const Register: NextPage = () => {
       },
     }))
     setValidationError("")
-    setCurrentStep((prev) => prev + 1)
+    setCurrentStep((prev) => stepAfter(prev))
   }
 
   const initiateIDPCheck = () => {
@@ -2296,12 +2495,43 @@ const Register: NextPage = () => {
             <div className={styles.header}>
               <h1 className={styles.title}>{t("register.idCheck.title")}</h1>
               <p className={styles.subtitle}>
-                {(formData.m2m.useM2M === "yes" || alwaysM2M || !eherkenningConfigured) ? (
+                {(
                   <div>
                     {/* <p>{t("register.idCheck.eidasCertificate")}</p> */}
                     <p>{t("register.idCheck.subtitle")}</p>
                     <div className={styles.radioGroup}>
-                      {eherkenningConfigured && !alwaysEherkenning && <div className={styles.radioOption}>
+                      {vcOnboardingEnabled && (
+                        <div className={styles.radioOption}>
+                          <input
+                            type="radio"
+                            id="vc"
+                            name="identityMethod"
+                            value="vc"
+                            checked={formData.idCheck.idCheckMethod === "vc"}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                idCheck: { ...formData.idCheck, idCheckMethod: "vc" },
+                              })
+                            }
+                          />
+                          <label htmlFor="vc">
+                            <strong>{t("register.idCheck.vc.radioLabel")}</strong>
+                          </label>
+                          <Tooltip content={t("register.idCheck.vc.radioInfo")}>
+                            <span className={styles.infoIcon}>ⓘ</span>
+                          </Tooltip>
+                          {formData.idCheck.idCheckMethod === "vc" && (
+                            <VcPresentation
+                              flowRoute={flowRouteParam}
+                              value={vcVerification}
+                              onVerified={handleVcVerified}
+                              onCleared={handleVcCleared}
+                            />
+                          )}
+                        </div>
+                      )}
+                      {offersIdentityMethod("eherkenning") && <div className={styles.radioOption}>
                         <input
                           type="radio"
                           id="eherkenning"
@@ -2317,8 +2547,15 @@ const Register: NextPage = () => {
                           <span className={styles.infoIcon}>ⓘ</span>
                         </Tooltip>
                         <div className={styles.roleDescription}>{renderEherkenningAction()}</div>
+                        <p className={styles.infoText}>
+                          {t("register.idCheck.info", { id: "eHerkenning" })}
+                          <a href="https://www.eherkenning.nl" className={styles.link}>
+                            {t("register.idCheck.forMoreInfo")}
+                          </a>
+                        </p>
                       </div>}
 
+                      {offersIdentityMethod("eidas") && (
                       <div className={styles.radioOption}>
                         <input
                           type="radio"
@@ -2329,7 +2566,7 @@ const Register: NextPage = () => {
                           onChange={() => setFormData({ ...formData, idCheck: { ...formData.idCheck, idCheckMethod: "eidas" } })}
                         />
                         <label htmlFor="eidas">
-                          <strong>{alwaysEherkenning ? t("register.idCheck.eidas") : `with a ${t("register.idCheck.eidas")}`}</strong>
+                          <strong>{`with a ${t("register.idCheck.eidas")}`}</strong>
                         </label>
                         <Tooltip content={t("register.idCheck.eidasInfo")}>
                           <span className={styles.infoIcon}>ⓘ</span>
@@ -2399,24 +2636,12 @@ const Register: NextPage = () => {
                           )}
                         </div>
                       </div>
+                      )}
+                      {offeredIdentityMethods.length === 0 && (
+                        <p className={styles.errorMessage}>{t("register.idCheck.noMethods")}</p>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <p>
-                      {t("register.idCheck.subtitle", { id: "eHerkenning" })}
-                    </p>
-                    {renderEherkenningAction()}
-                    <p className={styles.infoText}>
-                      {t("register.idCheck.info", { id: "eHerkenning" })}
-                      <a
-                        href="https://www.eherkenning.nl"
-                        className={styles.link}
-                      >
-                        {t("register.idCheck.forMoreInfo")}
-                      </a>
-                    </p>
-                  </>
                 )}
               </p >
             </div >
@@ -2431,12 +2656,14 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {t("register.location.subtitle")}
               </p>
+              {verifiedLockNote("idCheck", "location")}
             </div>
             <div>
               <div className={styles.formAndInfo}>
                 <div className={styles.formSection}>
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("idCheck.partyId")}
                       label={t("register.idCheck.partyId")}
                       id="partyId"
                       name="partyId"
@@ -2452,6 +2679,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("idCheck.partyName")}
                       label={t("register.idCheck.partyName")}
                       id="partyName"
                       name="partyName"
@@ -2471,6 +2699,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.address")}
                       label={t("register.location.placeholders.address")}
                       id="address"
                       name="address"
@@ -2486,6 +2715,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.zipCode")}
                       label={t("register.location.placeholders.zipCode")}
                       id="zipCode"
                       name="zipCode"
@@ -2501,6 +2731,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.city")}
                       label={t("register.location.placeholders.city")}
                       id="city"
                       name="city"
@@ -2516,6 +2747,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.country")}
                       label={t("register.location.placeholders.country")}
                       id="country"
                       name="country"
@@ -2531,6 +2763,7 @@ const Register: NextPage = () => {
 
                   <div className={styles.inputGroup}>
                     <FormInput
+                      disabled={isVerifiedField("location.website")}
                       label={t("register.location.placeholders.website")}
                       id="website"
                       name="website"
@@ -2559,6 +2792,7 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {isSingleAssociation ? t("register.association.singleSubtitle") : t("register.association.subtitle")}
               </p>
+              {verifiedLockNote("association")}
             </div>
 
             <div className={styles.associationContainer}>
@@ -2611,6 +2845,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("association.authRegistryUrl")}
                   label={t("register.association.authRegistryUrl")}
                   id="authRegistryUrl"
                   name="authRegistryUrl"
@@ -2633,6 +2868,7 @@ const Register: NextPage = () => {
               {!hideCapabilitiesUrlField && (
                 <div className={styles.inputGroup}>
                   <FormInput
+                      disabled={isVerifiedField("association.capabilitiesUrl")}
                     label={t("register.association.capabilitiesUrl")}
                     id="capabilitiesUrl"
                     name="capabilitiesUrl"
@@ -2719,11 +2955,13 @@ const Register: NextPage = () => {
               <p className={styles.subtitle}>
                 {t("register.account.subtitle")}
               </p>
+              {verifiedLockNote("account")}
             </div>
 
             <div className={styles.formSection}>
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.name")}
                   label={t("register.account.placeholders.name")}
                   id="name"
                   name="name"
@@ -2739,6 +2977,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.email")}
                   label={t("register.account.placeholders.email")}
                   id="email"
                   name="email"
@@ -2754,6 +2993,7 @@ const Register: NextPage = () => {
 
               <div className={styles.inputGroup}>
                 <FormInput
+                      disabled={isVerifiedField("account.phone")}
                   label={t("register.account.placeholders.phone")}
                   id="phone"
                   name="phone"

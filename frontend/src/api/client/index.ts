@@ -319,6 +319,92 @@ export interface KeycloakUser {
   roles?: string[]
 }
 
+// ---------------------------------------------------------------------------
+// Credential-based onboarding (OID4VP)
+// ---------------------------------------------------------------------------
+
+// One credential that passed verification, as summarised by the backend.
+export interface VerifiedCredentialView {
+  types: string[]
+  type: string
+  label?: string
+  issuer: string
+  issuerName?: string
+  subject?: string
+  validFrom?: string
+  validUntil?: string
+}
+
+// The verifier's projection of a presentation onto the onboarding form.
+export interface VerificationResult {
+  holder?: string
+  credentials: VerifiedCredentialView[]
+  // fields maps an onboarding field name ("idCheck.partyName") to the verified
+  // value. The browser uses it to pre-fill; the backend re-reads it from the
+  // session when the proposal is submitted, so this copy is display-only.
+  fields: Record<string, string>
+  fieldSources: Record<string, string>
+  // identitySatisfied is true when the presentation also supplied the identity
+  // proof the registry requires, so the certificate step can be skipped.
+  identitySatisfied: boolean
+  warnings?: string[]
+  verifiedAt: string
+}
+
+export interface VcSessionView {
+  sessionId: string
+  status: 'pending' | 'verified' | 'failed' | 'expired'
+  expiresAt?: string
+  error?: string
+  result?: VerificationResult
+}
+
+export interface VcSessionStart extends VcSessionView {
+  requestUri: string
+  // walletUrl is the openid4vp:// deep link rendered as a QR code.
+  walletUrl: string
+  acceptedCredentials: { type: string; label: string; issuers: string[] }[]
+}
+
+export interface VcTrustedIssuer {
+  did: string
+  name?: string
+  resolverUrl?: string
+  // Client-only stable row identity for the settings editor; stripped before save.
+  clientKey?: string
+}
+
+export interface VcClaimMapping {
+  path: string
+  field: string
+  // Client-only stable row identity for the settings editor; stripped before save.
+  clientKey?: string
+}
+
+export interface VcAcceptedType {
+  type: string
+  label?: string
+  enabled: boolean
+  issuers: VcTrustedIssuer[]
+  mappings: VcClaimMapping[]
+}
+
+// Trust configuration only. Whether VCs are offered at all is an identity
+// verification method (settings.identityMethods), not part of the policy.
+export interface VcTrustPolicy {
+  statusCheck: 'required' | 'soft' | 'off'
+  requireHolderBinding: boolean
+  acceptedTypes: VcAcceptedType[]
+}
+
+export interface VcPolicyResponse {
+  policy: VcTrustPolicy
+  autoAcceptVerified: boolean
+  verifierBaseUrl: string
+  clientId: string
+  mappableFields: string[]
+}
+
 export class API {
   public client: AxiosInstance
   constructor () {
@@ -742,6 +828,34 @@ export class API {
     clientSecret?: string
   }) {
     return this.client.post<DelegationIdpConnection>('/delegations/idp-connections', data)
+  }
+
+  // --- Credential-based onboarding ------------------------------------------
+  // Open an OID4VP session and get the wallet deep link to render as a QR code.
+  startVcSession (flowRoute?: string) {
+    return this.client.post<VcSessionStart>('/onboarding/vc/session', { flowRoute: flowRoute ?? '' })
+  }
+
+  // Poll a session. Scoped server-side to the applicant who opened it.
+  fetchVcSession (sessionId: string) {
+    return this.client.get<VcSessionView>(`/onboarding/vc/session/${encodeURIComponent(sessionId)}`)
+  }
+
+  // Verify a presentation pasted or uploaded in the browser (no wallet round-trip).
+  verifyVcPresentation (presentation: string, flowRoute?: string) {
+    return this.client.post<VcSessionView & { result: VerificationResult }>(
+      '/onboarding/vc/verify',
+      { presentation, flowRoute: flowRoute ?? '' }
+    )
+  }
+
+  // Admin: the accepted credential types, trusted issuers and claim mappings.
+  fetchVcPolicy () {
+    return this.client.get<VcPolicyResponse>('/settings/vc-onboarding')
+  }
+
+  updateVcPolicy (policy: VcTrustPolicy, autoAcceptVerified: boolean) {
+    return this.client.post('/settings/vc-onboarding', { policy, autoAcceptVerified })
   }
 
   createDelegationMember (data: {
