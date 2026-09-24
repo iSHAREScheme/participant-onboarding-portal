@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { FormInput, FormSelect, Button } from "components";
-import { useSubmitParty } from "hooks";
+import { useDataspaces, useSubmitParty } from "hooks";
 import { useLanguage } from "context/LanguageContext";
 import { API } from "api/client";
 import { extractCertificateFields } from "util/certificate";
@@ -342,6 +342,13 @@ const SubmitClaimsForm: React.FC = () => {
   const { t } = useLanguage();
   const router = useRouter();
   const { submitParty, loading, error, response } = useSubmitParty();
+  // Registered dataspaces, so every dataspaceId on this form is selected from
+  // the registry's own list instead of typed by hand.
+  const {
+    optionsWith: dataspaceOptions,
+    loading: dataspacesLoading,
+    available: dataspacesAvailable,
+  } = useDataspaces();
 
   // After a successful creation, take the operator to the participants list so
   // they can see the new party appear — after a short pause so the success
@@ -600,6 +607,27 @@ const SubmitClaimsForm: React.FC = () => {
       onChange={() => {}}
     />
   );
+
+  // Dataspace field: a dropdown over the dataspaces registered in the registry,
+  // so the stored dataspaceId always resolves to a real dataspace. The list is a
+  // convenience — when it cannot be loaded (registry unreachable, or none
+  // registered) the field degrades to the free-text input so the form still works.
+  const claimDataspace = (index: number, required = false) => {
+    if (!dataspacesLoading && !dataspacesAvailable) {
+      return claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", required);
+    }
+    const current = claims[index].dataspaceId || "";
+    return (
+      <FormSelect
+        label={t("submit.claim.dataspaceId")}
+        options={dataspaceOptions(current)}
+        value={current}
+        onChange={(v) => updateClaim(index, "dataspaceId", v)}
+        required={required}
+        disabled={dataspacesLoading}
+      />
+    );
+  };
 
   // --- File uploads: certificate → x5c/x5t#s256/subjectName; agreement PDF → sha256 hash ---
 
@@ -910,7 +938,7 @@ const SubmitClaimsForm: React.FC = () => {
             {claimInput(index, "name", t("submit.claim.authRegistryName"), "", true)}
             {claimInput(index, "authRegistryId", t("submit.claim.authRegistryId"), "", true)}
             {claimInput(index, "authUrl", t("submit.claim.authRegistryUrl"), t("submit.placeholders.url"), true)}
-            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"))}
+            {claimDataspace(index)}
             {claimInput(index, "serviceProviderPartyId", t("submit.claim.serviceProviderPartyId"))}
           </>
         );
@@ -974,7 +1002,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "dataspaceMembership":
         return (
           <>
-            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimDataspace(index, true)}
             {claimInput(index, "capabilityUrl", t("submit.claim.capabilityUrl"), t("submit.placeholders.url"))}
             <FormSelect
               label={t("submit.claim.legalAdherence")}
@@ -996,7 +1024,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "dataspaceAgreement":
         return (
           <>
-            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimDataspace(index, true)}
             {claimInput(index, "agreementType", t("submit.claim.agreementType"), t("submit.placeholders.agreementType"), true)}
             {claimInput(index, "agreementId", t("submit.claim.agreementId"), "", true)}
             {claimInput(index, "title", t("submit.claim.title"), "", true)}
@@ -1005,7 +1033,7 @@ const SubmitClaimsForm: React.FC = () => {
       case "dataspaceRole":
         return (
           <>
-            {claimInput(index, "dataspaceId", t("submit.claim.dataspaceId"), "", true)}
+            {claimDataspace(index, true)}
             {claimInput(index, "roleId", t("submit.claim.roleId"), t("submit.placeholders.roleId"), true)}
             {claimInput(index, "title", t("submit.claim.title"))}
             <FormSelect

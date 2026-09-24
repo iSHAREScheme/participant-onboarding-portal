@@ -213,28 +213,7 @@ func firstString(m map[string]interface{}, keys ...string) string {
 // whose rows live under "data" (older builds used "dataspaces").
 func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 	out := []fiber.Map{}
-	var arr []interface{}
-
-	container := claims["dataspacesInfo"]
-	if container == nil {
-		container = claims["dataspace_info"]
-	}
-	switch v := container.(type) {
-	case []interface{}:
-		arr = v
-	case map[string]interface{}:
-		if inner, ok := v["data"].([]interface{}); ok {
-			arr = inner
-		} else if inner, ok := v["dataspaces"].([]interface{}); ok {
-			arr = inner
-		}
-	}
-	if arr == nil {
-		if v, ok := claims["dataspaces"].([]interface{}); ok {
-			arr = v
-		}
-	}
-	for _, item := range arr {
+	for _, item := range dataspaceRows(claims) {
 		m, ok := item.(map[string]interface{})
 		if !ok {
 			continue
@@ -244,7 +223,79 @@ func extractDataspaces(claims map[string]interface{}) []fiber.Map {
 			continue
 		}
 		title := firstString(m, "title", "dataspace_title")
-		out = append(out, fiber.Map{"id": id, "title": title})
+		out = append(out, fiber.Map{
+			"id":         id,
+			"title":      title,
+			"agreements": extractCatalogueEntries(m["agreements"]),
+			"roles":      extractCatalogueEntries(m["roles"]),
+		})
+	}
+	return out
+}
+
+// dataspaceRows locates the dataspace array in a decoded dataspaces token: v3
+// nests it under dataspacesInfo.data, legacy 2.x under dataspace_info (as a
+// list or a {data|dataspaces} object), and some builds put it at the top level.
+func dataspaceRows(claims map[string]interface{}) []interface{} {
+	container := claims["dataspacesInfo"]
+	if container == nil {
+		container = claims["dataspace_info"]
+	}
+	switch v := container.(type) {
+	case []interface{}:
+		return v
+	case map[string]interface{}:
+		if inner, ok := v["data"].([]interface{}); ok {
+			return inner
+		}
+		if inner, ok := v["dataspaces"].([]interface{}); ok {
+			return inner
+		}
+	}
+	if v, ok := claims["dataspaces"].([]interface{}); ok {
+		return v
+	}
+	return nil
+}
+
+// extractCatalogueEntries normalises the agreements or roles a dataspace (or
+// framework) defines to {id, title[, agreements]} rows, so the claim forms can
+// offer them as choices for agreementType / roleId. Legacy 2.x satellites do not
+// publish them; the result is then an empty list, never nil, so the frontend
+// sees one shape on every satellite version.
+func extractCatalogueEntries(raw interface{}) []fiber.Map {
+	out := []fiber.Map{}
+	entries, ok := raw.([]interface{})
+	if !ok {
+		return out
+	}
+	for _, entry := range entries {
+		m, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		id := firstString(m, "id")
+		if id == "" {
+			continue
+		}
+		row := fiber.Map{"id": id, "title": firstString(m, "title")}
+		// A role may list the agreement ids it requires.
+		if required, ok := m["agreements"].([]interface{}); ok {
+			row["agreements"] = nonEmptyStrings(required)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// nonEmptyStrings keeps the trimmed, non-empty string members of a decoded
+// JSON array and drops everything else.
+func nonEmptyStrings(values []interface{}) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, strings.TrimSpace(s))
+		}
 	}
 	return out
 }
@@ -307,6 +358,10 @@ func extractFrameworks(claims map[string]interface{}) ([]fiber.Map, fiber.Map) {
 				row[key] = val
 			}
 		}
+		// The framework's agreement and role catalogue, in the same shape the
+		// dataspace rows use, so claim forms can offer them for frameworkAgreement.
+		row["agreements"] = extractCatalogueEntries(m["agreements"])
+		row["roles"] = extractCatalogueEntries(m["roles"])
 		out = append(out, row)
 	}
 	return out, pagination

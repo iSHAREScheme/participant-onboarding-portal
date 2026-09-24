@@ -1,5 +1,6 @@
 import { useState } from "react";
 import API from "api/client";
+import { useDataspaces } from "hooks";
 import { useLanguage } from "../../context/LanguageContext";
 import styles from "styles/ParticipantDetail.module.css";
 
@@ -161,6 +162,13 @@ const ClaimEditModal = ({
   const claimId = str(claim?.id);
   const mutable = TYPE_MUTABLE[type] ?? [];
   const readonly = ["type", "registrarId", ...(TYPE_READONLY[type] ?? [])];
+  // dataspaceId is immutable on a claim PATCH (the satellite rejects it, see
+  // v3ClaimSpecificImmutablePatchPaths), so it stays read-only here — but it is
+  // resolved against the registry's dataspace list to show the dataspace's title
+  // rather than a bare id. Only fetched when this claim type actually has one.
+  const { labelFor: dataspaceLabelFor } = useDataspaces(
+    readonly.includes("dataspaceId")
+  );
 
   // Claim dates are stored as RFC3339 instants; a date input needs bare
   // yyyy-mm-dd (an RFC3339 value renders as EMPTY), so trim for display and
@@ -286,7 +294,12 @@ const ClaimEditModal = ({
             {roVals.map(({ k, v }) => (
               <div className={styles.formRow} key={k}>
                 <label className={styles.formLabel}>{humanize(k)}</label>
-                <input className={styles.formInput} value={v} disabled readOnly />
+                <input
+                  className={styles.formInput}
+                  value={k === "dataspaceId" ? dataspaceLabelFor(v) : v}
+                  disabled
+                  readOnly
+                />
               </div>
             ))}
           </div>

@@ -4,7 +4,7 @@ import { NextPage } from "next";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { FormInput, Button, FormSelect } from "components";
-import { useSubmitInfo } from "hooks";
+import { useDataspaces, useSubmitInfo } from "hooks";
 import { useLanguage } from "context/LanguageContext";
 import { useKeycloak } from "@react-keycloak/web";
 import { useRouter } from "next/router";
@@ -107,6 +107,15 @@ const Submit: NextPage = () => {
   useEffect(() => {
     if (keycloak?.authenticated && !isAdmin) router.replace("/");
   }, [keycloak?.authenticated, isAdmin, router]);
+  // Registered dataspaces for the v2 dataspace pickers (shared with the v3
+  // claim forms, so the same list and labels appear everywhere). Admin-only,
+  // like the endpoint that serves it and the form itself.
+  const {
+    optionsWith: dataspaceOptions,
+    titleFor: dataspaceTitleFor,
+    loading: dataspacesLoading,
+    available: dataspacesAvailable,
+  } = useDataspaces(isAdmin);
   // The interface (v2 party form vs v3 claims form) must follow the satellite's
   // actual version. The backend auto-detects it — the same source the Settings
   // page shows — which can differ from the static client env. Seed from the env
@@ -283,6 +292,62 @@ const Submit: NextPage = () => {
   };
   const handleAuthorisationRegistryNameChange = (value: string) => {
     formik.setFieldValue("authregistries[0].authregistery_name", value);
+  };
+
+  // Dataspace on a v2 record: the id is chosen from the dataspaces registered in
+  // the registry (same list as everywhere else) and the title is filled from that
+  // choice, so the stored pair always matches a real dataspace. The list is a
+  // convenience — when it cannot be loaded (registry unreachable, or none
+  // registered) both fields degrade to free text so the form still works.
+  const dataspaceFields = (
+    path: string,
+    value: { dataspace_id?: string; dataspace_title?: string } | undefined
+  ) => {
+    const id = value?.dataspace_id || "";
+    const title = value?.dataspace_title || "";
+    const titleField = (disabled: boolean) => (
+      <FormInput
+        label={t("submit.v2.fields.dataspaceTitle")}
+        id={`${path}.dataspace_title`}
+        name={`${path}.dataspace_title`}
+        type="text"
+        placeholder=""
+        disabled={disabled}
+        value={title}
+        onChange={disabled ? () => {} : formik.handleChange}
+      />
+    );
+    if (!dataspacesLoading && !dataspacesAvailable) {
+      return (
+        <>
+          <FormInput
+            label={t("submit.claim.dataspaceId")}
+            id={`${path}.dataspace_id`}
+            name={`${path}.dataspace_id`}
+            type="text"
+            placeholder=""
+            value={id}
+            onChange={formik.handleChange}
+          />
+          {titleField(false)}
+        </>
+      );
+    }
+    return (
+      <>
+        <FormSelect
+          label={t("submit.claim.dataspaceId")}
+          options={dataspaceOptions(id)}
+          value={id}
+          disabled={dataspacesLoading}
+          onChange={(v) => {
+            formik.setFieldValue(`${path}.dataspace_id`, v);
+            formik.setFieldValue(`${path}.dataspace_title`, dataspaceTitleFor(v));
+          }}
+        />
+        {titleField(true)}
+      </>
+    );
   };
 
   // Authenticated non-admins are redirected away by the effect above; render
@@ -524,32 +589,10 @@ const Submit: NextPage = () => {
                       : undefined
                   }
                 />
-                <FormInput
-                  label={t("submit.claim.dataspaceId")}
-                  id={`authregistries[0].dataspace_id`}
-                  name={`authregistries[0].dataspace_id`}
-                  type="text"
-                  value={""}
-                  onChange={formik.handleChange}
-                  error={
-                    formik.touched.authregistries?.[0]?.dataspace_id
-                      ? formik.errors.authregistries?.[0]?.dataspace_id
-                      : undefined
-                  }
-                />
-                <FormInput
-                  label={t("submit.v2.fields.dataspaceTitle")}
-                  id={`authregistries[0].dataspace_title`}
-                  name={`authregistries[0].dataspace_title`}
-                  type="text"
-                  value={""}
-                  onChange={formik.handleChange}
-                  error={
-                    formik.touched.authregistries?.[0]?.dataspace_title
-                      ? formik.errors.authregistries?.[0]?.dataspace_title
-                      : undefined
-                  }
-                />
+                {dataspaceFields(
+                  "authregistries[0]",
+                  formik.values.authregistries?.[0]
+                )}
               </div>
             )}
           </div>
@@ -774,32 +817,7 @@ const Submit: NextPage = () => {
                       : undefined
                   }
                 />
-                <FormInput
-                  label={t("submit.claim.dataspaceId")}
-                  id={`agreements[0].dataspace_id`}
-                  name={`agreements[0].dataspace_id`}
-                  type="text"
-                  value={""}
-                  onChange={formik.handleChange}
-                  error={
-                    formik.touched.agreements?.[0]?.dataspace_id
-                      ? formik.errors.agreements?.[0]?.dataspace_id
-                      : undefined
-                  }
-                />
-                <FormInput
-                  label={t("submit.v2.fields.dataspaceTitle")}
-                  id={`agreements[0].dataspace_title`}
-                  name={`agreements[0].dataspace_title`}
-                  type="text"
-                  value={""}
-                  onChange={formik.handleChange}
-                  error={
-                    formik.touched.agreements?.[0]?.dataspace_title
-                      ? formik.errors.agreements?.[0]?.dataspace_title
-                      : undefined
-                  }
-                />
+                {dataspaceFields("agreements[0]", formik.values.agreements?.[0])}
                 <FormInput
                   label={t("submit.v2.fields.contractFile")}
                   id={`agreements[0].agreement_file`}
