@@ -84,29 +84,49 @@ func (h *HandlerRegistry) partyCertificates(partyID string) ([]*x509.Certificate
 	if !ok {
 		return nil, nil
 	}
-	certificates := make([]*x509.Certificate, 0)
-	add := func(x5c string) {
-		parsed, err := satellite.ParseX5CCertificate(x5c)
-		if err == nil && parsed != nil {
-			certificates = append(certificates, parsed)
-		}
-	}
+	values := append(claimCertificateValues(record), legacyCertificateValues(record)...)
+	return parseCertificateValues(values), nil
+}
+
+// claimCertificateValues returns the x5c of every x509Certificate claim.
+func claimCertificateValues(record map[string]interface{}) []string {
+	values := make([]string, 0)
 	for _, claim := range partyClaims(record) {
 		if claimType, _ := claim["type"].(string); claimType != "x509Certificate" {
 			continue
 		}
 		if x5c, _ := claim["x5c"].(string); strings.TrimSpace(x5c) != "" {
-			add(x5c)
+			values = append(values, x5c)
 		}
 	}
-	if legacy, ok := record["certificates"].([]interface{}); ok {
-		for _, entry := range legacy {
-			if m, ok := entry.(map[string]interface{}); ok {
-				if x5c := firstString(m, "x5c", "certificate", "certificate_value"); x5c != "" {
-					add(x5c)
-				}
+	return values
+}
+
+// legacyCertificateValues returns the certificate values of a v2 party record.
+func legacyCertificateValues(record map[string]interface{}) []string {
+	values := make([]string, 0)
+	legacy, ok := record["certificates"].([]interface{})
+	if !ok {
+		return values
+	}
+	for _, entry := range legacy {
+		if m, ok := entry.(map[string]interface{}); ok {
+			if x5c := firstString(m, "x5c", "certificate", "certificate_value"); x5c != "" {
+				values = append(values, x5c)
 			}
 		}
 	}
-	return certificates, nil
+	return values
+}
+
+// parseCertificateValues parses what it can and drops the rest: a registry
+// record with one unreadable certificate must not hide the readable ones.
+func parseCertificateValues(values []string) []*x509.Certificate {
+	certificates := make([]*x509.Certificate, 0, len(values))
+	for _, value := range values {
+		if parsed, err := satellite.ParseX5CCertificate(value); err == nil && parsed != nil {
+			certificates = append(certificates, parsed)
+		}
+	}
+	return certificates
 }

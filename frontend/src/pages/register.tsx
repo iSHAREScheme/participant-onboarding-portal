@@ -1981,7 +1981,7 @@ const Register: NextPage = () => {
     } else {
       // Handle single file for other steps
       const file = files[0];
-      if (file) handleFileUpload(file);
+      if (file) void handleFileUpload(file);
     }
   };
 
@@ -2011,7 +2011,7 @@ const Register: NextPage = () => {
     } else {
       // Handle single file for other steps
       const file = e.target.files?.[0];
-      if (file) handleFileUpload(file);
+      if (file) void handleFileUpload(file);
     }
     // Reset the input value so the same file can be selected again
     e.target.value = '';
@@ -2629,7 +2629,7 @@ const Register: NextPage = () => {
                                 ref={fileInputRef}
                                 onChange={(e) => {
                                   const file = e.target.files?.[0]
-                                  if (file) handleFileUpload(file)
+                                  if (file) void handleFileUpload(file)
                                 }}
                               />
                             </div>
