@@ -49,7 +49,7 @@ type VcPresentationSession struct {
 	Result datatypes.JSON `gorm:"type:json" json:"result,omitempty"`
 
 	CreatedAt  time.Time  `json:"createdAt"`
-	ExpiresAt  time.Time  `json:"expiresAt"`
+	ExpiresAt  time.Time  `gorm:"index" json:"expiresAt"`
 	VerifiedAt *time.Time `json:"verifiedAt,omitempty"`
 	// ConsumedAt is set when a proposal was built from this verification, so one
 	// presentation cannot silently back several applications.

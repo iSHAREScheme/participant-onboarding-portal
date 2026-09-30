@@ -3,12 +3,21 @@ package verification
 import (
 	"crypto"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+// Error classes a handler maps to applicant-safe messages. The wrapped detail
+// may name internal hosts (an operator's resolver URL, a dial error) and is for
+// the server log only.
+var (
+	ErrKeyResolution = errors.New("issuer key resolution failed")
+	ErrStatusList    = errors.New("status list unavailable")
 )
 
 // Verifier turns an inbound vp_token into onboarding form values. Every
@@ -65,6 +74,12 @@ type Result struct {
 	IdentitySatisfied bool `json:"identitySatisfied"`
 	// Warnings are non-fatal observations worth showing an operator.
 	Warnings []string `json:"warnings,omitempty"`
+	// HolderBound is true only when the presentation itself was signed, that
+	// signature verified against the holder's key, and it echoed this session's
+	// nonce. Without it the credentials inside are genuine but the presentation
+	// could be a replay of someone else's: anything that grants privilege
+	// automatically (skipping admin review) must require it.
+	HolderBound bool `json:"holderBound"`
 	// VerifiedAt is when the presentation cleared verification.
 	VerifiedAt time.Time `json:"verifiedAt"`
 }
@@ -74,6 +89,12 @@ type Verifier struct {
 	Policy TrustPolicy
 	Keys   KeyResolver
 	Status StatusChecker
+	// HolderKeys resolves the key a holder signed the presentation with. A
+	// holder is a party, not an issuer, so it has no trust-list entry; iSHARE
+	// parties (did:ishare) publish no DID document either, so the portal
+	// resolves them through the Participant Registry's certificates. Falls back
+	// to Keys (did:web only) when nil.
+	HolderKeys KeyResolver
 	// Now is injectable so tests can pin the validation instant.
 	Now func() time.Time
 }
@@ -115,7 +136,7 @@ func (v *Verifier) Verify(rawPresentation []byte, expect Expectation) (*Result, 
 	}
 
 	for i, token := range parsed.CredentialJWTs {
-		credential, err := v.verifyCredential(token)
+		credential, err := v.verifyCredential(token, result)
 		if err != nil {
 			return nil, fmt.Errorf("credential %d of %d: %w", i+1, len(parsed.CredentialJWTs), err)
 		}
@@ -126,8 +147,22 @@ func (v *Verifier) Verify(rawPresentation []byte, expect Expectation) (*Result, 
 	}
 
 	v.applyMappings(result)
-	sort.Strings(result.Warnings)
+	result.Warnings = uniqueSorted(result.Warnings)
 	return result, nil
+}
+
+func uniqueSorted(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+	sort.Strings(values)
+	out := values[:1]
+	for _, value := range values[1:] {
+		if value != out[len(out)-1] {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // checkHolderBinding verifies the presentation's own signature when it has one.
@@ -176,27 +211,41 @@ func (v *Verifier) checkHolderBinding(parsed *ParsedPresentation, expect Expecta
 			return fmt.Errorf("holder binding failed: %w", err)
 		}
 		result.Warnings = append(result.Warnings, "Holder binding could not be verified: "+err.Error())
+		return nil
 	}
+	// Signed by the holder and, when this portal issued a nonce, echoing it:
+	// the presentation is bound to this session and not a replay.
+	result.HolderBound = expect.Nonce != ""
 	return nil
+}
+
+// holderKeys is the resolver for presentation (holder) signatures.
+func (v *Verifier) holderKeys() KeyResolver {
+	if v.HolderKeys != nil {
+		return v.HolderKeys
+	}
+	return v.Keys
 }
 
 func (v *Verifier) verifyPresentationSignature(token, holder string) error {
 	if strings.TrimSpace(holder) == "" {
 		return fmt.Errorf("presentation names no holder")
 	}
-	if v.Keys == nil {
+	keys := v.holderKeys()
+	if keys == nil {
 		return fmt.Errorf("no key resolver configured")
 	}
-	// A holder is not an issuer, so it has no trust-list entry; only did:web
-	// holders resolve without configuration.
+	// A holder is not an issuer, so it has no trust-list entry: HolderKeys
+	// (the registry's certificates for iSHARE parties, did:web otherwise).
 	_, err := v.parseAndVerify(token, func(kid string) (crypto.PublicKey, error) {
-		return v.Keys.ResolveKey(holder, kid, "")
+		return keys.ResolveKey(holder, kid, "")
 	})
 	return err
 }
 
-// verifyCredential runs the full gate for one vc+jwt.
-func (v *Verifier) verifyCredential(token string) (*VerifiedCredential, error) {
+// verifyCredential runs the full gate for one vc+jwt. Non-fatal observations
+// (soft-mode status problems) are appended to result.Warnings.
+func (v *Verifier) verifyCredential(token string, result *Result) (*VerifiedCredential, error) {
 	// Decode before verifying, purely to learn which key and policy apply. No
 	// value read here is trusted until the signature check below succeeds.
 	payload, err := DecodeJWTPayload(token)
@@ -237,7 +286,7 @@ func (v *Verifier) verifyCredential(token string) (*VerifiedCredential, error) {
 		return nil, fmt.Errorf("%s from %s: %w", accepted.Type, issuer, err)
 	}
 
-	if err := v.checkStatus(body); err != nil {
+	if err := v.checkStatus(body, result); err != nil {
 		return nil, fmt.Errorf("%s from %s: %w", accepted.Type, issuer, err)
 	}
 
@@ -257,12 +306,15 @@ func (v *Verifier) verifyCredential(token string) (*VerifiedCredential, error) {
 // parseAndVerify checks the compact JWS with a key chosen by the token's kid,
 // restricted to the algorithm allow-list.
 func (v *Verifier) parseAndVerify(token string, resolve func(kid string) (crypto.PublicKey, error)) (*jwt.Token, error) {
-	if v.Keys == nil {
-		return nil, fmt.Errorf("no key resolver configured")
-	}
 	return jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		kid, _ := t.Header["kid"].(string)
-		return resolve(kid)
+		key, err := resolve(kid)
+		if err != nil {
+			// Classified so the handler can answer the applicant without the
+			// detail (which may carry an internal resolver host).
+			return nil, fmt.Errorf("%w: %v", ErrKeyResolution, err)
+		}
+		return key, nil
 	},
 		jwt.WithValidMethods(allowedAlgorithms),
 		// The VC body carries its own validity window (validFrom/validUntil),
@@ -292,8 +344,15 @@ func (v *Verifier) checkValidity(body map[string]any) (*time.Time, *time.Time, e
 	return from, until, nil
 }
 
+const (
+	warnStatusMalformed   = "The credential's revocation status could not be read (malformed credentialStatus); revocation checking is in soft mode, so verification continued."
+	warnStatusUnavailable = "The credential's status list could not be checked; revocation checking is in soft mode, so verification continued."
+)
+
 // checkStatus applies the configured revocation policy to every status entry.
-func (v *Verifier) checkStatus(body map[string]any) error {
+// In soft mode anything that prevents a check (malformed entry, unreachable
+// list) becomes a warning; a readable list that says "revoked" always fails.
+func (v *Verifier) checkStatus(body map[string]any, result *Result) error {
 	mode := strings.TrimSpace(v.Policy.StatusCheck)
 	if mode == "" {
 		mode = StatusCheckSoft
@@ -301,30 +360,35 @@ func (v *Verifier) checkStatus(body map[string]any) error {
 	if mode == StatusCheckOff {
 		return nil
 	}
+	required := mode == StatusCheckRequired
 	entries, err := statusEntries(body["credentialStatus"])
 	if err != nil {
-		return err
+		if required {
+			return fmt.Errorf("%w: %v", ErrStatusList, err)
+		}
+		result.Warnings = append(result.Warnings, warnStatusMalformed)
+		return nil
 	}
 	if len(entries) == 0 {
-		if mode == StatusCheckRequired {
+		if required {
 			return fmt.Errorf("credential carries no status list but revocation checking is required")
 		}
 		return nil
 	}
 	if v.Status == nil {
-		if mode == StatusCheckRequired {
-			return fmt.Errorf("no status checker configured but revocation checking is required")
+		if required {
+			return fmt.Errorf("%w: no status checker configured", ErrStatusList)
 		}
+		result.Warnings = append(result.Warnings, warnStatusUnavailable)
 		return nil
 	}
 	for _, entry := range entries {
 		purposes, err := v.Status.Check(entry)
 		if err != nil {
-			if mode == StatusCheckRequired {
-				return fmt.Errorf("revocation status could not be established: %w", err)
+			if required {
+				return fmt.Errorf("%w: revocation status could not be established: %v", ErrStatusList, err)
 			}
-			// Soft mode: an unreachable list must not block onboarding, but a
-			// readable list that says "revoked" still fails below.
+			result.Warnings = append(result.Warnings, warnStatusUnavailable)
 			continue
 		}
 		if len(purposes) > 0 {

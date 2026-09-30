@@ -217,9 +217,9 @@ func publicFlowView(f models.OnboardingFlow, allAgreements []models.Agreement) f
 		"authRegistryUrl":  f.AuthRegistryUrl,
 		// The flow's identity-method override ("" = inherit the deployment
 		// choice). Only which methods are offered travels publicly; the
-		// trusted-issuer list behind VCs stays admin-only.
+		// trusted-issuer list behind VCs and the review policy (vcAutoAccept)
+		// stay admin-only.
 		"identityMethods":    f.IdentityMethods,
-		"vcAutoAccept":       f.VcAutoAccept,
 		"defaultRole":        f.DefaultRole,
 		"skipRoles":          f.SkipRoles,
 		"activeRoles":        f.ActiveRoles,

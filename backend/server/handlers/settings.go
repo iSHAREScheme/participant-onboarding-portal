@@ -70,14 +70,17 @@ func (h *HandlerSettings) GetSettings(c *fiber.Ctx) error {
 	// authenticated but NOT admin-gated. Replace it with the single boolean the
 	// onboarding form actually needs; the full policy is served only by the
 	// admin-gated /settings/vc-onboarding.
-	if payload, err := settingsAsMap(settings); err == nil {
-		delete(payload, "vcOnboarding")
-		// Serve the resolved deployment choice, so callers never need to know
-		// the default: an unset value arrives as eIDAS + eHerkenning, VCs off.
-		payload["identityMethods"] = strings.Join(deploymentIdentityMethods(&settings), ",")
-		return c.JSON(payload)
+	payload, err := settingsAsMap(settings)
+	if err != nil {
+		// Never fall back to the raw struct: that would serve the trust policy
+		// this endpoint exists to withhold.
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Could not render settings")
 	}
-	return c.JSON(settings)
+	delete(payload, "vcOnboarding")
+	// Serve the resolved deployment choice, so callers never need to know
+	// the default: an unset value arrives as eIDAS + eHerkenning, VCs off.
+	payload["identityMethods"] = strings.Join(deploymentIdentityMethods(&settings), ",")
+	return c.JSON(payload)
 }
 
 // GetPublicSettings godoc

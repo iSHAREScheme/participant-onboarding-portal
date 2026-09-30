@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 type HandlerParty struct {
@@ -724,6 +725,17 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}
 	}
 
+	// A verified presentation decides the fields it proved BEFORE anything is
+	// judged: the certificate/party-id alignment and the authorization match
+	// below must see the party the credential names, not what the form sent.
+	vcSession, vcResult, err := h.loadVerifiedPresentation(c, proposalData.VcSessionId)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+	if vcResult != nil {
+		applyVerifiedFieldsToProposalData(&proposalData, vcResult.Fields)
+	}
+
 	// The party identifier is the generic party id — KVK-based for NL eHerkenning
 	// parties, but also EORI/DID/other registration numbers for non-Dutch parties.
 	// Require that, not a KVK specifically.
@@ -844,17 +856,26 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		CertX5tS256:      proposalData.IDCheck.CertX5tS256,
 	}
 
-	// A verified presentation overrides whatever the browser submitted for the
-	// fields it proved, and may skip admin review when the flow allows it.
-	if err := h.applyVerifiedPresentation(c, &proposal, proposalData.VcSessionId); err != nil {
-		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	// Evidence of the verified presentation, and the review policy (skip admin
+	// review only for a holder-bound presentation on a flow that allows it).
+	if vcResult != nil {
+		h.stampVerifiedPresentation(&proposal, vcSession, vcResult)
 	}
 
-	result := h.Server.DB.Create(&proposal)
-	if result.Error != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save proposal to database: "+result.Error.Error())
+	// Claim the session and insert the proposal in one transaction: two submits
+	// racing on the same verification cannot both become proposals, and a failed
+	// insert leaves the session usable.
+	if err := h.Server.DB.Transaction(func(tx *gorm.DB) error {
+		if err := consumePresentationSession(tx, proposalData.VcSessionId); err != nil {
+			return err
+		}
+		return tx.Create(&proposal).Error
+	}); err != nil {
+		if errors.Is(err, errPresentationConsumed) {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save proposal to database: "+err.Error())
 	}
-	h.markPresentationConsumed(proposalData.VcSessionId)
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":    "Your proposal has been successfully saved.",

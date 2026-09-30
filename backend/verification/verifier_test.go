@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"crypto"
+	"errors"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -406,4 +408,116 @@ func encodeList(bits []byte) string {
 	_, _ = gw.Write(bits)
 	_ = gw.Close()
 	return "u" + base64.RawURLEncoding.EncodeToString(buf.Bytes())
+}
+
+type staticKeyResolver struct{ key crypto.PublicKey }
+
+func (r staticKeyResolver) ResolveKey(string, string, string) (crypto.PublicKey, error) {
+	return r.key, nil
+}
+
+func signedPresentation(t *testing.T, issuer *issuerFixture, nonce, audience string) []byte {
+	t.Helper()
+	vp := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims(map[string]any{
+		"iss":   testSubject,
+		"aud":   audience,
+		"nonce": nonce,
+		"vp": map[string]any{
+			"type":   []any{TypeVerifiablePresentation},
+			"holder": testSubject,
+			"verifiableCredential": []any{map[string]any{
+				"id":   credentialJWTPrefix + signCredential(t, issuer.key, trustedParticipantCredential()),
+				"type": TypeEnvelopedCredential,
+			}},
+		},
+	}))
+	vp.Header["kid"] = testKeyID
+	signed, err := vp.SignedString(issuer.key)
+	if err != nil {
+		t.Fatalf("signing presentation: %v", err)
+	}
+	return []byte(signed)
+}
+
+// HolderBound is what auto-approval keys on: only a presentation the holder
+// signed, verified against the holder's key and echoing this session's nonce.
+func TestVerifySetsHolderBoundOnlyForSignedPresentationsWithTheSessionNonce(t *testing.T) {
+	issuer := newIssuerFixture(t)
+	verifier := NewVerifier(policyTrusting(issuer.resolverURL))
+	verifier.HolderKeys = staticKeyResolver{key: &issuer.key.PublicKey}
+
+	bound, err := verifier.Verify(signedPresentation(t, issuer, "nonce-1", "https://portal/response"), Expectation{Nonce: "nonce-1", Audience: "https://portal/response"})
+	if err != nil {
+		t.Fatalf("signed presentation: %v", err)
+	}
+	if !bound.HolderBound {
+		t.Fatal("a signed presentation echoing the session nonce must be holder-bound")
+	}
+	for _, warning := range bound.Warnings {
+		if strings.Contains(warning, "Holder binding") {
+			t.Fatalf("no holder-binding warning expected: %q", warning)
+		}
+	}
+
+	// Direct submission: nothing to bind to, however well signed.
+	direct, err := verifier.Verify(signedPresentation(t, issuer, "whatever", "x"), Expectation{})
+	if err != nil {
+		t.Fatalf("direct: %v", err)
+	}
+	if direct.HolderBound {
+		t.Fatal("without a session nonce a presentation is never holder-bound")
+	}
+
+	// Unsecured presentation: credentials fine, binding absent.
+	unsecured, err := verifier.Verify(envelopePresentation(signCredential(t, issuer.key, trustedParticipantCredential())), Expectation{Nonce: "nonce-1"})
+	if err != nil {
+		t.Fatalf("unsecured: %v", err)
+	}
+	if unsecured.HolderBound {
+		t.Fatal("an unsecured presentation must not be holder-bound")
+	}
+}
+
+// Key-resolution failures are classified so the handler can answer without
+// exposing the resolver URL or dial error.
+func TestVerifyClassifiesKeyResolutionFailures(t *testing.T) {
+	issuer := newIssuerFixture(t)
+	dead := httptest.NewServer(http.NotFoundHandler())
+	deadURL := dead.URL + "/.well-known/did.json"
+	dead.Close()
+
+	_, err := NewVerifier(policyTrusting(deadURL)).Verify(envelopePresentation(signCredential(t, issuer.key, trustedParticipantCredential())), Expectation{})
+	if !errors.Is(err, ErrKeyResolution) {
+		t.Fatalf("err = %v, want ErrKeyResolution in the chain", err)
+	}
+}
+
+// Soft mode tolerates a status entry it cannot read (warning), required mode
+// refuses it with the status-list error class.
+func TestVerifySoftModeWarnsOnMalformedCredentialStatus(t *testing.T) {
+	issuer := newIssuerFixture(t)
+	credential := trustedParticipantCredential()
+	credential["credentialStatus"] = "not-a-status-entry"
+	presentation := envelopePresentation(signCredential(t, issuer.key, credential))
+
+	policy := policyTrusting(issuer.resolverURL)
+	policy.StatusCheck = StatusCheckSoft
+	result, err := NewVerifier(policy).Verify(presentation, Expectation{})
+	if err != nil {
+		t.Fatalf("soft mode must verify: %v", err)
+	}
+	found := false
+	for _, warning := range result.Warnings {
+		if warning == warnStatusMalformed {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("soft mode must warn about the malformed status: %v", result.Warnings)
+	}
+
+	policy.StatusCheck = StatusCheckRequired
+	if _, err := NewVerifier(policy).Verify(presentation, Expectation{}); !errors.Is(err, ErrStatusList) {
+		t.Fatalf("required mode err = %v, want ErrStatusList", err)
+	}
 }

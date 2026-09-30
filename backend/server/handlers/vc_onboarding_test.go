@@ -236,7 +236,8 @@ func TestApplyVerifiedPresentationAutoApproves(t *testing.T) {
 		t.Fatalf("seed settings: %v", err)
 	}
 	storeVerifiedSession(t, database, "session-1", "applicant", verification.Result{
-		Fields: map[string]string{verification.FieldPartyName: "Acme Logistics BV"},
+		Fields:      map[string]string{verification.FieldPartyName: "Acme Logistics BV"},
+		HolderBound: true,
 	})
 
 	proposal := &models.Proposal{FlowRoute: "fast", Status: "pending"}
@@ -244,7 +245,31 @@ func TestApplyVerifiedPresentationAutoApproves(t *testing.T) {
 		t.Fatalf("applyVerifiedPresentation: %v", err)
 	}
 	if proposal.Status != "approved" {
-		t.Errorf("status = %q, want approved on a flow that auto-accepts verified applications", proposal.Status)
+		t.Errorf("status = %q, want approved on a flow that auto-accepts holder-bound verified applications", proposal.Status)
+	}
+}
+
+// A presentation that was not signed by its holder (or never echoed this
+// portal's nonce) may be a replay of credentials that are public; it keeps
+// manual review even on a flow that auto-accepts.
+func TestApplyVerifiedPresentationKeepsReviewWithoutHolderBinding(t *testing.T) {
+	database := newVcTestDB(t)
+	handler := newPartyHandler(database)
+
+	flows, _ := json.Marshal([]models.OnboardingFlow{{Route: "fast", VcAutoAccept: "true"}})
+	if err := database.Create(&models.Settings{OnboardingFlows: datatypes.JSON(flows), VcAutoAcceptVerified: "true"}).Error; err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+	storeVerifiedSession(t, database, "session-1", "applicant", verification.Result{
+		Fields: map[string]string{verification.FieldPartyName: "Acme Logistics BV"},
+	})
+
+	proposal := &models.Proposal{FlowRoute: "fast", Status: "pending"}
+	if err := handler.applyVerifiedPresentation(nil, proposal, "session-1"); err != nil {
+		t.Fatalf("applyVerifiedPresentation: %v", err)
+	}
+	if proposal.Status != "pending" || !proposal.VcVerified {
+		t.Errorf("status=%q verified=%t, want pending (review kept) and verified", proposal.Status, proposal.VcVerified)
 	}
 }
 

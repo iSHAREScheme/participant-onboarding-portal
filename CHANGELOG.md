@@ -19,4 +19,17 @@ All notable changes to this project will be documented in this file.
 - `NEXT_PUBLIC_ALWAYS_EHERKENNING` no longer changes the identity step. Its
   behaviour depended on the M2M answer, which is not known yet now that the
   identity check comes first; use the identity verification methods setting.
+  The variable has been removed from the environment templates.
+- Skipping admin review for VC-verified applications now requires holder
+  binding: only a presentation signed by the holder with the session nonce
+  (`holderBound`) is auto-approved, and the setting can only be enabled
+  together with "Require the wallet to sign the presentation". Holder keys for
+  `did:ishare` parties are resolved through their certificates in the
+  Participant Registry.
+- OID4VP: the request object uses the response URI as `client_id` under the
+  `redirect_uri` scheme, the presentation definition matches `type[*]`, and a
+  wallet response must carry the session `state`.
+- Verifier failures caused by an unreachable issuer key document or status
+  list are reported to the applicant as a fixed message; the detail stays in
+  the server log.
 - Initial open-source release.

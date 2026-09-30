@@ -211,8 +211,9 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
       </div>
 
       <p className={styles.helperText}>
-        Wallets reach this portal at <code>{verifierBaseUrl || "(not configured)"}</code> and know
-        it as <code>{clientId || "(not configured)"}</code>.
+        Wallets reach this portal at <code>{verifierBaseUrl || "(not configured)"}</code>; per
+        OID4VP&apos;s redirect_uri scheme they address each presentation to its response URI,{" "}
+        <code>{clientId || "(not configured)"}</code>.
         {!verifierBaseUrl &&
           " Set VC_VERIFIER_BASE_URL to a publicly reachable URL before the QR flow can work; applicants can still paste a presentation without it."}
       </p>
