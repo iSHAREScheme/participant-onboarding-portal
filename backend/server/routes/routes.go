@@ -42,6 +42,32 @@ func ConfigureRoutes(server *s.Server, config *config.Config) {
 	// forwards the operator's token through the single pr.Client.
 	groupPR := server.App.Group("/pr")
 	GroupPRRequests(server, groupPR, config)
+
+	// Credential-based onboarding (OID4VP). Two of these endpoints are reached
+	// by the applicant's wallet rather than by the browser, so they are public
+	// by necessity — see the auth middleware allowlist and the handler comments.
+	groupVc := server.App.Group("/onboarding/vc")
+	GroupVcOnboardingRequests(server, groupVc, config)
+}
+
+// GroupVcOnboardingRequests mounts the verifiable-presentation onboarding flow.
+//
+// The split matters. /request/:id and /response/:id are fetched and posted by a
+// wallet on the applicant's phone, which holds no Keycloak session; they are
+// authenticated by the unguessable session id, a single-use nonce and a short
+// expiry. Everything the browser touches is authenticated normally, and the
+// session poll additionally checks that the caller owns the session.
+func GroupVcOnboardingRequests(server *s.Server, group fiber.Router, config *config.Config) {
+	handler := handlers.NewHandlerVcOnboarding(server, config)
+
+	// Browser-facing, authenticated.
+	group.Post("/session", handler.CreateSession)
+	group.Get("/session/:id", handler.GetSession)
+	group.Post("/verify", handler.VerifyDirect)
+
+	// Wallet-facing, public by protocol.
+	group.Get("/request/:id", handler.GetRequestObject)
+	group.Post("/response/:id", handler.SubmitResponse)
 }
 
 func GroupPartyRequests(server *s.Server, group fiber.Router, config *config.Config) {
@@ -117,6 +143,13 @@ func GroupSettingsRequests(server *s.Server, group fiber.Router, config *config.
 	group.Post("/settings/agreements/url", middlewares.RequireAdminRole(), agreements.AddAgreementURL)
 	group.Put("/settings/agreements/:id", middlewares.RequireAdminRole(), agreements.UpdateAgreement)
 	group.Delete("/settings/agreements/:id", middlewares.RequireAdminRole(), agreements.DeleteAgreement)
+
+	// Credential-based onboarding configuration: accepted credential types,
+	// trusted issuers and the claim-to-field mapping. Admin-only — the resolver
+	// URLs and issuer list are the trust anchors for pre-filled applications.
+	vc := handlers.NewHandlerVcOnboarding(server, config)
+	group.Get("/settings/vc-onboarding", middlewares.RequireAdminRole(), vc.GetPolicy)
+	group.Post("/settings/vc-onboarding", middlewares.RequireAdminRole(), vc.UpdatePolicy)
 
 	// Authentication: the realm's identity providers and SMTP settings live in
 	// Keycloak and are managed here via the Keycloak Admin API. Admin-only; IdP

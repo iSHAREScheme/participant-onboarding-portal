@@ -67,3 +67,9 @@ func PartyIDFromOrganizationIdentifier(identifier string) string {
 	}
 	return identifier
 }
+
+// ParseX5CCertificate parses the leaf certificate of an x5c value (base64 DER,
+// optionally a comma-separated chain, or PEM).
+func ParseX5CCertificate(x5c string) (*x509.Certificate, error) {
+	return parseFirstX5CCertificate(x5c)
+}

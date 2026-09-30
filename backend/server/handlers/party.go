@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 type HandlerParty struct {
@@ -637,10 +638,12 @@ type ProposalData struct {
 		UseM2M string `json:"useM2M"`
 	} `json:"m2m"`
 	IDCheck struct {
-		CompanyName string `json:"companyName"`
-		KvkNumber   string `json:"kvkNumber"`
-		PartyId     string `json:"partyId"`
-		PartyName   string `json:"partyName"`
+		// IdCheckMethod is how identity was proven: "eherkenning", "eidas" or "vc".
+		IdCheckMethod string `json:"idCheckMethod"`
+		CompanyName   string `json:"companyName"`
+		KvkNumber     string `json:"kvkNumber"`
+		PartyId       string `json:"partyId"`
+		PartyName     string `json:"partyName"`
 		// eIDAS certificate fields captured at the identity-check step, used to
 		// build the v3 x509Certificate identity claim at party creation.
 		CertSubjectName string `json:"certSubjectName"`
@@ -667,6 +670,10 @@ type ProposalData struct {
 	} `json:"account"`
 	KeycloakUsername string `json:"keycloakUsername"`
 	Status           string `json:"status"`
+	// VcSessionId names a verified presentation session. The browser sends only
+	// the id: every value it proved is re-read from the session server-side, so
+	// a tampered form body cannot claim a field was verified when it was not.
+	VcSessionId string `json:"vcSessionId"`
 	// FlowRoute is the public onboarding flow the applicant came through
 	// ("" = base URL). Validated against the configured flows on receipt.
 	FlowRoute string `json:"flowRoute"`
@@ -716,6 +723,17 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		if err := json.Unmarshal([]byte(jsonData[0]), &proposalData); err != nil {
 			return responses.ErrorResponse(c, fiber.StatusBadRequest, "Failed to parse JSON data")
 		}
+	}
+
+	// A verified presentation decides the fields it proved BEFORE anything is
+	// judged: the certificate/party-id alignment and the authorization match
+	// below must see the party the credential names, not what the form sent.
+	vcSession, vcResult, err := h.loadVerifiedPresentation(c, proposalData.VcSessionId)
+	if err != nil {
+		return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+	if vcResult != nil {
+		applyVerifiedFieldsToProposalData(&proposalData, vcResult.Fields)
 	}
 
 	// The party identifier is the generic party id — KVK-based for NL eHerkenning
@@ -832,20 +850,38 @@ func (h *HandlerParty) HandlePropose(c *fiber.Ctx) error {
 		}(),
 		CreatedAt:        time.Now(),
 		KeycloakUsername: ownerUsername,
+		IdCheckMethod:    strings.TrimSpace(proposalData.IDCheck.IdCheckMethod),
 		CertSubjectName:  proposalData.IDCheck.CertSubjectName,
 		CertX5c:          proposalData.IDCheck.CertX5c,
 		CertX5tS256:      proposalData.IDCheck.CertX5tS256,
 	}
 
-	result := h.Server.DB.Create(&proposal)
-	if result.Error != nil {
-		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save proposal to database: "+result.Error.Error())
+	// Evidence of the verified presentation, and the review policy (skip admin
+	// review only for a holder-bound presentation on a flow that allows it).
+	if vcResult != nil {
+		h.stampVerifiedPresentation(&proposal, vcSession, vcResult)
+	}
+
+	// Claim the session and insert the proposal in one transaction: two submits
+	// racing on the same verification cannot both become proposals, and a failed
+	// insert leaves the session usable.
+	if err := h.Server.DB.Transaction(func(tx *gorm.DB) error {
+		if err := consumePresentationSession(tx, proposalData.VcSessionId); err != nil {
+			return err
+		}
+		return tx.Create(&proposal).Error
+	}); err != nil {
+		if errors.Is(err, errPresentationConsumed) {
+			return responses.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+		}
+		return responses.ErrorResponse(c, fiber.StatusInternalServerError, "Failed to save proposal to database: "+err.Error())
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Your proposal has been successfully saved.",
-		"id":      proposal.ID,
-		"status":  proposal.Status,
+		"message":    "Your proposal has been successfully saved.",
+		"id":         proposal.ID,
+		"status":     proposal.Status,
+		"vcVerified": proposal.VcVerified,
 	})
 }
 

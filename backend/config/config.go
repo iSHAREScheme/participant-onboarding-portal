@@ -51,6 +51,15 @@ type Config struct {
 	// (the same token the portal authenticated the admin with), so the PR must trust
 	// the portal's realm/issuer (scope so.api). Empty = PR-admin features disabled.
 	PrApiBaseUrl string
+	// VcVerifierBaseUrl is this portal's own publicly reachable base URL, used to
+	// build the request_uri / response_uri a wallet must fetch and post to. A
+	// wallet runs on the applicant's phone, so unlike the other service URLs this
+	// one must be reachable from the public internet. Empty = credential-based
+	// onboarding cannot offer the cross-device (QR) flow and says so.
+	VcVerifierBaseUrl string
+	// VcVerifierClientId identifies this verifier to the wallet. Defaults to the
+	// deployment's registrar/satellite identifier.
+	VcVerifierClientId string
 	// CorsAllowedOrigins is a comma-separated allow-list of browser origins
 	// permitted to call the API cross-origin. Empty = no CORS headers emitted.
 	CorsAllowedOrigins string
@@ -260,6 +269,12 @@ func (config *Config) LoadEnvironment() error {
 	// Shared bearer the issuer's /v1 ObP API requires (matches the issuer's
 	// obp.api_key). Secret → env only.
 	config.VcIssuerApiKey = strings.TrimSpace(os.Getenv("VC_ISSUER_API_KEY"))
+
+	// OID4VP verifier identity. The base URL must be publicly reachable because
+	// the applicant's wallet fetches the request object and posts the
+	// presentation directly to it.
+	config.VcVerifierBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_VERIFIER_BASE_URL")), "/")
+	config.VcVerifierClientId = strings.TrimSpace(os.Getenv("VC_VERIFIER_CLIENT_ID"))
 
 	// Participant Registry admin API (SO.api). Server-to-server base URL; auth is
 	// the forwarded operator token, so no credential is configured here.
