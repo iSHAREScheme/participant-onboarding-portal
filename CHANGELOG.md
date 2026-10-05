@@ -22,10 +22,11 @@ All notable changes to this project will be documented in this file.
   The variable has been removed from the environment templates.
 - Skipping admin review for VC-verified applications now requires holder
   binding: only a presentation signed by the holder with the session nonce
-  (`holderBound`) is auto-approved, and the setting can only be enabled
-  together with "Require the wallet to sign the presentation". Holder keys for
-  `did:ishare` parties are resolved through their certificates in the
-  Participant Registry.
+  (`holderBound`) is auto-approved, and only when the holder is the subject of
+  every credential in it. Auto-accept takes effect only together with "Require
+  the wallet to sign the presentation", including when a flow overrides it.
+  Holder keys for `did:ishare` parties are resolved through their active,
+  currently valid certificates in the Participant Registry.
 - OID4VP: the request object uses the response URI as `client_id` under the
   `redirect_uri` scheme, the presentation definition matches `type[*]`, and a
   wallet response must carry the session `state`.
