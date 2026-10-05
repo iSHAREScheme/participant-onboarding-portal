@@ -112,6 +112,17 @@ func Auth(cfg OIDCConfig) (fiber.Handler, error) {
 			return c.Next()
 		}
 
+		// OID4VP wallet endpoints. The applicant's wallet is a separate device
+		// with no Keycloak session, so it cannot present a bearer token: the
+		// protocol authenticates the exchange with an unguessable session id, a
+		// single-use nonce and a short expiry instead (see handlers/vc_onboarding.go).
+		if strings.HasPrefix(path, "/onboarding/vc/request/") && (method == fiber.MethodGet || method == fiber.MethodHead) {
+			return c.Next()
+		}
+		if strings.HasPrefix(path, "/onboarding/vc/response/") && method == fiber.MethodPost {
+			return c.Next()
+		}
+
 		if method == fiber.MethodGet || method == fiber.MethodHead {
 			switch path {
 			// "/settings" is intentionally NOT public — it carries the satellite

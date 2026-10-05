@@ -766,34 +766,16 @@ func (h *HandlerAgreements) fetchAgreementURL(a *models.Agreement) ([]byte, erro
 
 // ssrfGuardControl is the net.Dialer Control hook: it rejects connections to
 // non-public IP ranges, defeating SSRF to internal services / cloud metadata.
-func ssrfGuardControl(network, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return err
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return fmt.Errorf("could not parse dial address %q", address)
-	}
-	if isBlockedIP(ip) {
-		return fmt.Errorf("blocked non-public address %s", ip)
-	}
-	return nil
+// The rule itself lives in utils so the VC verifier applies the identical one.
+func ssrfGuardControl(network, address string, raw syscall.RawConn) error {
+	return utils.SSRFGuardControl(network, address, raw)
 }
 
 // isBlockedIP reports whether an address must not be reached when fetching an
 // admin-supplied agreement URL (loopback, private, link-local incl. the cloud
 // metadata 169.254.169.254, unspecified, and CGNAT 100.64.0.0/10).
 func isBlockedIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
-		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() {
-		return true
-	}
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
-		return true
-	}
-	return false
+	return utils.IsBlockedIP(ip)
 }
 
 // uploadedFileIsPDF checks the magic bytes of a multipart upload.

@@ -7,7 +7,6 @@ module.exports = [
   'NEXT_PUBLIC_IDP_ONLY',
   'NEXT_PUBLIC_KEYCLOAK_IDP',
   'NEXT_PUBLIC_ALWAYS_M2M',
-  'NEXT_PUBLIC_ALWAYS_EHERKENNING',
   // NOTE: the onboarding-flow settings — association name, skip-roles, active
   // roles, default role and auto-accept — are intentionally NOT published here.
   // They are managed at runtime in the admin UI (Settings → Onboarding), stored
