@@ -521,3 +521,50 @@ func TestVerifySoftModeWarnsOnMalformedCredentialStatus(t *testing.T) {
 		t.Fatalf("required mode err = %v, want ErrStatusList", err)
 	}
 }
+
+// A holder signature only proves who signed. Party A wrapping party B's
+// credentials in a presentation signed with A's own key must not count as
+// holder-bound, or B's application could be auto-approved on A's say-so.
+func TestVerifyHolderMustBeTheCredentialSubject(t *testing.T) {
+	issuer := newIssuerFixture(t)
+	verifier := NewVerifier(policyTrusting(issuer.resolverURL))
+	verifier.HolderKeys = staticKeyResolver{key: &issuer.key.PublicKey}
+
+	const otherParty = "did:ishare:EU.NL.NTRNL-87654321"
+	vp := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims(map[string]any{
+		"iss":   otherParty,
+		"aud":   "https://portal/response",
+		"nonce": "nonce-1",
+		"vp": map[string]any{
+			"type":   []any{TypeVerifiablePresentation},
+			"holder": otherParty,
+			"verifiableCredential": []any{map[string]any{
+				// trustedParticipantCredential is about testSubject, not otherParty.
+				"id":   credentialJWTPrefix + signCredential(t, issuer.key, trustedParticipantCredential()),
+				"type": TypeEnvelopedCredential,
+			}},
+		},
+	}))
+	vp.Header["kid"] = testKeyID
+	signed, err := vp.SignedString(issuer.key)
+	if err != nil {
+		t.Fatalf("signing presentation: %v", err)
+	}
+
+	result, err := verifier.Verify([]byte(signed), Expectation{Nonce: "nonce-1", Audience: "https://portal/response"})
+	if err != nil {
+		t.Fatalf("the credentials themselves are valid, so verification should succeed: %v", err)
+	}
+	if result.HolderBound {
+		t.Fatal("a holder that is not the credential subject must not be holder-bound")
+	}
+	found := false
+	for _, warning := range result.Warnings {
+		if warning == warnHolderNotSubject {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning explaining the missing binding, got %v", result.Warnings)
+	}
+}

@@ -31,6 +31,7 @@ const STATUS_CHECK_OPTIONS: { value: VcTrustPolicy["statusCheck"]; label: string
 ];
 
 const emptyType = (): VcAcceptedType => ({
+  clientKey: newClientKey(),
   type: "",
   label: "",
   enabled: true,
@@ -48,6 +49,7 @@ const withClientKeys = (policy: VcTrustPolicy): VcTrustPolicy => ({
   ...policy,
   acceptedTypes: (policy.acceptedTypes ?? []).map((accepted) => ({
     ...accepted,
+    clientKey: accepted.clientKey ?? newClientKey(),
     issuers: (accepted.issuers ?? []).map((issuer) => ({ ...issuer, clientKey: issuer.clientKey ?? newClientKey() })),
     mappings: (accepted.mappings ?? []).map((mapping) => ({ ...mapping, clientKey: mapping.clientKey ?? newClientKey() })),
   })),
@@ -55,7 +57,7 @@ const withClientKeys = (policy: VcTrustPolicy): VcTrustPolicy => ({
 
 const stripClientKeys = (policy: VcTrustPolicy): VcTrustPolicy => ({
   ...policy,
-  acceptedTypes: (policy.acceptedTypes ?? []).map((accepted) => ({
+  acceptedTypes: (policy.acceptedTypes ?? []).map(({ clientKey: _typeKey, ...accepted }) => ({
     ...accepted,
     issuers: (accepted.issuers ?? []).map(({ clientKey: _key, ...issuer }) => issuer),
     mappings: (accepted.mappings ?? []).map(({ clientKey: _key, ...mapping }) => mapping),
@@ -226,7 +228,7 @@ const VcOnboardingSettings: React.FC<Props> = ({ vcEnabled }) => {
 
       {policy.acceptedTypes.map((accepted, index) => (
         <AcceptedTypeEditor
-          key={`${accepted.type}-${index}`}
+          key={accepted.clientKey ?? index}
           accepted={accepted}
           fields={fields}
           onChange={(patch) => updateType(index, patch)}

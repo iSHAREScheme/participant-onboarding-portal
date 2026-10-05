@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 
 	"onboardingportal/integrations/satellite"
 )
@@ -25,10 +26,12 @@ type registryHolderResolver struct {
 	// certificates returns the party's registered certificates (v3 x509Certificate
 	// claims, or the legacy certificates array). Injected so tests need no registry.
 	certificates func(partyID string) ([]*x509.Certificate, error)
+	// now pins the validity check in tests; defaults to time.Now.
+	now func() time.Time
 }
 
 func newRegistryHolderResolver(registry *HandlerRegistry) *registryHolderResolver {
-	return &registryHolderResolver{certificates: registry.partyCertificates}
+	return &registryHolderResolver{certificates: registry.partyCertificates, now: time.Now}
 }
 
 // ResolveKey implements verification.KeyResolver for holders. kid may be the
@@ -40,12 +43,15 @@ func (r *registryHolderResolver) ResolveKey(holder, kid, _ string) (crypto.Publi
 	if holder == "" {
 		return nil, fmt.Errorf("presentation names no holder")
 	}
-	certificates, err := r.certificates(holder)
+	registered, err := r.certificates(holder)
 	if err != nil {
 		return nil, fmt.Errorf("holder %s could not be looked up in the participant registry: %w", holder, err)
 	}
+	// An expired (or not yet valid) certificate cannot vouch for a holder: its
+	// key may be retired or compromised, and holder binding unlocks auto-approval.
+	certificates := currentCertificates(registered, r.clock())
 	if len(certificates) == 0 {
-		return nil, fmt.Errorf("holder %s has no registered certificate to verify the presentation with", holder)
+		return nil, fmt.Errorf("holder %s has no currently valid registered certificate to verify the presentation with", holder)
 	}
 	kid = strings.TrimSpace(kid)
 	if kid == "" {
@@ -64,6 +70,31 @@ func (r *registryHolderResolver) ResolveKey(holder, kid, _ string) (crypto.Publi
 		}
 	}
 	return nil, fmt.Errorf("holder %s has no registered certificate with thumbprint %s", holder, want)
+}
+
+func (r *registryHolderResolver) clock() time.Time {
+	if r.now != nil {
+		return r.now()
+	}
+	return time.Now()
+}
+
+// currentCertificates keeps the certificates whose validity window contains at.
+func currentCertificates(certificates []*x509.Certificate, at time.Time) []*x509.Certificate {
+	current := make([]*x509.Certificate, 0, len(certificates))
+	for _, certificate := range certificates {
+		if !at.Before(certificate.NotBefore) && !at.After(certificate.NotAfter) {
+			current = append(current, certificate)
+		}
+	}
+	return current
+}
+
+// claimIsActive reports whether a registry claim is in force. A claim without a
+// status is treated as active; Revoked / NotActive / Pending claims are not.
+func claimIsActive(claim map[string]interface{}) bool {
+	status, present := claim["status"].(string)
+	return !present || strings.EqualFold(strings.TrimSpace(status), "active")
 }
 
 // certificateThumbprint is the JOSE x5t#S256 value: base64url(sha256(DER)).
@@ -92,7 +123,7 @@ func (h *HandlerRegistry) partyCertificates(partyID string) ([]*x509.Certificate
 func claimCertificateValues(record map[string]interface{}) []string {
 	values := make([]string, 0)
 	for _, claim := range partyClaims(record) {
-		if claimType, _ := claim["type"].(string); claimType != "x509Certificate" {
+		if claimType, _ := claim["type"].(string); claimType != "x509Certificate" || !claimIsActive(claim) {
 			continue
 		}
 		if x5c, _ := claim["x5c"].(string); strings.TrimSpace(x5c) != "" {

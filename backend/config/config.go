@@ -57,9 +57,6 @@ type Config struct {
 	// one must be reachable from the public internet. Empty = credential-based
 	// onboarding cannot offer the cross-device (QR) flow and says so.
 	VcVerifierBaseUrl string
-	// VcVerifierClientId identifies this verifier to the wallet. Defaults to the
-	// deployment's registrar/satellite identifier.
-	VcVerifierClientId string
 	// CorsAllowedOrigins is a comma-separated allow-list of browser origins
 	// permitted to call the API cross-origin. Empty = no CORS headers emitted.
 	CorsAllowedOrigins string
@@ -274,7 +271,6 @@ func (config *Config) LoadEnvironment() error {
 	// the applicant's wallet fetches the request object and posts the
 	// presentation directly to it.
 	config.VcVerifierBaseUrl = strings.TrimRight(strings.TrimSpace(os.Getenv("VC_VERIFIER_BASE_URL")), "/")
-	config.VcVerifierClientId = strings.TrimSpace(os.Getenv("VC_VERIFIER_CLIENT_ID"))
 
 	// Participant Registry admin API (SO.api). Server-to-server base URL; auth is
 	// the forwarded operator token, so no credential is configured here.

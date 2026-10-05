@@ -232,7 +232,10 @@ func TestApplyVerifiedPresentationAutoApproves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode flows: %v", err)
 	}
-	if err := database.Create(&models.Settings{OnboardingFlows: datatypes.JSON(flows)}).Error; err != nil {
+	if err := database.Create(&models.Settings{
+		OnboardingFlows: datatypes.JSON(flows),
+		VcOnboarding:    holderBindingPolicy(t, true),
+	}).Error; err != nil {
 		t.Fatalf("seed settings: %v", err)
 	}
 	storeVerifiedSession(t, database, "session-1", "applicant", verification.Result{
@@ -359,5 +362,48 @@ func TestFullSettingsHidesTrustPolicy(t *testing.T) {
 	// The onboarding form reads which identity methods are offered from here.
 	if got := payload["identityMethods"]; got != "eidas,vc" {
 		t.Errorf("identityMethods = %v, want %q", got, "eidas,vc")
+	}
+}
+
+func holderBindingPolicy(t *testing.T, required bool) datatypes.JSON {
+	t.Helper()
+	policy := verification.DefaultTrustPolicy()
+	policy.RequireHolderBinding = required
+	encoded, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatalf("encode policy: %v", err)
+	}
+	return datatypes.JSON(encoded)
+}
+
+// A flow's own auto-accept override is saved through /settings, which never
+// checks the holder-binding pairing that the VC card enforces. The pairing is
+// therefore enforced where review is skipped: without "require holder binding"
+// even a holder-bound presentation keeps manual review.
+func TestApplyVerifiedPresentationAutoAcceptNeedsHolderBindingRequired(t *testing.T) {
+	database := newVcTestDB(t)
+	handler := newPartyHandler(database)
+
+	flows, err := json.Marshal([]models.OnboardingFlow{{Route: "fast", VcAutoAccept: "true"}})
+	if err != nil {
+		t.Fatalf("encode flows: %v", err)
+	}
+	if err := database.Create(&models.Settings{
+		OnboardingFlows: datatypes.JSON(flows),
+		VcOnboarding:    holderBindingPolicy(t, false),
+	}).Error; err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+	storeVerifiedSession(t, database, "session-1", "applicant", verification.Result{
+		Fields:      map[string]string{verification.FieldPartyName: "Acme Logistics BV"},
+		HolderBound: true,
+	})
+
+	proposal := &models.Proposal{FlowRoute: "fast", Status: "pending"}
+	if err := handler.applyVerifiedPresentation(nil, proposal, "session-1"); err != nil {
+		t.Fatalf("applyVerifiedPresentation: %v", err)
+	}
+	if proposal.Status != "pending" {
+		t.Errorf("status = %q, want pending while holder binding is not required", proposal.Status)
 	}
 }

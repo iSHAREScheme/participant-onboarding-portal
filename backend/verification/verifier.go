@@ -146,6 +146,7 @@ func (v *Verifier) Verify(rawPresentation []byte, expect Expectation) (*Result, 
 		return nil, fmt.Errorf("presentation carried no acceptable credentials")
 	}
 
+	bindHolderToSubjects(result)
 	v.applyMappings(result)
 	result.Warnings = uniqueSorted(result.Warnings)
 	return result, nil
@@ -214,9 +215,33 @@ func (v *Verifier) checkHolderBinding(parsed *ParsedPresentation, expect Expecta
 		return nil
 	}
 	// Signed by the holder and, when this portal issued a nonce, echoing it:
-	// the presentation is bound to this session and not a replay.
+	// the presentation is bound to this session and not a replay. Whether the
+	// holder is also who the credentials are about is checked once they are
+	// verified (bindHolderToSubjects).
+	result.Holder = holder
 	result.HolderBound = expect.Nonce != ""
 	return nil
+}
+
+// warnHolderNotSubject explains why a signed presentation still is not bound.
+const warnHolderNotSubject = "The presentation was signed by its holder, but the holder is not the subject of every credential in it, so it does not count as holder-bound."
+
+// bindHolderToSubjects withdraws holder binding unless the holder is the
+// subject of every credential. A valid holder signature only proves that the
+// holder signed; without this check party A could wrap party B's credentials in
+// a presentation signed with A's own registered key and have B's application
+// approved without review.
+func bindHolderToSubjects(result *Result) {
+	if !result.HolderBound {
+		return
+	}
+	for _, credential := range result.Credentials {
+		if credential.Subject == "" || credential.Subject != result.Holder {
+			result.HolderBound = false
+			result.Warnings = append(result.Warnings, warnHolderNotSubject)
+			return
+		}
+	}
 }
 
 // holderKeys is the resolver for presentation (holder) signatures.

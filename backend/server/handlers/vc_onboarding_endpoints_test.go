@@ -347,3 +347,43 @@ func TestRegistryHolderResolverMatchesRegisteredCertificates(t *testing.T) {
 		t.Fatal("a holder without certificates must not resolve")
 	}
 }
+
+// An expired certificate's key may be retired or compromised: it must not vouch
+// for a holder, because holder binding unlocks auto-approval.
+func TestRegistryHolderResolverIgnoresCertificatesOutsideTheirValidity(t *testing.T) {
+	certificate := testHolderCertificate(t) // valid from an hour ago to an hour ahead
+	resolver := &registryHolderResolver{
+		certificates: func(string) ([]*x509.Certificate, error) { return []*x509.Certificate{certificate}, nil },
+	}
+	thumb := certificateThumbprint(certificate)
+
+	resolver.now = func() time.Time { return time.Now() }
+	if _, err := resolver.ResolveKey("did:ishare:EU.NL.NTRNL-1", thumb, ""); err != nil {
+		t.Fatalf("a current certificate must resolve: %v", err)
+	}
+	resolver.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
+	if _, err := resolver.ResolveKey("did:ishare:EU.NL.NTRNL-1", thumb, ""); err == nil {
+		t.Fatal("an expired certificate must not resolve")
+	}
+	resolver.now = func() time.Time { return time.Now().Add(-2 * time.Hour) }
+	if _, err := resolver.ResolveKey("did:ishare:EU.NL.NTRNL-1", thumb, ""); err == nil {
+		t.Fatal("a not-yet-valid certificate must not resolve")
+	}
+}
+
+// A revoked (or otherwise inactive) x509Certificate claim no longer belongs to
+// the party, so its certificate is not offered as a holder key.
+func TestClaimCertificateValuesSkipsInactiveClaims(t *testing.T) {
+	record := map[string]interface{}{"claims": []interface{}{
+		map[string]interface{}{"type": "x509Certificate", "status": "active", "x5c": "ACTIVE"},
+		map[string]interface{}{"type": "x509Certificate", "status": "Active", "x5c": "ACTIVE-CASE"},
+		map[string]interface{}{"type": "x509Certificate", "x5c": "NO-STATUS"},
+		map[string]interface{}{"type": "x509Certificate", "status": "Revoked", "x5c": "REVOKED"},
+		map[string]interface{}{"type": "x509Certificate", "status": "NotActive", "x5c": "NOT-ACTIVE"},
+		map[string]interface{}{"type": "frameworkRole", "status": "active", "x5c": "NOT-A-CERT"},
+	}}
+	got := strings.Join(claimCertificateValues(record), ",")
+	if want := "ACTIVE,ACTIVE-CASE,NO-STATUS"; got != want {
+		t.Errorf("claimCertificateValues = %q, want %q", got, want)
+	}
+}

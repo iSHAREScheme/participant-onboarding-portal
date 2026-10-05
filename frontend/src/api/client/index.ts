@@ -382,6 +382,8 @@ export interface VcClaimMapping {
 }
 
 export interface VcAcceptedType {
+  // Client-only stable row identity for the settings editor; stripped before save.
+  clientKey?: string
   type: string
   label?: string
   enabled: boolean

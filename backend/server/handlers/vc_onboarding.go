@@ -189,16 +189,6 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (h *HandlerVcOnboarding) clientID() string {
-	if id := strings.TrimSpace(h.Config.VcVerifierClientId); id != "" {
-		return id
-	}
-	if id := strings.TrimSpace(h.Config.RegistrarId); id != "" {
-		return id
-	}
-	return strings.TrimSpace(h.Config.SatelliteIss)
-}
-
 // CreateSession opens an OID4VP exchange for the authenticated applicant and
 // returns everything the browser needs to render the QR code.
 func (h *HandlerVcOnboarding) CreateSession(c *fiber.Ctx) error {
@@ -833,7 +823,14 @@ func (h *HandlerParty) stampVerifiedPresentation(proposal *models.Proposal, sess
 	if h.Server.DB.First(&settings).Error == nil &&
 		vcAutoAcceptForRoute(&settings, proposal.FlowRoute) &&
 		proposal.Status == "pending" {
-		if !result.HolderBound {
+		// The pairing with "require holder binding" is enforced here, where the
+		// decision is made, not only when the VC card is saved: a flow's own
+		// auto-accept override is saved through /settings and never meets that
+		// check.
+		if !policyFromSettings(&settings).RequireHolderBinding {
+			log.Printf("vc-onboarding: proposal for %q keeps manual review: auto-accept is configured but holder binding is not required (flow %q)",
+				proposal.PartyId, proposal.FlowRoute)
+		} else if !result.HolderBound {
 			log.Printf("vc-onboarding: proposal for %q keeps manual review: the presentation was not holder-bound (flow %q)",
 				proposal.PartyId, proposal.FlowRoute)
 		} else {
